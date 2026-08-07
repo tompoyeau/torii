@@ -4,6 +4,9 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.6.1
+- Fiche de jeu : correction du bandeau de statistiques qui sortait de l'écran quand il y avait des captures, et zone « À propos » élargie.
+
 ## 0.6.0
 - Métadonnées enrichies via IGDB pour tous les jeux : description, captures d'écran, studio, année et jaquette de secours — y compris pour les jeux hors Steam (Fortnite, Valorant, Battle.net…) qui n'avaient rien jusqu'ici.
 
