@@ -73,20 +73,24 @@ Get-Content $HOME\.tauri\torii-updater.key -Raw | Set-Clipboard
    - `src-tauri/tauri.conf.json` → `"version"`
    - `src-tauri/Cargo.toml` → `version` de `[package]`
 
-2. Commit + tag + push :
+2. **Ajouter une section en tête de `CHANGELOG.md`** avec le numéro exact
+   (`## 0.4.0`) et la liste des changements. La CI l'extrait automatiquement pour
+   en faire le corps de la Release **et** les notes affichées dans la bannière.
+
+3. Commit + tag + push :
 
    ```bash
    git add -A
-   git commit -m "Torii 0.3.0"
-   git tag v0.3.0
+   git commit -m "Torii 0.4.0"
+   git tag v0.4.0
    git push && git push --tags
    ```
 
-3. GitHub Actions (`.github/workflows/release.yml`) se déclenche sur le tag :
-   il build l'app Windows, la **signe**, crée la Release `Torii v0.3.0` et y dépose
+4. GitHub Actions (`.github/workflows/release.yml`) se déclenche sur le tag :
+   il build l'app Windows, la **signe**, crée la Release `Torii vX.Y.Z` et y dépose
    l'installeur `.exe` + `latest.json`. Suivre l'avancement dans l'onglet **Actions**.
 
-4. Terminé. Les apps déjà installées proposeront la mise à jour à leur prochain lancement.
+5. Terminé. Les apps déjà installées proposeront la mise à jour à leur prochain lancement.
 
 > Le numéro de version qui fait foi pour l'updater est celui de
 > `src-tauri/tauri.conf.json`. Le tag `vX.Y.Z` doit correspondre.

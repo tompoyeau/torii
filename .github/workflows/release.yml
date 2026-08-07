@@ -32,6 +32,21 @@ jobs:
       - name: Installer les dépendances frontend
         run: npm ci
 
+      # Extrait la section du CHANGELOG correspondant au tag (## X.Y.Z) pour
+      # l'utiliser comme corps de la Release ET comme notes de mise à jour in-app.
+      - name: Extraire les notes de version
+        id: notes
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk -v ver="## $VERSION" '$0==ver{f=1;next} /^## /{f=0} f' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then NOTES="Mise à jour de Torii $VERSION."; fi
+          {
+            echo "body<<__NOTES_EOF__"
+            echo "$NOTES"
+            echo "__NOTES_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build, signature et publication de la Release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -42,6 +57,6 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Torii ${{ github.ref_name }}"
-          releaseBody: "Mises à jour automatiques activées. Voir les changements ci-dessous."
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
