@@ -257,8 +257,21 @@ cargo run --example community        # jeux possédés + famille (via session st
   (compteurs affichés). `shownGames` applique `g.genre === genre` après le filtre courant. Menu = bouton
   `.genre-btn` (actif en accent si un genre est choisi) + popover `.genre-menu` avec « Toutes les catégories »
   en tête. Ferme au clic-dehors (listener document).
-- ⚠️ Le genre vient de l'**enrichissement** (lazy, à l'ouverture d'une fiche) → peu de genres au début sur
-  données réelles, s'étoffe à l'usage. En mock tous les jeux ont un genre.
+- Le genre est peuplé en masse par **IGDB** (voir ci-dessous) — plus besoin d'ouvrir chaque fiche.
+
+## Genres via IGDB + mini-proxy (fait)
+
+- Le genre n'existe pas en local et Steam ignore les jeux hors-Steam (Fortnite/Valorant/WoW). Source =
+  **IGDB** (base cross-plateforme, Twitch). Comme IGDB exige un token Twitch non-embarquable, on passe par un
+  **mini-proxy Cloudflare** (`proxy/`, déployé sur `torii-igdb-proxy.toriiapp.workers.dev`) qui détient le secret —
+  exactement l'approche Playnite. Setup dans `proxy/README.md`.
+- `metadata/igdb.rs::fill_genres` : **Steam en masse** via `external_games` (`external_game_source = 1` & `uid = appids`)
+  → `games` (exact, 2 appels/500 jeux) ; **non-Steam par nom** (`where name = "X"` exact, repli `search` + sélection du
+  nom normalisé). Genre = 1er de `genres`, abrégé (« Role-playing (RPG) » → « RPG »). Cache `igdb_genre_cache_v1.json`,
+  throttle 300 ms (<4 req/s). Commande `enrich_genres` (événement `genre-batch` pour l'affichage progressif) ;
+  front `enrichGenres`/`useLibrary.fillGenres`. Testé réel : **820/887 jeux (92 %)**. `cargo run --example genres`.
+- ⚠️ `search` IGDB est fuzzy (remonte DLC/jeux voisins) → toujours filtrer par nom normalisé, jamais le 1er résultat brut.
+  Ratés connus : Overwatch 2 (absent d'IGDB en jeu de base) + jeux niche. Proxy URL en dur (`PROXY_URL`).
 
 ## Prochaines étapes
 

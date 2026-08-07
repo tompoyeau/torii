@@ -126,6 +126,39 @@ export async function enrichCovers(): Promise<{ id: string; coverUrl: string }[]
   }
 }
 
+/** Un genre résolu pour un jeu (renvoyé par `enrich_genres`). */
+export interface GenreUpdate {
+  id: string;
+  genre: string;
+}
+
+/**
+ * Peuple le genre de toute la bibliothèque via IGDB (cross-plateforme : Fortnite,
+ * Valorant, WoW…), en cache disque côté Rust. Les genres arrivent par lots via
+ * l'événement `genre-batch` (`onBatch` appelé au fil de l'eau pour un affichage
+ * progressif) ; l'ensemble final est aussi renvoyé en filet de sécurité. No-op hors Tauri.
+ */
+export async function enrichGenres(
+  onBatch: (updates: GenreUpdate[]) => void,
+): Promise<void> {
+  let unlisten: (() => void) | null = null;
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    unlisten = await listen<GenreUpdate[]>("genre-batch", (e) => onBatch(e.payload));
+  } catch {
+    // Hors Tauri : pas d'événements.
+  }
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const all = await invoke<GenreUpdate[]>("enrich_genres");
+    onBatch(all); // filet : réapplique le total (fusion idempotente).
+  } catch (err) {
+    console.info("[ludo] enrich_genres indisponible hors Tauri", err);
+  } finally {
+    if (unlisten) unlisten();
+  }
+}
+
 /** Enregistre la clé API Steam (chemin avancé, chaîne vide = effacement). */
 export async function setSteamKey(key: string): Promise<Settings | null> {
   try {

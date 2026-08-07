@@ -809,6 +809,43 @@ async fn enrich_covers(app: tauri::AppHandle) -> Result<Vec<CoverUpdate>, String
         .collect())
 }
 
+/// Un genre résolu pour un jeu (renvoyé au front pour fusion réactive).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct GenreUpdate {
+    id: String,
+    genre: String,
+}
+
+/// Remplit le genre de toute la bibliothèque via IGDB (proxy) : match exact par
+/// appid Steam en masse + par nom pour les autres launchers. Les genres arrivent
+/// par lots (événement `genre-batch`) pour un affichage progressif ; la valeur de
+/// retour est l'ensemble complet. Mise en cache disque (1er remplissage seulement).
+#[tauri::command]
+async fn enrich_genres(app: tauri::AppHandle) -> Result<Vec<GenreUpdate>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let emitter = app.clone();
+    let updates = tauri::async_runtime::spawn_blocking(move || {
+        let games = platforms::scan_all(Some(&dir));
+        metadata::igdb::fill_genres(&games, &dir, |batch| {
+            let ups: Vec<GenreUpdate> = batch
+                .iter()
+                .map(|(id, genre)| GenreUpdate {
+                    id: id.clone(),
+                    genre: genre.clone(),
+                })
+                .collect();
+            let _ = emitter.emit("genre-batch", ups);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(updates
+        .into_iter()
+        .map(|(id, genre)| GenreUpdate { id, genre })
+        .collect())
+}
+
 /// Renvoie l'état des connexions de comptes.
 #[tauri::command]
 fn get_settings(app: tauri::AppHandle) -> Settings {
@@ -948,6 +985,7 @@ pub fn run() {
             connect_battlenet,
             disconnect_battlenet,
             enrich_covers,
+            enrich_genres,
             set_steam_key,
             get_settings
         ])
