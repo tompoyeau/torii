@@ -257,21 +257,28 @@ cargo run --example community        # jeux possédés + famille (via session st
   (compteurs affichés). `shownGames` applique `g.genre === genre` après le filtre courant. Menu = bouton
   `.genre-btn` (actif en accent si un genre est choisi) + popover `.genre-menu` avec « Toutes les catégories »
   en tête. Ferme au clic-dehors (listener document).
-- Le genre est peuplé en masse par **IGDB** (voir ci-dessous) — plus besoin d'ouvrir chaque fiche.
+- La métadonnée descriptive est peuplée en masse par **IGDB** (voir ci-dessous), source unique tous launchers.
 
-## Genres via IGDB + mini-proxy (fait)
+## Métadonnée via IGDB + mini-proxy (fait) — SOURCE UNIQUE
 
-- Le genre n'existe pas en local et Steam ignore les jeux hors-Steam (Fortnite/Valorant/WoW). Source =
-  **IGDB** (base cross-plateforme, Twitch). Comme IGDB exige un token Twitch non-embarquable, on passe par un
-  **mini-proxy Cloudflare** (`proxy/`, déployé sur `torii-igdb-proxy.toriiapp.workers.dev`) qui détient le secret —
-  exactement l'approche Playnite. Setup dans `proxy/README.md`.
-- `metadata/igdb.rs::fill_genres` : **Steam en masse** via `external_games` (`external_game_source = 1` & `uid = appids`)
-  → `games` (exact, 2 appels/500 jeux) ; **non-Steam par nom** (`where name = "X"` exact, repli `search` + sélection du
-  nom normalisé). Genre = 1er de `genres`, abrégé (« Role-playing (RPG) » → « RPG »). Cache `igdb_genre_cache_v1.json`,
-  throttle 300 ms (<4 req/s). Commande `enrich_genres` (événement `genre-batch` pour l'affichage progressif) ;
-  front `enrichGenres`/`useLibrary.fillGenres`. Testé réel : **820/887 jeux (92 %)**. `cargo run --example genres`.
+- La métadonnée descriptive (genre, description, captures, hero, studio, année, jaquette) n'existe pas en local et
+  Steam ignore les jeux hors-Steam (Fortnite/Valorant/WoW). Source = **IGDB** (base cross-plateforme, Twitch). Comme
+  IGDB exige un token Twitch non-embarquable, on passe par un **mini-proxy Cloudflare** (`proxy/`, déployé sur
+  `torii-igdb-proxy.toriiapp.workers.dev`) qui détient le secret — exactement l'approche Playnite. Setup dans `proxy/README.md`.
+- `metadata/igdb.rs::fill_metadata` renvoie un `IgdbMeta` complet par jeu (genre/description/coverUrl/heroUrl/developer/
+  year/screenshots). **Steam en masse** via `external_games` (`external_game_source = 1` & `uid = appids`) → `games`
+  (exact, 2 appels/500 jeux) ; **non-Steam par nom** (`where name = "X"` exact, repli `search` + sélection du nom
+  normalisé). Champs via const `FIELDS`. Images `images.igdb.com/.../t_{taille}/{image_id}.jpg` (cover=cover_big_2x,
+  hero=1re artwork/capture en 1080p). Cache `igdb_meta_cache_v1.json`, throttle 300 ms (<4 req/s). Commande `enrich_igdb`
+  (événement `igdb-batch`) ; front `enrichIgdb`/`useLibrary.fillIgdb`. Testé réel : **822/887 (93 %)**, dont 818 genre /
+  821 jaquette / 821 description. `cargo run --example genres`.
+- **Fusion front (`fillIgdb`)** : remplit chaque champ SANS écraser ce que le launcher a fourni. 🔑 Jaquette/hero =
+  **launcher d'abord, IGDB en repli** (décision user) → capsules Steam conservées, IGDB comble les manquantes.
+- Données JOUEUR (temps de jeu, installé, possédé, famille) = toujours 100 % des launchers, jamais IGDB.
+  Taille de téléchargement (non-installés) conservée sur steamcmd.net/API GOG (IGDB ne l'a pas) via l'enrich lazy `enrich_game`.
 - ⚠️ `search` IGDB est fuzzy (remonte DLC/jeux voisins) → toujours filtrer par nom normalisé, jamais le 1er résultat brut.
-  Ratés connus : Overwatch 2 (absent d'IGDB en jeu de base) + jeux niche. Proxy URL en dur (`PROXY_URL`).
+  `~"x"` sans wildcards ne matche pas (`~ *"x"*` = contains) ; `="x"` = exact sensible à la casse. Ratés : Overwatch 2
+  (absent d'IGDB en jeu de base) + ~7 % niche. Proxy URL en dur (`PROXY_URL`). Recherche Steam-par-titre pour jaquettes RETIRÉE.
 
 ## Prochaines étapes
 

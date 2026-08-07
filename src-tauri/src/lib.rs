@@ -809,40 +809,59 @@ async fn enrich_covers(app: tauri::AppHandle) -> Result<Vec<CoverUpdate>, String
         .collect())
 }
 
-/// Un genre résolu pour un jeu (renvoyé au front pour fusion réactive).
+/// Métadonnée IGDB résolue pour un jeu (renvoyée au front pour fusion réactive).
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct GenreUpdate {
+struct MetaUpdate {
     id: String,
-    genre: String,
+    genre: Option<String>,
+    description: Option<String>,
+    cover_url: Option<String>,
+    hero_url: Option<String>,
+    developer: Option<String>,
+    year: Option<i64>,
+    screenshots: Vec<String>,
 }
 
-/// Remplit le genre de toute la bibliothèque via IGDB (proxy) : match exact par
-/// appid Steam en masse + par nom pour les autres launchers. Les genres arrivent
-/// par lots (événement `genre-batch`) pour un affichage progressif ; la valeur de
-/// retour est l'ensemble complet. Mise en cache disque (1er remplissage seulement).
+impl MetaUpdate {
+    fn new(id: String, m: metadata::igdb::IgdbMeta) -> Self {
+        MetaUpdate {
+            id,
+            genre: m.genre,
+            description: m.description,
+            cover_url: m.cover_url,
+            hero_url: m.hero_url,
+            developer: m.developer,
+            year: m.year,
+            screenshots: m.screenshots,
+        }
+    }
+}
+
+/// Remplit la métadonnée descriptive de toute la bibliothèque via IGDB (proxy) :
+/// genre, description, captures, jaquette (repli), hero, studio, année. Match exact
+/// par appid Steam en masse + par nom pour les autres launchers. Les résultats
+/// arrivent par lots (événement `igdb-batch`) pour un affichage progressif ; la
+/// valeur de retour est l'ensemble complet. Cache disque (1er remplissage seulement).
 #[tauri::command]
-async fn enrich_genres(app: tauri::AppHandle) -> Result<Vec<GenreUpdate>, String> {
+async fn enrich_igdb(app: tauri::AppHandle) -> Result<Vec<MetaUpdate>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let emitter = app.clone();
     let updates = tauri::async_runtime::spawn_blocking(move || {
         let games = platforms::scan_all(Some(&dir));
-        metadata::igdb::fill_genres(&games, &dir, |batch| {
-            let ups: Vec<GenreUpdate> = batch
+        metadata::igdb::fill_metadata(&games, &dir, |batch| {
+            let ups: Vec<MetaUpdate> = batch
                 .iter()
-                .map(|(id, genre)| GenreUpdate {
-                    id: id.clone(),
-                    genre: genre.clone(),
-                })
+                .map(|(id, m)| MetaUpdate::new(id.clone(), m.clone()))
                 .collect();
-            let _ = emitter.emit("genre-batch", ups);
+            let _ = emitter.emit("igdb-batch", ups);
         })
     })
     .await
     .map_err(|e| e.to_string())?;
     Ok(updates
         .into_iter()
-        .map(|(id, genre)| GenreUpdate { id, genre })
+        .map(|(id, m)| MetaUpdate::new(id, m))
         .collect())
 }
 
@@ -985,7 +1004,7 @@ pub fn run() {
             connect_battlenet,
             disconnect_battlenet,
             enrich_covers,
-            enrich_genres,
+            enrich_igdb,
             set_steam_key,
             get_settings
         ])

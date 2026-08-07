@@ -2,9 +2,8 @@ import { computed, ref } from "vue";
 import { fetchGames, fromDto, mergeDuplicates } from "../data/games";
 import {
   addManualGame,
-  enrichCovers,
   enrichGame,
-  enrichGenres,
+  enrichIgdb,
   removeManualGame,
   setGameFavorite,
   setGameHidden,
@@ -67,43 +66,41 @@ function load() {
     .then((list) => {
       // Fusionne les doublons cross-plateforme en cartes uniques multi-sources.
       games.value = mergeDuplicates(list);
-      // En tâche de fond : complète les jaquettes manquantes (tous launchers) via Steam.
-      void fillMissingCovers();
-      // Et les genres via IGDB (cross-plateforme), pour le filtre par catégorie.
-      void fillGenres();
+      // En tâche de fond : IGDB peuple toute la métadonnée descriptive.
+      void fillIgdb();
     })
     .finally(() => (loading.value = false));
-  // Note : l'enrichissement en masse (genre/description via appdetails) est
-  // désactivé — Steam bride l'API et la page communautaire fournit déjà
-  // noms + temps de jeu. À réintroduire en mode « à la demande » (ouverture détail).
 }
 
 /**
- * Repli universel de jaquettes : pour tout jeu sans jaquette (Battle.net, EA…), Torii
- * cherche une jaquette Steam par titre (sans clé, côté Rust, en cache). On applique les
- * résultats de façon réactive sans écraser une jaquette déjà présente.
+ * Source unique de métadonnée descriptive : IGDB (cross-plateforme) peuple genre,
+ * description, captures, hero, studio, année et complète les jaquettes manquantes.
+ * Fusion réactive au fil des lots, SANS écraser ce que le launcher a déjà fourni
+ * (jaquette native prioritaire, IGDB en repli — décision utilisateur).
  */
-async function fillMissingCovers() {
-  const updates = await enrichCovers();
-  if (!updates.length) return;
-  const byId = new Map(updates.map((u) => [u.id, u.coverUrl]));
-  games.value = games.value.map((g) =>
-    !g.coverUrl && byId.has(g.id) ? { ...g, coverUrl: byId.get(g.id) } : g,
-  );
-}
-
-/**
- * Peuple le genre des jeux via IGDB (cross-plateforme), pour alimenter le filtre
- * par catégorie. Fusion réactive au fil des lots, sans écraser un genre déjà présent
- * (ex: enrichissement à la demande d'une fiche).
- */
-async function fillGenres() {
-  await enrichGenres((updates) => {
+async function fillIgdb() {
+  await enrichIgdb((updates) => {
     if (!updates.length) return;
-    const byId = new Map(updates.map((u) => [u.id, u.genre]));
-    games.value = games.value.map((g) =>
-      !g.genre && byId.has(g.id) ? { ...g, genre: byId.get(g.id) } : g,
-    );
+    const byId = new Map(updates.map((u) => [u.id, u]));
+    games.value = games.value.map((g) => {
+      const u = byId.get(g.id);
+      if (!u) return g;
+      return {
+        ...g,
+        genre: g.genre ?? u.genre ?? undefined,
+        description: g.description ?? u.description ?? undefined,
+        developer: g.developer ?? u.developer ?? undefined,
+        year: g.year ?? u.year ?? undefined,
+        // Jaquette/hero : launcher d'abord, IGDB en repli.
+        coverUrl: g.coverUrl ?? u.coverUrl ?? undefined,
+        heroUrl: g.heroUrl ?? u.heroUrl ?? undefined,
+        screenshots: g.screenshots?.length
+          ? g.screenshots
+          : u.screenshots?.length
+            ? u.screenshots
+            : undefined,
+      };
+    });
   });
 }
 

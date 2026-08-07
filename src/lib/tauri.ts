@@ -126,34 +126,41 @@ export async function enrichCovers(): Promise<{ id: string; coverUrl: string }[]
   }
 }
 
-/** Un genre résolu pour un jeu (renvoyé par `enrich_genres`). */
-export interface GenreUpdate {
+/** Métadonnée IGDB résolue pour un jeu (renvoyée par `enrich_igdb`). */
+export interface MetaUpdate {
   id: string;
-  genre: string;
+  genre?: string | null;
+  description?: string | null;
+  coverUrl?: string | null;
+  heroUrl?: string | null;
+  developer?: string | null;
+  year?: number | null;
+  screenshots: string[];
 }
 
 /**
- * Peuple le genre de toute la bibliothèque via IGDB (cross-plateforme : Fortnite,
- * Valorant, WoW…), en cache disque côté Rust. Les genres arrivent par lots via
- * l'événement `genre-batch` (`onBatch` appelé au fil de l'eau pour un affichage
+ * Peuple la métadonnée descriptive de toute la bibliothèque via IGDB (source unique,
+ * cross-plateforme : Fortnite, Valorant, WoW…) : genre, description, captures, jaquette
+ * de repli, hero, studio, année. Cache disque côté Rust. Les résultats arrivent par lots
+ * via l'événement `igdb-batch` (`onBatch` appelé au fil de l'eau pour un affichage
  * progressif) ; l'ensemble final est aussi renvoyé en filet de sécurité. No-op hors Tauri.
  */
-export async function enrichGenres(
-  onBatch: (updates: GenreUpdate[]) => void,
+export async function enrichIgdb(
+  onBatch: (updates: MetaUpdate[]) => void,
 ): Promise<void> {
   let unlisten: (() => void) | null = null;
   try {
     const { listen } = await import("@tauri-apps/api/event");
-    unlisten = await listen<GenreUpdate[]>("genre-batch", (e) => onBatch(e.payload));
+    unlisten = await listen<MetaUpdate[]>("igdb-batch", (e) => onBatch(e.payload));
   } catch {
     // Hors Tauri : pas d'événements.
   }
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const all = await invoke<GenreUpdate[]>("enrich_genres");
+    const all = await invoke<MetaUpdate[]>("enrich_igdb");
     onBatch(all); // filet : réapplique le total (fusion idempotente).
   } catch (err) {
-    console.info("[ludo] enrich_genres indisponible hors Tauri", err);
+    console.info("[ludo] enrich_igdb indisponible hors Tauri", err);
   } finally {
     if (unlisten) unlisten();
   }
