@@ -1,0 +1,13 @@
+{
+  "name": "torii-igdb-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mini-proxy Cloudflare Worker pour l'API IGDB (métadonnées de jeux de Torii).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

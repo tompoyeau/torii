@@ -1,0 +1,6 @@
+name = "torii-igdb-proxy"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+# Les secrets (TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, PROXY_TOKEN optionnel) ne
+# sont PAS dans ce fichier : ils sont posés via `wrangler secret put <NOM>`.
