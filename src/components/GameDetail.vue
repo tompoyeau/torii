@@ -387,13 +387,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .settings-opt.danger { color: #ff6b6b; }
 .settings-opt.danger:hover { background: color-mix(in srgb, #ff6b6b 15%, transparent); }
 .settings-opt:disabled { opacity: 0.6; cursor: default; }
-.detail-body { display: grid; grid-template-columns: 1fr 320px; gap: 40px; padding: 34px 56px 70px; align-items: start; }
+/* minmax(0, 1fr) : autorise la colonne gauche à rétrécir sous la largeur de son
+   contenu (sinon la rangée de captures en flex élargit le grid et pousse le bandeau
+   stats hors de l'écran → scroll horizontal). Les captures scrollent dans leur propre conteneur. */
+.detail-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; padding: 34px 56px 70px; align-items: start; }
 .detail-section { margin-bottom: 34px; z-index: 1; }
 .detail-section h4 {
   font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint);
   font-weight: 700; margin: 0 0 16px;
 }
-.detail-desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 64ch; }
+.detail-desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 90ch; }
 .detail-desc.dim { color: var(--text-faint); font-style: italic; }
 .shots { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
 .shot {
@@ -477,7 +480,7 @@ img.shot { object-fit: cover; }
 .ach-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), #ffb08a); }
 
 @media (max-width: 980px) {
-  .detail-body { grid-template-columns: 1fr; }
+  .detail-body { grid-template-columns: minmax(0, 1fr); }
   .stat-card { position: static; }
 }
 @media (max-width: 820px) {
