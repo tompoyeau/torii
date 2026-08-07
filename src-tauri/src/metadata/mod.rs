@@ -1,4 +1,5 @@
 pub mod gog_store;
+pub mod igdb;
 pub mod steam_store;
 
 use crate::models::{GameDto, GameMeta};

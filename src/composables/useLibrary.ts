@@ -4,6 +4,7 @@ import {
   addManualGame,
   enrichCovers,
   enrichGame,
+  enrichGenres,
   removeManualGame,
   setGameFavorite,
   setGameHidden,
@@ -68,6 +69,8 @@ function load() {
       games.value = mergeDuplicates(list);
       // En tâche de fond : complète les jaquettes manquantes (tous launchers) via Steam.
       void fillMissingCovers();
+      // Et les genres via IGDB (cross-plateforme), pour le filtre par catégorie.
+      void fillGenres();
     })
     .finally(() => (loading.value = false));
   // Note : l'enrichissement en masse (genre/description via appdetails) est
@@ -87,6 +90,21 @@ async function fillMissingCovers() {
   games.value = games.value.map((g) =>
     !g.coverUrl && byId.has(g.id) ? { ...g, coverUrl: byId.get(g.id) } : g,
   );
+}
+
+/**
+ * Peuple le genre des jeux via IGDB (cross-plateforme), pour alimenter le filtre
+ * par catégorie. Fusion réactive au fil des lots, sans écraser un genre déjà présent
+ * (ex: enrichissement à la demande d'une fiche).
+ */
+async function fillGenres() {
+  await enrichGenres((updates) => {
+    if (!updates.length) return;
+    const byId = new Map(updates.map((u) => [u.id, u.genre]));
+    games.value = games.value.map((g) =>
+      !g.genre && byId.has(g.id) ? { ...g, genre: byId.get(g.id) } : g,
+    );
+  });
 }
 
 /** Force un nouveau scan (ex: après connexion d'un compte). */
