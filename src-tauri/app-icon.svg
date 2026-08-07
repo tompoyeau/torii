@@ -1,0 +1,46 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="tile" cx="50%" cy="34%" r="78%">
+      <stop offset="0%" stop-color="#2c1e50"/>
+      <stop offset="55%" stop-color="#171130"/>
+      <stop offset="100%" stop-color="#0c0919"/>
+    </radialGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffb489"/>
+      <stop offset="42%" stop-color="#ff7a5c"/>
+      <stop offset="100%" stop-color="#ee4d2c"/>
+    </linearGradient>
+    <linearGradient id="woodSoft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff9d6f"/>
+      <stop offset="100%" stop-color="#f0562f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Tuile de fond arrondie (violet-noir, comme le fond de l'app) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#tile)"/>
+
+  <!-- Torii ⛩️ -->
+  <g>
+    <!-- Piliers (légèrement évasés vers le bas) -->
+    <path d="M323 336 L393 336 L402 812 L314 812 Z" fill="url(#wood)"/>
+    <path d="M631 336 L701 336 L710 812 L622 812 Z" fill="url(#wood)"/>
+
+    <!-- Gakuzuka : petit montant central -->
+    <rect x="492" y="372" width="40" height="86" fill="url(#woodSoft)"/>
+
+    <!-- Nuki : linteau inférieur, dépasse des piliers -->
+    <rect x="250" y="446" width="524" height="70" rx="10" fill="url(#wood)"/>
+
+    <!-- Shimaki : fine poutre sous le chapeau -->
+    <path d="M172 336 Q512 392 852 336 L852 368 Q512 424 172 368 Z" fill="url(#woodSoft)"/>
+
+    <!-- Kasagi : chapeau incurvé (centre plus bas, extrémités relevées) -->
+    <path d="M120 250
+             Q512 316 904 250
+             L904 322
+             Q512 388 120 322 Z" fill="url(#wood)"/>
+    <!-- Pointes relevées aux extrémités du kasagi -->
+    <path d="M120 250 L96 214 L82 268 L120 322 Z" fill="url(#wood)"/>
+    <path d="M904 250 L928 214 L942 268 L904 322 Z" fill="url(#wood)"/>
+  </g>
+</svg>

@@ -1,0 +1,47 @@
+name: Release
+
+# Publie une nouvelle version quand on pousse un tag « vX.Y.Z ».
+# GitHub Actions build l'app Windows, la signe avec la clé de mise à jour,
+# crée la Release et y dépose l'installeur + `latest.json` (le manifeste que
+# l'app interroge pour se mettre à jour automatiquement).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cache des dépendances Rust pour accélérer les builds suivants.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Installer les dépendances frontend
+        run: npm ci
+
+      - name: Build, signature et publication de la Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Clé privée de signature des mises à jour (secret du dépôt).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Torii ${{ github.ref_name }}"
+          releaseBody: "Mises à jour automatiques activées. Voir les changements ci-dessous."
+          releaseDraft: false
+          prerelease: false

@@ -1,0 +1,42 @@
+[package]
+name = "ludo"
+version = "0.2.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+# Nom de code interne du crate = "ludo", mais l'exécutable produit s'appelle "Torii.exe"
+# (cible bin explicite ci-dessous). `autobins = false` évite que Cargo ne crée en plus un
+# binaire "ludo" auto-détecté depuis src/main.rs ; `default-run` lève l'ambiguïté pour Tauri.
+default-run = "Torii"
+autobins = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "Torii"
+path = "src/main.rs"
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "ludo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+# Parsing du YAML embarqué dans le cache `configurations` d'Ubisoft Connect.
+yaml-rust2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
