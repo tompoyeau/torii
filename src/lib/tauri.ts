@@ -37,6 +37,20 @@ export async function launchSource(platform: string, target?: string): Promise<v
 }
 
 /**
+ * Enregistre « maintenant » comme dernière session du jeu (au clic sur Jouer).
+ * Donne une date de dernière session aux jeux sans stats de launcher (Riot/EA/Battle.net…).
+ * Renvoie l'horodatage Unix posé, ou null hors Tauri.
+ */
+export async function recordLaunch(id: string): Promise<number | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<number>("record_launch", { id });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Ouvre la fenêtre de connexion Steam officielle et récupère la session.
  * Bloque jusqu'à ce que l'utilisateur se connecte (ou expiration).
  */

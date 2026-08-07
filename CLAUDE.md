@@ -280,6 +280,16 @@ cargo run --example community        # jeux possédés + famille (via session st
   `~"x"` sans wildcards ne matche pas (`~ *"x"*` = contains) ; `="x"` = exact sensible à la casse. Ratés : Overwatch 2
   (absent d'IGDB en jeu de base) + ~7 % niche. Proxy URL en dur (`PROXY_URL`). Recherche Steam-par-titre pour jaquettes RETIRÉE.
 
+## Dernière session « maison » (fait)
+
+- Pour les jeux sans stats de launcher (Riot/EA/Battle.net/Ubisoft/manuel…), Torii enregistre l'instant du
+  **clic sur Jouer** comme date de dernière session. `platforms/playhistory.rs` : `last_played.json` (id → Unix),
+  `record(dir, id)`/`load(dir)`. Commande `record_launch(id)`. `scan_all` fusionne : `last_played = max(launcher, maison)`.
+- Front : `useLibrary.markPlayed(id)` (maj optimiste `lastPlayedAt`/`recent` + persiste via `recordLaunch`), appelé à
+  chaque point de lancement (GameDetail onPlay/playFrom, ContextMenu, SalonHero, HeroFeatured). Le jeu remonte aussitôt
+  dans « Récemment joué ». ⚠️ Limite assumée : lancement HORS Torii = non capté (le user était OK). Piste future :
+  surveiller le process du jeu pour le vrai temps de jeu (plus fragile).
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.

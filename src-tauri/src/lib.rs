@@ -953,6 +953,15 @@ fn launch_game(platform: String, target: String) -> Result<(), String> {
     platforms::launch(&platform, &target)
 }
 
+/// Enregistre « maintenant » comme dernière session du jeu (déclenché au clic sur Jouer).
+/// Fournit une date de dernière session pour les jeux sans stats de launcher. Renvoie
+/// l'horodatage Unix posé (pour la mise à jour optimiste du front).
+#[tauri::command]
+fn record_launch(app: tauri::AppHandle, id: String) -> Result<i64, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::playhistory::record(&dir, &id)
+}
+
 /// Déclenche la désinstallation d'un jeu installé (délègue à l'UI native du launcher).
 #[tauri::command]
 fn uninstall_game(
@@ -990,6 +999,7 @@ pub fn run() {
             set_game_hidden,
             set_game_favorite,
             launch_game,
+            record_launch,
             uninstall_game,
             add_manual_game,
             remove_manual_game,

@@ -3,6 +3,7 @@ pub mod favorites;
 pub mod gog;
 pub mod hidden;
 pub mod manual;
+pub mod playhistory;
 pub mod riot;
 pub mod steam;
 pub mod ubisoft;
@@ -53,6 +54,17 @@ pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
             for game in &mut games {
                 game.hidden = excluded.contains(&game.id);
                 game.favorite = favorites.contains(&game.id);
+            }
+        }
+
+        // Dernière session « maison » (clic sur Jouer dans Torii) : comble les jeux sans
+        // date du launcher (Riot/EA/Battle.net…) et l'emporte si plus récente que celle du launcher.
+        let history = playhistory::load(dir);
+        if !history.is_empty() {
+            for game in &mut games {
+                if let Some(&ours) = history.get(&game.id) {
+                    game.last_played = Some(game.last_played.map_or(ours, |cur| cur.max(ours)));
+                }
             }
         }
     }
