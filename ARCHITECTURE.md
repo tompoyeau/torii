@@ -248,7 +248,20 @@ cargo run --example community        # jeux possédés + famille (via session st
   - ⚠️ La v0.1.0 (sans updater) ne s'auto-met pas à jour : 1re install manuelle de la v0.2.0, puis automatique.
     Bumper la version dans les **3** fichiers (package.json, tauri.conf.json, Cargo.toml) à chaque release.
 
+## Filtre par catégorie / genre (fait)
+
+- Filtrage par **genre**, qui se **combine** aux filtres sidebar (plateforme/favoris/…) + recherche + tri.
+  État `genre: string|null` dans `useUi` (`setGenre`, null = toutes). Menu déroulant dans l'en-tête de
+  `BureauView` (à côté des puces de tri), affiché seulement si des genres existent.
+- `availableGenres` (computed BureauView) : genres uniques des jeux non masqués, triés par nombre décroissant
+  (compteurs affichés). `shownGames` applique `g.genre === genre` après le filtre courant. Menu = bouton
+  `.genre-btn` (actif en accent si un genre est choisi) + popover `.genre-menu` avec « Toutes les catégories »
+  en tête. Ferme au clic-dehors (listener document).
+- ⚠️ Le genre vient de l'**enrichissement** (lazy, à l'ouverture d'une fiche) → peu de genres au début sur
+  données réelles, s'étoffe à l'usage. En mock tous les jeux ont un genre.
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.
 2. Temps de jeu Steam local (`localconfig.vdf`).
+3. Peupler les genres plus largement sans saturer l'API (pour un filtre catégorie plus riche).
