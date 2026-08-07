@@ -1,9 +1,11 @@
 import { computed, ref } from "vue";
 import { fetchGames, fromDto, mergeDuplicates } from "../data/games";
+import { relativeTime } from "../lib/covers";
 import {
   addManualGame,
   enrichGame,
   enrichIgdb,
+  recordLaunch,
   removeManualGame,
   setGameFavorite,
   setGameHidden,
@@ -183,6 +185,25 @@ export function useLibrary() {
     games.value = games.value.filter((g) => g.id !== id);
   }
 
+  /**
+   * Note le jeu comme joué « maintenant » (au clic sur Jouer) : met à jour le store
+   * de façon optimiste (remonte dans « Récemment joué ») et persiste côté Rust. Fournit
+   * une date de dernière session aux jeux sans stats de launcher.
+   */
+  async function markPlayed(id: string) {
+    const now = Math.floor(Date.now() / 1000);
+    const idx = games.value.findIndex((g) => g.id === id);
+    if (idx !== -1) {
+      games.value[idx] = {
+        ...games.value[idx],
+        lastPlayedAt: now,
+        lastPlayed: relativeTime(now),
+        recent: true,
+      };
+    }
+    await recordLaunch(id);
+  }
+
   function filtered(filter: LibraryFilter, query: string): Game[] {
     const q = query.trim().toLowerCase();
     return games.value.filter(
@@ -206,5 +227,6 @@ export function useLibrary() {
     setFavorite,
     addManual,
     removeManual,
+    markPlayed,
   };
 }

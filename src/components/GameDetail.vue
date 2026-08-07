@@ -6,7 +6,7 @@ import { platformName } from "../data/platforms";
 import { launchGame, launchSource, uninstallGame } from "../lib/tauri";
 import PlatformIcon from "./PlatformIcon.vue";
 
-const { byId, ensureEnriched, enrichingId, setFavorite } = useLibrary();
+const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed } = useLibrary();
 const { selectedGameId, closeGame } = useUi();
 
 const game = computed(() => byId(selectedGameId.value));
@@ -19,9 +19,13 @@ const launchMenuOpen = ref(false);
 /** Bouton « Jouer » : lance direct si une seule source, sinon ouvre le choix. */
 function onPlay() {
   if (multiSource.value) launchMenuOpen.value = !launchMenuOpen.value;
-  else if (game.value) launchGame(game.value);
+  else if (game.value) {
+    markPlayed(game.value.id);
+    launchGame(game.value);
+  }
 }
 function playFrom(platform: string, target?: string) {
+  if (game.value) markPlayed(game.value.id);
   launchSource(platform, target);
   launchMenuOpen.value = false;
 }

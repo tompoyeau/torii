@@ -5,10 +5,17 @@ import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
 import { launchGame } from "../lib/tauri";
 
-const { spotlight } = useLibrary();
+const { spotlight, markPlayed } = useLibrary();
 const { openGame } = useUi();
 
 const game = computed(() => spotlight.value[0] ?? null);
+
+/** Note le jeu comme joué (dernière session) puis le lance. */
+function play() {
+  if (!game.value) return;
+  markPlayed(game.value.id);
+  launchGame(game.value);
+}
 
 function hideBrokenCover(e: Event) {
   (e.target as HTMLElement).style.display = "none";
@@ -29,7 +36,7 @@ function hideBrokenCover(e: Event) {
       <template v-if="game.lastPlayed"><span class="sep">•</span><span>Joué {{ game.lastPlayed }}</span></template>
     </div>
     <div class="hero-actions">
-      <button class="btn-play" @click="launchGame(game)">
+      <button class="btn-play" @click="play()">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>Jouer
       </button>
       <button class="btn-ghost" @click="openGame(game.id)">

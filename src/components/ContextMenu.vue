@@ -6,7 +6,7 @@ import { useUi } from "../composables/useUi";
 import { launchGame, uninstallGame } from "../lib/tauri";
 
 const { ctx, closeContext } = useContextMenu();
-const { setFavorite, setHidden, removeManual } = useLibrary();
+const { setFavorite, setHidden, removeManual, markPlayed } = useLibrary();
 const { openGame } = useUi();
 
 const menuEl = ref<HTMLElement | null>(null);
@@ -37,7 +37,10 @@ const game = computed(() => ctx.game);
 const isManual = computed(() => game.value?.platform === "manual");
 
 function onPlay() {
-  if (game.value) launchGame(game.value);
+  if (game.value) {
+    markPlayed(game.value.id);
+    launchGame(game.value);
+  }
   closeContext();
 }
 function onFavorite() {
