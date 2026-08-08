@@ -865,6 +865,65 @@ async fn enrich_igdb(app: tauri::AppHandle) -> Result<Vec<MetaUpdate>, String> {
         .collect())
 }
 
+/// Boutique — vitrine : une page de jeux mis en avant / en promo (CheapShark),
+/// selon le tri (`featured`, `savings`, `price`, `recent`, `rating`). Découverte
+/// pure : indépendant de la bibliothèque de l'utilisateur.
+#[tauri::command]
+async fn store_deals(
+    page: u32,
+    sort: String,
+) -> Result<Vec<metadata::store::StoreItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || metadata::store::deals(page, &sort))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Boutique — recherche de jeux par titre (renvoie le prix le plus bas de chacun).
+#[tauri::command]
+async fn store_search(query: String) -> Result<Vec<metadata::store::StoreItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || metadata::store::search(&query))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Boutique — suggestions d'autocomplétion (léger, sans prix) au fil de la frappe.
+#[tauri::command]
+async fn store_suggest(query: String) -> Result<Vec<metadata::store::Suggestion>, String> {
+    tauri::async_runtime::spawn_blocking(move || metadata::store::suggest(&query))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Boutique — fiche produit : comparatif de prix multi-boutiques + enrichissement
+/// descriptif IGDB (visuels, description, genre, captures).
+#[tauri::command]
+async fn store_game(
+    app: tauri::AppHandle,
+    game_id: String,
+) -> Result<Option<metadata::store::StoreGame>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || metadata::store::game(&game_id, &dir))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Liste d'amis Steam + présence (en ligne / en jeu), via la session stockée.
+/// Renvoie une liste vide si Steam n'est pas connecté.
+#[tauri::command]
+async fn steam_friends(app: tauri::AppHandle) -> Result<Vec<accounts::steam::Friend>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let creds = accounts::secrets::load(&dir);
+    let (Some(steam_id), Some(cookie)) = (
+        creds.steam_id.clone(),
+        creds.steam_community.clone().or(creds.steam_login_secure.clone()),
+    ) else {
+        return Ok(Vec::new());
+    };
+    tauri::async_runtime::spawn_blocking(move || accounts::steam::friends(&steam_id, &cookie))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Renvoie l'état des connexions de comptes.
 #[tauri::command]
 fn get_settings(app: tauri::AppHandle) -> Settings {
@@ -1015,6 +1074,11 @@ pub fn run() {
             disconnect_battlenet,
             enrich_covers,
             enrich_igdb,
+            store_deals,
+            store_search,
+            store_suggest,
+            store_game,
+            steam_friends,
             set_steam_key,
             get_settings
         ])

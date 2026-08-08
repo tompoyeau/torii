@@ -1,6 +1,8 @@
 pub mod gog_store;
 pub mod igdb;
+pub mod instant_gaming;
 pub mod steam_store;
+pub mod store;
 
 use crate::models::{GameDto, GameMeta};
 use std::collections::HashMap;

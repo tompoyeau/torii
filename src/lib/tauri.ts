@@ -1,4 +1,4 @@
-import type { Game, GameDto, GameMeta, Settings } from "../types";
+import type { Friend, Game, GameDto, GameMeta, Settings, StoreGame, StoreItem, StoreSuggestion } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -180,6 +180,67 @@ export async function enrichIgdb(
   }
 }
 
+/**
+ * Boutique — vitrine : une page de jeux mis en avant / en promo (CheapShark), selon
+ * le tri (`featured`, `savings`, `price`, `recent`, `rating`). Renvoie `null` hors Tauri.
+ */
+export async function storeDeals(
+  page: number,
+  sort: string,
+): Promise<StoreItem[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<StoreItem[]>("store_deals", { page, sort });
+  } catch (err) {
+    console.info("[ludo] store_deals indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Boutique — recherche de jeux par titre. Renvoie `null` hors Tauri. */
+export async function storeSearch(query: string): Promise<StoreItem[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<StoreItem[]>("store_search", { query });
+  } catch (err) {
+    console.info("[ludo] store_search indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Boutique — suggestions d'autocomplétion (léger). `null` hors Tauri. */
+export async function storeSuggest(query: string): Promise<StoreSuggestion[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<StoreSuggestion[]>("store_suggest", { query });
+  } catch (err) {
+    console.info("[ludo] store_suggest indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Boutique — fiche produit (comparatif de prix + méta IGDB). `null` hors Tauri. */
+export async function storeGame(gameId: string): Promise<StoreGame | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<StoreGame | null>("store_game", { gameId });
+  } catch (err) {
+    console.info("[ludo] store_game indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Ouvre un lien externe (achat) dans le navigateur par défaut, hors de l'app. */
+export async function openExternal(url: string): Promise<void> {
+  try {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(url);
+  } catch {
+    // Hors Tauri (preview navigateur) : ouverture classique.
+    window.open(url, "_blank", "noopener");
+  }
+}
+
 /** Enregistre la clé API Steam (chemin avancé, chaîne vide = effacement). */
 export async function setSteamKey(key: string): Promise<Settings | null> {
   try {
@@ -279,6 +340,17 @@ export async function removeManualGame(id: string): Promise<GameDto[] | null> {
     return await invoke<GameDto[]>("remove_manual_game", { id });
   } catch (err) {
     console.info("[ludo] remove_manual_game indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Liste d'amis Steam + présence (vide si Steam non connecté). `null` hors Tauri. */
+export async function steamFriends(): Promise<Friend[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<Friend[]>("steam_friends");
+  } catch (err) {
+    console.info("[ludo] steam_friends indisponible hors Tauri", err);
     return null;
   }
 }

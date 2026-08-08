@@ -8,9 +8,11 @@ import Sidebar from "./Sidebar.vue";
 import TopBar from "./TopBar.vue";
 import HeroFeatured from "./HeroFeatured.vue";
 import GameCard from "./GameCard.vue";
+import StoreView from "./StoreView.vue";
+import FriendsView from "./FriendsView.vue";
 
 const { filtered, games } = useLibrary();
-const { filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, genre, setGenre, openGame } = useUi();
+const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, genre, setGenre, openGame } = useUi();
 
 /** Le filtre courant vise-t-il une plateforme précise (vs « Tous », « Favoris »…) ? */
 const isPlatformView = computed(() => filter.value in PLATFORMS);
@@ -90,6 +92,10 @@ function title(f: LibraryFilter): string {
     <Sidebar />
     <main class="main">
       <TopBar />
+
+      <StoreView v-if="section === 'store'" />
+      <FriendsView v-else-if="section === 'friends'" />
+      <template v-else>
       <HeroFeatured />
 
       <div class="sec-head">
@@ -150,6 +156,7 @@ function title(f: LibraryFilter): string {
         <GameCard v-for="g in shownGames" :key="g.id" :game="g" @open="openGame(g.id)" />
       </div>
       <div v-if="!shownGames.length" class="empty">Aucun jeu ne correspond à ta recherche.</div>
+      </template>
     </main>
   </div>
 </template>

@@ -1,8 +1,12 @@
-# Torii — mini-proxy IGDB
+# Torii — mini-proxy IGDB + IsThereAnyDeal
 
-Petit Cloudflare Worker qui donne à Torii l'accès aux métadonnées **IGDB**
-(genres cross-plateforme : Fortnite = Shooter, etc.) sans exposer le secret Twitch.
+Petit Cloudflare Worker qui donne à Torii l'accès à :
+- **IGDB** (métadonnées : genres cross-plateforme, descriptions, jaquettes…) sans exposer le secret Twitch ;
+- **IsThereAnyDeal (ITAD)** (prix multi-boutiques de la Boutique) sans exposer la clé ITAD.
+
 Même approche que Playnite. Gratuit (offre gratuite Cloudflare Workers).
+
+> ⚠️ Après avoir ajouté la partie ITAD (ci-dessous), **redéploie le Worker** (`npx wrangler deploy`).
 
 ## Mise en place (une seule fois)
 
@@ -36,6 +40,16 @@ npx wrangler secret put TWITCH_CLIENT_SECRET
 npx wrangler secret put PROXY_TOKEN        # optionnel : un mot de passe au hasard
 ```
 
+### 2 bis. Clé IsThereAnyDeal (pour la Boutique)
+
+1. Va sur **https://isthereanydeal.com/apps/my/** (crée un compte gratuit si besoin).
+2. **Register a new app** : nom `Torii`, coche les scopes de lecture proposés, valide.
+3. Récupère la **clé d'API** affichée, puis pose-la comme secret (depuis `proxy/`) :
+
+```bash
+npx wrangler secret put ITAD_API_KEY
+```
+
 Déployer :
 
 ```bash
@@ -62,8 +76,12 @@ Réponse attendue : un JSON avec `name: "Fortnite"` et `genres` (dont *Shooter*)
 - Le Worker obtient/met en cache un token d'app Twitch (client_credentials, ~60 j),
   ajoute les en-têtes `Client-ID` + `Authorization: Bearer`, et relaie vers
   `api.igdb.com/v4/<endpoint>`.
-- Endpoints autorisés : `games`, `external_games`, `genres`, `covers`, `multiquery`.
-- Le secret Twitch reste **côté Cloudflare** (jamais dans l'app ni le dépôt git).
+- Endpoints IGDB autorisés : `games`, `external_games`, `genres`, `covers`, `multiquery`.
+- **ITAD** : tout chemin `/itad/<endpoint>` (GET ou POST) est relayé vers
+  `api.isthereanydeal.com/<endpoint>` avec la clé `ITAD_API_KEY` injectée. Utilisé par la
+  Boutique : `deals/v2` (vitrine), `games/search/v1` + `games/prices/v3` (recherche),
+  `games/info/v2` + `games/prices/v3` + `games/overview/v2` (fiche produit).
+- Les secrets (Twitch + ITAD) restent **côté Cloudflare** (jamais dans l'app ni le dépôt git).
 
 ## Limites
 

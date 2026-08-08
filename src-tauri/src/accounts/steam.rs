@@ -207,14 +207,135 @@ fn owned_via_api(steam_id: &str, auth: &str) -> Vec<GameDto> {
         .unwrap_or_default()
 }
 
+/// Un ami Steam avec sa présence, envoyé au frontend.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Friend {
+    pub steam_id: String,
+    pub name: String,
+    pub avatar_url: String,
+    /// "in-game" | "online" | "away" | "busy" | "snooze" | "offline"
+    pub state: String,
+    /// Jeu en cours (si en jeu).
+    pub game_name: Option<String>,
+    /// URL du profil communautaire.
+    pub profile_url: String,
+}
+
+/// Liste d'amis Steam + présence, par **scrape de la page communautaire** des amis
+/// (sans clé API : le token web ne donne pas accès à `GetFriendList`). Utilise le
+/// cookie de session. La page groupe les amis en « en jeu / en ligne / hors ligne »
+/// avec avatar, pseudo et jeu en cours.
+pub fn friends(steam_id: &str, cookie: &str) -> Vec<Friend> {
+    let url = format!("https://steamcommunity.com/profiles/{steam_id}/friends/");
+    let Some(html) = fetch_text(&url, cookie, "https://steamcommunity.com/") else {
+        return Vec::new();
+    };
+    parse_friends_page(&html)
+}
+
+/// Extrait la sous-chaîne entre `start` et `end` (première occurrence).
+fn slice_between<'a>(hay: &'a str, start: &str, end: &str) -> Option<&'a str> {
+    let i = hay.find(start)? + start.len();
+    let rest = &hay[i..];
+    let j = rest.find(end)?;
+    Some(&rest[..j])
+}
+
+/// Décode les quelques entités HTML rencontrées dans les pseudos/jeux.
+fn decode_entities(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&#39;", "'")
+        .replace("&quot;", "\"")
+        .trim()
+        .to_string()
+}
+
+/// Parse la page communautaire des amis en blocs `friend_block_v2`.
+fn parse_friends_page(html: &str) -> Vec<Friend> {
+    let mut out = Vec::new();
+    // Chaque bloc d'ami commence par `data-steamid="<id64>"`. On découpe dessus :
+    // le segment suivant contient tout le bloc (statut, avatar, pseudo, jeu).
+    for seg in html.split("data-steamid=\"").skip(1) {
+        let steam_id: String = seg.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if steam_id.len() != 17 {
+            continue;
+        }
+        // Statut : classe de l'overlay d'avatar (`friend_block_link_overlay <état>`).
+        let state = ["in-game", "online", "away", "busy", "snooze"]
+            .iter()
+            .find(|s| seg.contains(&format!("friend_block_link_overlay {s}")))
+            .map(|s| (*s).to_string())
+            .unwrap_or_else(|| "offline".into());
+        let name = slice_between(seg, "friend_block_content\">", "<br")
+            .map(decode_entities)
+            .unwrap_or_default();
+        if name.is_empty() {
+            continue;
+        }
+        let game_name = slice_between(seg, "friend_game_link\">", "</span>")
+            .map(decode_entities)
+            .filter(|s| !s.is_empty());
+        // Avatar (medium → full pour une meilleure définition).
+        let avatar_url = seg
+            .find("player_avatar")
+            .and_then(|i| slice_between(&seg[i..], "src=\"", "\""))
+            .map(|s| s.replace("_medium", "_full"))
+            .unwrap_or_default();
+        let profile_url = seg
+            .find("selectable_overlay")
+            .and_then(|i| slice_between(&seg[i..], "href=\"", "\""))
+            .unwrap_or_default()
+            .to_string();
+
+        out.push(Friend {
+            steam_id,
+            name,
+            avatar_url,
+            state,
+            game_name,
+            profile_url,
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
-    use super::extract_webapi_token;
+    use super::{extract_webapi_token, parse_friends_page};
 
     #[test]
     fn extracts_webapi_token() {
         let html = r#"...Data = ["{\"WebAPIToken\":\"eyABC.def-ghi_123\",\"other\":1}"]..."#;
         assert_eq!(extract_webapi_token(html).as_deref(), Some("eyABC.def-ghi_123"));
+    }
+
+    // Bloc calqué sur la vraie page communautaire des amis (1 en jeu, 1 en ligne).
+    #[test]
+    fn parses_friends_page() {
+        let html = r##"
+        <div class="selectable friend_block_v2 persona in-game  " id="fr_1" data-steamid="76561198206344635" data-miniprofile="246078907" data-search="sterben ; soundpad ; ">
+          <a class="selectable_overlay" data-container="#fr_1" href="https://steamcommunity.com/id/lenyben"></a>
+          <div class="player_avatar friend_block_link_overlay in-game"><img src="https://av/aaa_medium.jpg"></div>
+          <div class="friend_block_content">Sterben<br><span class="friend_small_text"><span class="friend_game_link">Soundpad</span></span></div>
+        </div>
+        <div class="selectable friend_block_v2 persona online  " id="fr_2" data-steamid="76561198243042658" data-miniprofile="282776930" data-search="ecrevisse ;  ; ">
+          <a class="selectable_overlay" data-container="#fr_2" href="https://steamcommunity.com/profiles/76561198243042658"></a>
+          <div class="player_avatar friend_block_link_overlay online"><img src="https://av/bbb_medium.jpg"></div>
+          <div class="friend_block_content">Ecrevisse<br><span class="friend_small_text"></span></div>
+        </div>"##;
+        let f = parse_friends_page(html);
+        assert_eq!(f.len(), 2);
+        assert_eq!(f[0].steam_id, "76561198206344635");
+        assert_eq!(f[0].name, "Sterben");
+        assert_eq!(f[0].state, "in-game");
+        assert_eq!(f[0].game_name.as_deref(), Some("Soundpad"));
+        assert_eq!(f[0].avatar_url, "https://av/aaa_full.jpg"); // _medium → _full
+        assert_eq!(f[1].name, "Ecrevisse");
+        assert_eq!(f[1].state, "online");
+        assert_eq!(f[1].game_name, None);
     }
 }
 

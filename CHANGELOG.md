@@ -4,6 +4,10 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.8.0
+- Nouvelle **Boutique** : découvre des jeux à acheter et compare les prix sur toutes les boutiques PC (Steam, GOG, Epic, Humble, Fanatical…) en euros, avec le plus bas prix historique et un lien d'achat direct. Recherche avec suggestions instantanées. Les prix Instant Gaming sont aussi affichés sur la fiche produit.
+- Nouveau panneau **Amis** : retrouve tes amis Steam au même endroit, vois qui est en ligne et à quoi il joue, avec un rafraîchissement en direct.
+
 ## 0.7.0
 - Dernière session enregistrée au lancement depuis Torii : les jeux sans statistiques (Riot, EA, Battle.net…) affichent désormais leur dernière date de jeu et remontent dans « Récemment joué ».
 
