@@ -4,14 +4,14 @@ import { useTheme } from "../composables/useTheme";
 import { useLibrary } from "../composables/useLibrary";
 import ModeSwitch from "./ModeSwitch.vue";
 
-const { query, listView, toggleListView, openSettings, openAddGame } = useUi();
+const { section, query, listView, toggleListView, openSettings, openAddGame } = useUi();
 const { toggle: toggleTheme } = useTheme();
 const { loading, enriching, enrichProgress, reload } = useLibrary();
 </script>
 
 <template>
   <div class="topbar">
-    <label class="search">
+    <label v-if="section !== 'store'" class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
       <input v-model="query" type="text" placeholder="Rechercher dans la bibliothèque…" autocomplete="off" />
     </label>

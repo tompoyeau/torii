@@ -113,6 +113,73 @@ export type LibraryFilter =
   | "hidden"
   | PlatformId;
 
+// --- Boutique (découverte de jeux à acheter, source CheapShark) ---------------
+
+/** Un jeu de la vitrine ou des résultats de recherche (carte de grille). */
+export interface StoreItem {
+  /** Identifiant ITAD du jeu (UUID ; clé de la fiche produit). */
+  gameId: string;
+  title: string;
+  /** Jaquette (ITAD boxart) si disponible, sinon dégradé côté front. */
+  coverUrl?: string | null;
+  /** Prix actuel le plus bas (EUR). */
+  price: number;
+  /** Prix normal (hors promo) ; == price si inconnu. */
+  normalPrice: number;
+  /** Remise en % entier (0 = pas de promo / inconnu). */
+  savings: number;
+  /** Boutique de la meilleure offre (vide si non résolu). */
+  storeName: string;
+  /** Lien d'achat direct. */
+  buyUrl: string;
+}
+
+/** Suggestion d'autocomplétion de la barre de recherche (titre + jaquette). */
+export interface StoreSuggestion {
+  gameId: string;
+  title: string;
+  coverUrl?: string | null;
+}
+
+/** Une offre d'une boutique (ligne du comparatif de la fiche produit). */
+export interface StorePrice {
+  storeName: string;
+  price: number;
+  retailPrice: number;
+  savings: number;
+  /** Lien d'achat direct vers la boutique. */
+  buyUrl: string;
+}
+
+/** Fiche produit boutique : comparatif de prix + métadonnée descriptive (IGDB). */
+export interface StoreGame {
+  gameId: string;
+  title: string;
+  coverUrl?: string | null;
+  heroUrl?: string | null;
+  /** Prix le plus bas jamais atteint (EUR), si connu. */
+  cheapestEver?: number | null;
+  /** Offres par boutique, triées par prix croissant. */
+  prices: StorePrice[];
+  description?: string | null;
+  genre?: string | null;
+  developer?: string | null;
+  year?: number | null;
+  screenshots: string[];
+}
+
+/** Un ami Steam avec sa présence (commande Rust `steam_friends`). */
+export interface Friend {
+  steamId: string;
+  name: string;
+  avatarUrl: string;
+  /** "in-game" | "online" | "away" | "busy" | "snooze" | "offline" */
+  state: string;
+  /** Jeu en cours (si en jeu). */
+  gameName?: string | null;
+  profileUrl: string;
+}
+
 export type AppMode = "bureau" | "salon";
 
 /** Critère de tri de la bibliothèque. */

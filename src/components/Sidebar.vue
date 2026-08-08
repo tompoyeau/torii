@@ -4,8 +4,11 @@ import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import type { LibraryFilter, PlatformId } from "../types";
 
+import { useFriends } from "../composables/useFriends";
+
 const { games } = useLibrary();
-const { filter, setFilter } = useUi();
+const { section, filter, setFilter, showStore, showFriends } = useUi();
+const { activeCount: friendsOnline } = useFriends();
 
 // Les compteurs des vues normales excluent les jeux masqués.
 const visible = computed(() => games.value.filter((g) => !g.hidden));
@@ -69,40 +72,52 @@ const totalGb = 2000;
 
     <nav class="nav-group">
       <div class="nav-label">Bibliothèque</div>
-      <button class="nav-item" :class="{ active: filter === 'all' }" @click="setFilter('all')">
+      <button class="nav-item" :class="{ active: section === 'library' && filter ==='all' }" @click="setFilter('all')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
         Tous les jeux <span class="count">{{ count("all").value }}</span>
       </button>
-      <button v-if="count('family').value" class="nav-item" :class="{ active: filter === 'mine' }" @click="setFilter('mine')">
+      <button v-if="count('family').value" class="nav-item" :class="{ active: section === 'library' && filter ==='mine' }" @click="setFilter('mine')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
         Mes jeux <span class="count">{{ count("mine").value }}</span>
       </button>
-      <button v-if="count('family').value" class="nav-item" :class="{ active: filter === 'family' }" @click="setFilter('family')">
+      <button v-if="count('family').value" class="nav-item" :class="{ active: section === 'library' && filter ==='family' }" @click="setFilter('family')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3" /><circle cx="17" cy="15" r="3" /><path d="M3 20a6 6 0 0 1 12 0M13 20a5 5 0 0 1 8 0" /></svg>
         Famille <span class="count">{{ count("family").value }}</span>
       </button>
-      <button class="nav-item" :class="{ active: filter === 'recent' }" @click="setFilter('recent')">
+      <button class="nav-item" :class="{ active: section === 'library' && filter ==='recent' }" @click="setFilter('recent')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
         Récents <span class="count">{{ count("recent").value }}</span>
       </button>
-      <button class="nav-item" :class="{ active: filter === 'favorite' }" @click="setFilter('favorite')">
+      <button class="nav-item" :class="{ active: section === 'library' && filter ==='favorite' }" @click="setFilter('favorite')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg>
         Favoris <span class="count">{{ count("favorite").value }}</span>
       </button>
-      <button class="nav-item" :class="{ active: filter === 'installed' }" @click="setFilter('installed')">
+      <button class="nav-item" :class="{ active: section === 'library' && filter ==='installed' }" @click="setFilter('installed')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" /></svg>
         Installés <span class="count">{{ count("installed").value }}</span>
       </button>
-      <button v-if="count('hidden').value" class="nav-item" :class="{ active: filter === 'hidden' }" @click="setFilter('hidden')">
+      <button v-if="count('hidden').value" class="nav-item" :class="{ active: section === 'library' && filter ==='hidden' }" @click="setFilter('hidden')">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg>
         Masqués <span class="count">{{ count("hidden").value }}</span>
       </button>
     </nav>
 
     <nav class="nav-group">
+      <div class="nav-label">Découvrir</div>
+      <button class="nav-item" :class="{ active: section === 'store' }" @click="showStore()">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /><path d="M6 14.4V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5.6" /></svg>
+        Boutique
+      </button>
+      <button class="nav-item" :class="{ active: section === 'friends' }" @click="showFriends()">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
+        Amis <span v-if="friendsOnline" class="count on">{{ friendsOnline }}</span>
+      </button>
+    </nav>
+
+    <nav class="nav-group">
       <div class="nav-label">Plateformes</div>
       <button v-for="p in platforms" :key="p.id" class="nav-item plat"
-              :class="{ active: filter === p.id }" @click="setFilter(p.id)">
+              :class="{ active: section === 'library' && filter ===p.id }" @click="setFilter(p.id)">
         <span class="dot" :style="{ background: `var(--${p.id})` }" />
         {{ p.label }} <span class="count">{{ count(p.id).value }}</span>
       </button>
@@ -149,6 +164,7 @@ const totalGb = 2000;
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 .nav-item.active { background: var(--accent-soft); color: var(--text); font-weight: 600; }
 .nav-item.active .count { color: var(--accent); }
+.nav-item .count.on { color: #4bbe6b; }
 .nav-item.plat { padding-left: 12px; }
 .storage { margin-top: auto; padding: 14px 12px 6px; }
 .storage-top { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-dim); margin-bottom: 8px; }

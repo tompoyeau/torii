@@ -1,8 +1,13 @@
 import { reactive, toRefs } from "vue";
 import type { AppMode, LibraryFilter, SortKey } from "../types";
 
+/** Section principale de la vue Bureau : bibliothèque, boutique ou amis. */
+type BureauSection = "library" | "store" | "friends";
+
 interface UiState {
   mode: AppMode;
+  /** Section affichée dans le mode Bureau (bibliothèque vs boutique). */
+  section: BureauSection;
   filter: LibraryFilter;
   query: string;
   sort: SortKey;
@@ -20,6 +25,7 @@ interface UiState {
 
 const state = reactive<UiState>({
   mode: "bureau",
+  section: "library",
   filter: "all",
   query: "",
   sort: "recent",
@@ -38,7 +44,19 @@ export function useUi() {
       state.mode = mode;
       window.scrollTo({ top: 0 });
     },
-    setFilter: (filter: LibraryFilter) => (state.filter = filter),
+    // Choisir un filtre ramène toujours à la bibliothèque (quitte la boutique).
+    setFilter: (filter: LibraryFilter) => {
+      state.filter = filter;
+      state.section = "library";
+    },
+    showStore: () => {
+      state.section = "store";
+      window.scrollTo({ top: 0 });
+    },
+    showFriends: () => {
+      state.section = "friends";
+      window.scrollTo({ top: 0 });
+    },
     setSort: (sort: SortKey) => (state.sort = sort),
     toggleListView: () => (state.listView = !state.listView),
     toggleInstalledOnly: () => (state.installedOnly = !state.installedOnly),
