@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, StoreGame, StoreItem, StoreSuggestion } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, StoreGame, StoreItem, StoreSuggestion, WishlistItem } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -351,6 +351,17 @@ export async function steamFriends(): Promise<Friend[] | null> {
     return await invoke<Friend[]>("steam_friends");
   } catch (err) {
     console.info("[ludo] steam_friends indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Wishlist Steam enrichie de prix (ITAD). `null` hors Tauri (→ mock). */
+export async function steamWishlist(): Promise<WishlistItem[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<WishlistItem[]>("steam_wishlist");
+  } catch (err) {
+    console.info("[ludo] steam_wishlist indisponible hors Tauri", err);
     return null;
   }
 }

@@ -929,6 +929,21 @@ async fn steam_friends(app: tauri::AppHandle) -> Result<Vec<accounts::steam::Fri
         .map_err(|e| e.to_string())
 }
 
+/// Wishlist Steam enrichie de prix (ITAD) : meilleur prix actuel + plus bas historique
+/// par jeu. Vide si Steam n'est pas connecté.
+#[tauri::command]
+async fn steam_wishlist(
+    app: tauri::AppHandle,
+) -> Result<Vec<metadata::store::WishlistItem>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let appids = accounts::steam_wishlist_appids(&dir);
+        metadata::store::wishlist(&appids)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Jeux en commun avec les amis Steam : ma bibliothèque croisée avec celle de chaque ami
 /// (dont le profil est lisible). `force` recalcule en ignorant le cache disque. Renvoie une
 /// charge vide si Steam n'est pas connecté.
@@ -1100,6 +1115,7 @@ pub fn run() {
             store_suggest,
             store_game,
             steam_friends,
+            steam_wishlist,
             friends_common,
             set_steam_key,
             get_settings

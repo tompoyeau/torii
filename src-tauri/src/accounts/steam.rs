@@ -54,19 +54,26 @@ pub fn owned_from_session(config_dir: &Path, cookie: &str) -> Vec<GameDto> {
         .collect()
 }
 
-/// GET authentifié gérant la redirection 302 de Steam : on réinjecte les cookies
-/// posés (`steamCountry`, `Steam_Language`…) et on rejoue, comme un navigateur.
-/// Sans ça, Steam boucle et renvoie une réponse vide.
+/// GET authentifié gérant les redirections de Steam **à la manière d'un navigateur** :
+/// on réinjecte les cookies posés (`steamCountry`, `Steam_Language`…) ET on **suit le
+/// `Location`**. Deux redirections coexistent :
+///  - même URL après pose de cookies (dynamicstore/userdata) → la réinjection suffit ;
+///  - 🔑 `/profiles/<id64>/…` → `/id/<vanity>/…` pour les comptes ayant une **URL
+///    personnalisée** : là il FAUT suivre le `Location`. Sans ça on rejouait la même URL
+///    `/profiles/…` en boucle → réponse vide (symptôme : liste d'amis absente uniquement
+///    pour ces comptes-là, alors que la biblio/Family — qui passe par api.steampowered.com —
+///    fonctionne).
 fn fetch_text(url: &str, cookie: &str, referer: &str) -> Option<String> {
     let agent = ureq::builder()
         .redirects(0)
         .timeout(Duration::from_secs(25))
         .build();
     let mut cookie = cookie.to_string();
+    let mut url = url.to_string();
 
-    for _ in 0..5 {
+    for _ in 0..6 {
         let resp = agent
-            .get(url)
+            .get(&url)
             .set("User-Agent", BROWSER_UA)
             .set("Referer", referer)
             .set("Accept-Encoding", "identity")
@@ -75,18 +82,33 @@ fn fetch_text(url: &str, cookie: &str, referer: &str) -> Option<String> {
             .ok()?;
 
         if (300..400).contains(&resp.status()) {
-            let mut added = false;
+            // Cookie jar : Steam exige ces cookies sur la requête rejouée.
             for set_cookie in resp.all("set-cookie") {
                 if let Some(pair) = set_cookie.split(';').next() {
                     if pair.contains('=') {
                         cookie.push_str("; ");
                         cookie.push_str(pair.trim());
-                        added = true;
                     }
                 }
             }
-            if !added {
-                return None;
+            // Suit la redirection (absolue ou relative à l'origine courante).
+            match resp.header("location") {
+                None => return None,
+                Some(loc) => {
+                    url = if loc.starts_with("http") {
+                        loc.to_string()
+                    } else {
+                        let origin = url
+                            .find("://")
+                            .and_then(|i| url[i + 3..].find('/').map(|j| url[..i + 3 + j].to_string()))
+                            .unwrap_or_else(|| url.clone());
+                        if loc.starts_with('/') {
+                            format!("{origin}{loc}")
+                        } else {
+                            format!("{origin}/{loc}")
+                        }
+                    };
+                }
             }
             continue;
         }
@@ -202,6 +224,27 @@ pub fn web_api_token(my_steam_id: &str, cookie: &str) -> Option<String> {
 /// puisqu'on est amis) ; sinon liste vide = profil privé, indistinguable d'un compte sans jeu.
 pub fn owned_with_token(steam_id: &str, token: &str) -> Vec<GameDto> {
     owned_via_api(steam_id, &format!("access_token={token}"))
+}
+
+/// Wishlist Steam via `IWishlistService/GetWishlist` — même auth sans clé que
+/// `GetOwnedGames` (le WebAPIToken de session). Renvoie les appids souhaités, triés par
+/// priorité. Les noms/jaquettes se résolvent ensuite via le CDN + enrichissement, comme
+/// les jeux possédés.
+pub fn wishlist(steam_id: &str, token: &str) -> Vec<u64> {
+    let url = format!(
+        "https://api.steampowered.com/IWishlistService/GetWishlist/v1/\
+         ?access_token={token}&steamid={steam_id}"
+    );
+    let Some(mut items) = get_json(&url).and_then(|j| j["response"]["items"].as_array().cloned())
+    else {
+        return Vec::new();
+    };
+    // Tri par priorité croissante (0 = pas de priorité définie → en dernier).
+    items.sort_by_key(|i| match i["priority"].as_u64() {
+        Some(0) | None => u64::MAX,
+        Some(p) => p,
+    });
+    items.iter().filter_map(|i| i["appid"].as_u64()).collect()
 }
 
 /// Extrait le jeton WebAPI (JWT) embarqué dans une page communautaire.
