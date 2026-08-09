@@ -18,6 +18,10 @@ pub struct GameDto {
     /// Jeu accessible via le partage familial Steam (possédé par un proche).
     #[serde(default)]
     pub family_shared: bool,
+    /// SteamIDs des membres du groupe familial qui possèdent ce jeu (= nombre de
+    /// copies dans la famille). Vide hors partage familial Steam.
+    #[serde(default)]
+    pub family_owners: Vec<String>,
     /// Temps de jeu total en minutes (compte Steam), si connu.
     #[serde(default)]
     pub playtime_minutes: Option<u32>,

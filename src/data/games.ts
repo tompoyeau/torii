@@ -57,6 +57,8 @@ export function mergeDuplicates(games: Game[]): Game[] {
       recent: group.some((g) => g.recent),
       favorite: group.some((g) => g.favorite),
       sizeGb: installedSrc?.sizeGb ?? primary.sizeGb,
+      // Copies famille : portées par la source Steam, quel que soit le primaire affiché.
+      familyOwners: group.find((g) => g.familyOwners?.length)?.familyOwners,
       sources,
     });
   }
@@ -114,6 +116,7 @@ export function fromDto(dto: GameDto): Game {
     installed: dto.installed,
     owned: dto.owned ?? dto.installed,
     familyShared: dto.familyShared ?? false,
+    familyOwners: dto.familyOwners?.length ? dto.familyOwners : undefined,
     favorite: dto.favorite ?? false,
     recent: lastPlayed
       ? Date.now() / 1000 - lastPlayed < RECENT_WINDOW_DAYS * 86400

@@ -162,10 +162,11 @@ fn parse_family_app(app: &Value, me: &str) -> Option<GameDto> {
     }
     let playtime = app["rt_playtime"].as_u64().unwrap_or(0) as u32;
     let last_played = app["rt_last_played"].as_i64().filter(|&t| t > 0);
-    let owned_by_me = app["owner_steamids"]
+    let owners: Vec<String> = app["owner_steamids"]
         .as_array()
-        .map(|owners| owners.iter().any(|o| o.as_str() == Some(me)))
-        .unwrap_or(false);
+        .map(|arr| arr.iter().filter_map(|o| o.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let owned_by_me = owners.iter().any(|o| o == me);
 
     Some(GameDto {
         id: format!("steam:{appid}"),
@@ -174,6 +175,7 @@ fn parse_family_app(app: &Value, me: &str) -> Option<GameDto> {
         installed: false,
         owned: owned_by_me,
         family_shared: !owned_by_me,
+        family_owners: owners,
         playtime_minutes: (playtime > 0).then_some(playtime),
         cover_url: cover_url(appid),
         hero_url: hero_url(appid),
@@ -182,6 +184,24 @@ fn parse_family_app(app: &Value, me: &str) -> Option<GameDto> {
         app_type: Some("game".into()),
         ..Default::default()
     })
+}
+
+/// Récupère un **WebAPIToken** (JWT de session, ~24 h) à partir de NOTRE page
+/// communautaire des jeux. Réutilisable pour interroger l'API `IPlayerService` sans clé,
+/// y compris pour les profils d'amis (voir [`owned_with_token`]). Un seul appel réseau,
+/// à mutualiser entre plusieurs requêtes.
+pub fn web_api_token(my_steam_id: &str, cookie: &str) -> Option<String> {
+    let page = format!("https://steamcommunity.com/profiles/{my_steam_id}/games/?tab=all");
+    let html = fetch_text(&page, cookie, "https://steamcommunity.com/")?;
+    extract_webapi_token(&html)
+}
+
+/// Bibliothèque possédée d'un utilisateur **quelconque** (nous ou un ami) via
+/// `GetOwnedGames`, avec un token obtenu par [`web_api_token`]. ⚠️ Pour un ami, ne renvoie
+/// des jeux que si son profil expose « Détails des jeux » (public, ou amis-seulement
+/// puisqu'on est amis) ; sinon liste vide = profil privé, indistinguable d'un compte sans jeu.
+pub fn owned_with_token(steam_id: &str, token: &str) -> Vec<GameDto> {
+    owned_via_api(steam_id, &format!("access_token={token}"))
 }
 
 /// Extrait le jeton WebAPI (JWT) embarqué dans une page communautaire.

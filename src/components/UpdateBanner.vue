@@ -2,7 +2,7 @@
 import { computed, onMounted } from "vue";
 import { useUpdater } from "../composables/useUpdater";
 
-const { status, version, notes, progress, error, check, install, dismiss } = useUpdater();
+const { status, version, progress, error, check, install, dismiss } = useUpdater();
 
 // Vérifie une mise à jour au lancement de l'app (silencieux si à jour / hors Tauri).
 onMounted(() => check(true));
@@ -27,7 +27,6 @@ const pct = computed(() => (progress.value != null ? Math.round(progress.value *
             <div class="ub-sub">Torii {{ version }} est prêt à être installé.</div>
           </div>
         </div>
-        <p v-if="notes" class="ub-notes">{{ notes }}</p>
         <div class="ub-actions">
           <button class="ub-btn primary" @click="install">Installer et redémarrer</button>
           <button class="ub-btn ghost" @click="dismiss">Plus tard</button>
@@ -102,12 +101,6 @@ const pct = computed(() => (progress.value != null ? Math.round(progress.value *
 /* Message d'erreur : jusqu'à 3 lignes puis coupe (pas de scrollbar). */
 .ub-sub.clamp {
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
-.ub-notes {
-  font-size: 12px; color: var(--text-dim); margin: 0; line-height: 1.5;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-  white-space: pre-line;
-  padding: 10px 12px; border-radius: 10px; background: var(--surface-2);
 }
 .ub-actions { display: flex; gap: 8px; }
 .ub-btn {

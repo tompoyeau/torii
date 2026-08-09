@@ -924,6 +924,22 @@ async fn steam_friends(app: tauri::AppHandle) -> Result<Vec<accounts::steam::Fri
         .map_err(|e| e.to_string())
 }
 
+/// Jeux en commun avec les amis Steam : ma bibliothèque croisée avec celle de chaque ami
+/// (dont le profil est lisible). `force` recalcule en ignorant le cache disque. Renvoie une
+/// charge vide si Steam n'est pas connecté.
+#[tauri::command]
+async fn friends_common(
+    app: tauri::AppHandle,
+    force: bool,
+) -> Result<accounts::friends_games::FriendsCommon, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        accounts::friends_games::compute(&dir, force).unwrap_or_default()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Renvoie l'état des connexions de comptes.
 #[tauri::command]
 fn get_settings(app: tauri::AppHandle) -> Settings {
@@ -1079,6 +1095,7 @@ pub fn run() {
             store_suggest,
             store_game,
             steam_friends,
+            friends_common,
             set_steam_key,
             get_settings
         ])

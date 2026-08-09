@@ -1,15 +1,66 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
+import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
-import { launchGame, launchSource, uninstallGame } from "../lib/tauri";
+import { launchGame, launchSource, openExternal, uninstallGame } from "../lib/tauri";
+import type { FriendLib } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
 
 const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed } = useLibrary();
+const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { selectedGameId, closeGame } = useUi();
 
 const game = computed(() => byId(selectedGameId.value));
+
+const friendById = computed(() => new Map(friends.value.map((f) => [f.steamId, f])));
+
+/**
+ * Amis qui possèdent aussi ce jeu : ceux dont on a lu la bibliothèque (via Steam),
+ * plus les membres de la famille qui sont des amis (utile quand leur biblio est privée,
+ * la donnée famille connaît la possession quand même). Déboublonné par SteamID.
+ */
+const friendOwners = computed<FriendLib[]>(() => {
+  if (!game.value) return [];
+  const map = new Map<string, FriendLib>();
+  for (const f of ownersOf(game.value)) map.set(f.steamId, f);
+  for (const sid of game.value.familyOwners ?? []) {
+    const f = friendById.value.get(sid);
+    if (f) map.set(sid, f);
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+});
+
+/** Nombre de copies du jeu dans la famille Steam. */
+const familyCopies = computed(() => game.value?.familyOwners?.length ?? 0);
+/** Montrer l'info famille : jeu partagé, ou plusieurs copies détenues. */
+const showFamily = computed(
+  () => familyCopies.value >= 1 && (game.value?.familyShared || familyCopies.value >= 2),
+);
+
+// Charge (une fois, cache 6 h) les bibliothèques d'amis pour la section « qui l'a aussi ».
+watch(
+  selectedGameId,
+  (id) => {
+    if (id) void ensureLoaded();
+  },
+  { immediate: true },
+);
+
+const avatarFailed = ref(new Set<string>());
+function ownerAvatar(f: FriendLib): string | null {
+  return f.avatarUrl && !avatarFailed.value.has(f.avatarUrl) ? f.avatarUrl : null;
+}
+function onOwnerAvatarError(url: string) {
+  avatarFailed.value = new Set(avatarFailed.value).add(url);
+}
+function ownerInitials(name: string): string {
+  return name.trim().slice(0, 2).toUpperCase();
+}
+function openFriendProfile(f: FriendLib) {
+  openExternal(`https://steamcommunity.com/profiles/${f.steamId}`);
+}
 
 /** Provenances jouables (jeu multi-plateforme) ; vide si mono-source. */
 const sources = computed(() => game.value?.sources ?? []);
@@ -203,6 +254,24 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             <p v-else-if="loadingMeta" class="detail-desc dim">Chargement des détails…</p>
             <p v-else class="detail-desc dim">Aucune description disponible pour ce jeu.</p>
           </div>
+          <div v-if="friendOwners.length" class="detail-section">
+            <h4>Amis qui possèdent ce jeu <span class="sec-count">{{ friendOwners.length }}</span></h4>
+            <div class="owners-list">
+              <button
+                v-for="f in friendOwners"
+                :key="f.steamId"
+                class="owner"
+                :title="`Voir le profil de ${f.name}`"
+                @click="openFriendProfile(f)"
+              >
+                <span class="owner-av">
+                  <img v-if="ownerAvatar(f)" :src="ownerAvatar(f)!" alt="" loading="lazy" @error="onOwnerAvatarError(f.avatarUrl)" />
+                  <span v-else class="owner-av-fb">{{ ownerInitials(f.name) }}</span>
+                </span>
+                <span class="owner-name">{{ f.name }}</span>
+              </button>
+            </div>
+          </div>
           <div class="detail-section">
             <h4>Captures d'écran</h4>
             <div class="shots no-scrollbar">
@@ -260,6 +329,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             <div v-if="game.year" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></svg>Sortie</span><span class="v">{{ game.year }}</span></div>
             <div v-if="game.genre" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg>Genre</span><span class="v">{{ game.genre }}</span></div>
             <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>Taille</span><span class="v">{{ game.sizeGb ? game.sizeGb + " Go" : "—" }}</span></div>
+            <div v-if="showFamily" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>Famille Steam</span><span class="v">{{ familyCopies }} copie{{ familyCopies > 1 ? "s" : "" }}</span></div>
           </div>
           <div v-if="game.achievements" class="ach-progress">
             <div class="top"><span>Succès</span><span><b>{{ game.achievements.unlocked }} / {{ game.achievements.total }} ({{ achPct }}%)</b></span></div>
@@ -402,6 +472,22 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 }
 .detail-desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 90ch; }
 .detail-desc.dim { color: var(--text-faint); font-style: italic; }
+.sec-count {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 8px;
+  border-radius: 99px; background: var(--surface-2); color: var(--text-dim);
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0; vertical-align: middle;
+}
+.owners-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.owner {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 99px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer;
+  font-size: 13.5px; transition: all 0.14s;
+}
+.owner:hover { color: var(--text); border-color: var(--border-strong); transform: translateY(-1px); }
+.owner-av { width: 26px; height: 26px; flex: none; border-radius: 50%; overflow: hidden; }
+.owner-av img, .owner-av-fb { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; }
+.owner-av-fb { background: linear-gradient(140deg, #6b6f7a, #3a3d47); color: #fff; font-size: 11px; font-weight: 700; font-family: var(--mono); }
+.owner-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shots { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
 .shot {
   flex: none; width: 300px; aspect-ratio: 16 / 9; border-radius: 13px; border: 1px solid var(--border);

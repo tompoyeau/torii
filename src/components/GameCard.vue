@@ -28,6 +28,9 @@ function onCoverError() {
   if (coverSrc.value) failed.value = new Set(failed.value).add(coverSrc.value);
 }
 
+/** Nombre de copies du jeu dans le groupe familial Steam (≥2 = plusieurs copies). */
+const familyCopies = computed(() => props.game.familyOwners?.length ?? 0);
+
 /** Bascule le jeu dans/hors la liste d'exclusion (sans ouvrir le détail). */
 function toggleHidden() {
   setHidden(props.game.id, !props.game.hidden);
@@ -74,6 +77,10 @@ function toggleFavorite() {
         </button>
       </div>
       <span class="cover-scrim" />
+      <span v-if="familyCopies >= 2" class="cover-fam" :title="`${familyCopies} copies dans ta famille Steam`">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>
+        {{ familyCopies }}
+      </span>
       <span class="cover-title">{{ game.title }}</span>
       <span class="cover-hover">
         <span class="cover-play">
@@ -168,4 +175,11 @@ function toggleFavorite() {
 .card-sub .not-installed { color: var(--text-faint); }
 .cover.uninstalled { filter: saturate(0.85) brightness(0.9); }
 .card:hover .cover.uninstalled { filter: none; }
+/* Badge « copies famille » (bas-droite de la cover) */
+.cover-fam {
+  position: absolute; right: 10px; bottom: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px 2px 6px; border-radius: 99px; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+  background: rgba(12, 10, 18, 0.62); backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.cover-fam svg { width: 13px; height: 13px; }
 </style>

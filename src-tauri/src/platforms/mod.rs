@@ -140,7 +140,13 @@ pub fn uninstall(platform: &str, target: &str, install_dir: Option<&str>) -> Res
         // Steam ouvre sa propre boîte de dialogue de désinstallation.
         "steam" => open_uri(&format!("steam://uninstall/{target}")),
         // Epic Games Launcher : action `uninstall` sur l'app (confirmation dans le launcher).
-        "epic" => open_uri(&format!("com.epicgames.launcher://apps/{target}?action=uninstall")),
+        // ⚠️ Contrairement à `launch`, l'uninstall exige l'identifiant canonique COMPLET
+        // (`namespace:catalogItemId:artifactId`) : avec le simple AppName, Epic s'ouvre mais
+        // ne cible aucun jeu. On résout le triplet depuis le manifeste (repli AppName seul).
+        "epic" => {
+            let app_id = epic::full_app_id(target).unwrap_or_else(|| target.to_string());
+            open_uri(&format!("com.epicgames.launcher://apps/{app_id}?action=uninstall"))
+        }
         // Ubisoft Connect : URI de désinstallation (ouvre le launcher sur la confirmation).
         "ubisoft" => open_uri(&format!("uplay://uninstall/{target}")),
         // App EA (ex-Origin) : désinstallation via l'app EA.
