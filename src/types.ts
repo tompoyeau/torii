@@ -15,6 +15,8 @@ export interface GameDto {
   installed: boolean;
   owned?: boolean;
   familyShared?: boolean;
+  /** SteamIDs des membres de la famille qui possèdent ce jeu (nb de copies). */
+  familyOwners?: string[];
   playtimeMinutes?: number | null;
   sizeGb: number;
   installDir?: string | null;
@@ -79,6 +81,8 @@ export interface Game {
   owned?: boolean;
   /** Accessible via le partage familial Steam (possédé par un proche). */
   familyShared?: boolean;
+  /** SteamIDs des membres de la famille qui possèdent ce jeu (nb de copies). */
+  familyOwners?: string[];
   favorite: boolean;
   recent: boolean;
   /** Cible de lancement transmise à Rust (appid, URI, exe…). */
@@ -178,6 +182,33 @@ export interface Friend {
   /** Jeu en cours (si en jeu). */
   gameName?: string | null;
   profileUrl: string;
+}
+
+/** Un ami dans la vue « Jeux en commun » (commande Rust `friends_common`). */
+export interface FriendLib {
+  steamId: string;
+  name: string;
+  avatarUrl: string;
+  /** Vrai si sa bibliothèque est privée (illisible) → non filtrable. */
+  private: boolean;
+  /** Nombre de jeux qu'il possède en commun avec moi. */
+  commonCount: number;
+}
+
+/** Un de MES jeux Steam, avec les amis qui le possèdent aussi. */
+export interface CommonGame {
+  id: string;
+  title: string;
+  coverUrl?: string | null;
+  /** SteamIDs des amis (lisibles) qui possèdent ce jeu. */
+  owners: string[];
+}
+
+/** Charge utile de la commande `friends_common`. */
+export interface FriendsCommon {
+  friends: FriendLib[];
+  games: CommonGame[];
+  fetchedAt: number;
 }
 
 export type AppMode = "bureau" | "salon";

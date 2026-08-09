@@ -1,4 +1,4 @@
-import type { Friend, Game, GameDto, GameMeta, Settings, StoreGame, StoreItem, StoreSuggestion } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, StoreGame, StoreItem, StoreSuggestion } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -351,6 +351,17 @@ export async function steamFriends(): Promise<Friend[] | null> {
     return await invoke<Friend[]>("steam_friends");
   } catch (err) {
     console.info("[ludo] steam_friends indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Jeux en commun avec les amis Steam. `null` hors Tauri (→ mock). */
+export async function friendsCommon(force = false): Promise<FriendsCommon | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<FriendsCommon>("friends_common", { force });
+  } catch (err) {
+    console.info("[ludo] friends_common indisponible hors Tauri", err);
     return null;
   }
 }

@@ -1,6 +1,7 @@
 pub mod battlenet;
 pub mod ea;
 pub mod epic;
+pub mod friends_games;
 pub mod gog;
 pub mod secrets;
 pub mod steam;

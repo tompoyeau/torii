@@ -14,6 +14,10 @@ struct EpicItem {
     app_name: String,
     #[serde(default)]
     main_game_app_name: String,
+    #[serde(default)]
+    catalog_namespace: String,
+    #[serde(default)]
+    catalog_item_id: String,
     #[serde(default, rename = "bIsIncompleteInstall")]
     incomplete: bool,
 }
@@ -80,6 +84,37 @@ pub fn launcher_exe() -> Option<PathBuf> {
     // Premier token entre guillemets = chemin de l'exécutable.
     let exe = PathBuf::from(cmd.split('"').nth(1)?);
     exe.is_file().then_some(exe)
+}
+
+/// Identifiant **canonique complet** d'un jeu Epic pour les deeplinks autres que `launch`.
+///
+/// Le launcher tolère le simple `AppName` (artifactId) pour `action=launch`, mais pour
+/// `action=uninstall` (comme pour `install`) il attend l'identifiant triple
+/// `namespace:catalogItemId:artifactId` — sinon le deeplink est reçu (Epic s'ouvre) mais
+/// aucun jeu n'est ciblé. On relit le manifeste `*.item` dont l'`AppName` correspond pour en
+/// extraire le namespace + catalogItemId, et on renvoie l'identifiant avec les deux-points
+/// **encodés `%3A`** (format des liens « Install » officiels d'Epic).
+pub fn full_app_id(app_name: &str) -> Option<String> {
+    let dir = manifests_dir()?;
+    for entry in fs::read_dir(&dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("item") {
+            continue;
+        }
+        let Ok(item) = fs::read_to_string(&path).and_then(|t| {
+            serde_json::from_str::<EpicItem>(&t).map_err(std::io::Error::other)
+        }) else {
+            continue;
+        };
+        if item.app_name == app_name && !item.catalog_namespace.is_empty() && !item.catalog_item_id.is_empty()
+        {
+            return Some(format!(
+                "{}%3A{}%3A{}",
+                item.catalog_namespace, item.catalog_item_id, item.app_name
+            ));
+        }
+    }
+    None
 }
 
 fn manifests_dir() -> Option<PathBuf> {

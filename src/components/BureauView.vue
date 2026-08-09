@@ -10,6 +10,7 @@ import HeroFeatured from "./HeroFeatured.vue";
 import GameCard from "./GameCard.vue";
 import StoreView from "./StoreView.vue";
 import FriendsView from "./FriendsView.vue";
+import CommonView from "./CommonView.vue";
 
 const { filtered, games } = useLibrary();
 const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, genre, setGenre, openGame } = useUi();
@@ -95,6 +96,7 @@ function title(f: LibraryFilter): string {
 
       <StoreView v-if="section === 'store'" />
       <FriendsView v-else-if="section === 'friends'" />
+      <CommonView v-else-if="section === 'common'" />
       <template v-else>
       <HeroFeatured />
 

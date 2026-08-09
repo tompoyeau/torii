@@ -4,6 +4,12 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.0
+- Nouvelle section **En commun** : retrouve tous les jeux que tu partages avec tes amis Steam, avec un filtre multi-amis pour voir ce que vous possédez tous et jouer ensemble.
+- Sur chaque fiche de jeu : les **amis qui possèdent aussi le jeu** (cliquables vers leur profil Steam) et, pour les jeux du partage familial, le **nombre de copies disponibles dans la famille**.
+- Correction de la **désinstallation des jeux Epic** : Epic s'ouvre désormais directement sur le bon jeu.
+- Nouvelles icônes plus reconnaissables pour Riot, Ubisoft Connect et Battle.net.
+
 ## 0.8.0
 - Nouvelle **Boutique** : découvre des jeux à acheter et compare les prix sur toutes les boutiques PC (Steam, GOG, Epic, Humble, Fanatical…) en euros, avec le plus bas prix historique et un lien d'achat direct. Recherche avec suggestions instantanées. Les prix Instant Gaming sont aussi affichés sur la fiche produit.
 - Nouveau panneau **Amis** : retrouve tes amis Steam au même endroit, vois qui est en ligne et à quoi il joue, avec un rafraîchissement en direct.

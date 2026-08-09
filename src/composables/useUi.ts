@@ -2,7 +2,7 @@ import { reactive, toRefs } from "vue";
 import type { AppMode, LibraryFilter, SortKey } from "../types";
 
 /** Section principale de la vue Bureau : bibliothèque, boutique ou amis. */
-type BureauSection = "library" | "store" | "friends";
+type BureauSection = "library" | "store" | "friends" | "common";
 
 interface UiState {
   mode: AppMode;
@@ -55,6 +55,10 @@ export function useUi() {
     },
     showFriends: () => {
       state.section = "friends";
+      window.scrollTo({ top: 0 });
+    },
+    showCommon: () => {
+      state.section = "common";
       window.scrollTo({ top: 0 });
     },
     setSort: (sort: SortKey) => (state.sort = sort),
