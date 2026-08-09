@@ -4,6 +4,9 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.1
+- Correction de la **liste d'amis Steam vide** chez certains utilisateurs : la session communautaire est désormais régénérée automatiquement (comme la bibliothèque), et la connexion Steam génère un cookie propre même en présence d'une ancienne session héritée d'une version antérieure. Si ta liste d'amis n'apparaissait pas, reconnecte ton compte Steam une fois.
+
 ## 0.9.0
 - Nouvelle section **En commun** : retrouve tous les jeux que tu partages avec tes amis Steam, avec un filtre multi-amis pour voir ce que vous possédez tous et jouer ensemble.
 - Sur chaque fiche de jeu : les **amis qui possèdent aussi le jeu** (cliquables vers leur profil Steam) et, pour les jeux du partage familial, le **nombre de copies disponibles dans la famille**.

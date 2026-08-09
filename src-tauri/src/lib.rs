@@ -294,6 +294,18 @@ async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
     creds.steam_community = community.map(|(sec, sid)| to_cookie_header(sec, sid));
     creds.steam_id = steam_id.clone();
     creds.steam_refresh_token = refresh_token;
+
+    // 🔑 Cookie communautaire GARANTI frais, dérivé du refresh token (rejeu de login),
+    // indépendant de l'état du WebView2. Sans ça, un profil WebView2 hérité d'une ancienne
+    // install peut retourner un vieux `steamLoginSecure` communautaire (HttpOnly, non purgé
+    // fiablement par clear_all_browsing_data) → cookie pourri, liste d'amis vide même après
+    // reconnexion. On remplace donc le cookie capté par un cookie régénéré (repli : le capté).
+    if let (Some(rt), Some(id)) = (creds.steam_refresh_token.as_deref(), creds.steam_id.as_deref()) {
+        if let Some(fresh) = accounts::steam::refresh_web_cookie(rt, id) {
+            creds.steam_community = Some(fresh.clone());
+            creds.steam_login_secure = Some(fresh);
+        }
+    }
     accounts::secrets::save(&dir, &creds)?;
 
     Ok(Settings::from_creds(&creds, &dir))
@@ -912,14 +924,7 @@ async fn store_game(
 #[tauri::command]
 async fn steam_friends(app: tauri::AppHandle) -> Result<Vec<accounts::steam::Friend>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let creds = accounts::secrets::load(&dir);
-    let (Some(steam_id), Some(cookie)) = (
-        creds.steam_id.clone(),
-        creds.steam_community.clone().or(creds.steam_login_secure.clone()),
-    ) else {
-        return Ok(Vec::new());
-    };
-    tauri::async_runtime::spawn_blocking(move || accounts::steam::friends(&steam_id, &cookie))
+    tauri::async_runtime::spawn_blocking(move || accounts::steam_friends_list(&dir))
         .await
         .map_err(|e| e.to_string())
 }
