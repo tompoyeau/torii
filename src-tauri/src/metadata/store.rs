@@ -17,6 +17,7 @@ use crate::models::GameDto;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 const PROXY: &str = "https://torii-igdb-proxy.toriiapp.workers.dev/itad";
@@ -368,6 +369,132 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
     }
 
     Some(out)
+}
+
+// --- Wishlist Steam enrichie de prix (ITAD) -----------------------------------
+
+const WISHLIST_WORKERS: usize = 8;
+
+/// Un jeu de la wishlist Steam, avec son meilleur prix actuel et son plus bas historique.
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WishlistItem {
+    pub app_id: u64,
+    /// Identifiant ITAD (pour ouvrir la fiche produit) ; vide si non trouvé sur ITAD.
+    pub game_id: String,
+    pub title: String,
+    /// Jaquette portrait Steam CDN (l'appid est toujours connu).
+    pub cover_url: String,
+    /// Meilleur prix actuel (EUR), `None` si aucune offre / non résolu.
+    pub price: Option<f64>,
+    pub normal_price: Option<f64>,
+    pub savings: u32,
+    pub store_name: String,
+    pub buy_url: String,
+    /// Plus bas prix historique (EUR), si connu.
+    pub history_low: Option<f64>,
+}
+
+/// Résout un appid Steam en identifiant ITAD + titre via `games/lookup/v1`
+/// (réponse `{found, game:{id, title, …}}`).
+fn lookup_appid(appid: u64) -> Option<(String, String)> {
+    let root = get_json(&format!("games/lookup/v1?appid={appid}"))?;
+    let g = root.get("game")?;
+    Some((g["id"].as_str()?.to_string(), g["title"].as_str()?.to_string()))
+}
+
+/// Meilleure offre (prix mini) d'une entrée `games/prices/v3`.
+fn best_deal(entry: &Value) -> Option<&Value> {
+    entry["deals"].as_array()?.iter().min_by(|a, b| {
+        num(&a["price"]["amount"])
+            .unwrap_or(f64::MAX)
+            .partial_cmp(&num(&b["price"]["amount"]).unwrap_or(f64::MAX))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    })
+}
+
+/// Wishlist enrichie : pour chaque appid, résout l'id ITAD + le titre (en parallèle),
+/// puis récupère prix courant (meilleure offre) + plus bas historique **en un seul appel
+/// groupé**. Ordre d'entrée préservé (priorité de la wishlist). Jaquette = CDN Steam.
+pub fn wishlist(appids: &[u64]) -> Vec<WishlistItem> {
+    if appids.is_empty() {
+        return Vec::new();
+    }
+
+    // 1) appid → (id ITAD, titre), réparti sur plusieurs threads.
+    let next = AtomicUsize::new(0);
+    let resolved: Vec<(u64, Option<(String, String)>)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..WISHLIST_WORKERS.min(appids.len().max(1)))
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut local = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        if i >= appids.len() {
+                            break;
+                        }
+                        local.push((appids[i], lookup_appid(appids[i])));
+                    }
+                    local
+                })
+            })
+            .collect();
+        handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
+    });
+    let mut by_appid: std::collections::HashMap<u64, (String, String)> = resolved
+        .into_iter()
+        .filter_map(|(a, r)| r.map(|v| (a, v)))
+        .collect();
+
+    // 2) Prix groupés pour tous les ids ITAD résolus (un seul POST).
+    let ids: Vec<String> = appids
+        .iter()
+        .filter_map(|a| by_appid.get(a).map(|(id, _)| id.clone()))
+        .collect();
+    let price_entries = if ids.is_empty() {
+        Vec::new()
+    } else {
+        post_json(&format!("games/prices/v3?country={COUNTRY}"), &json!(ids))
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default()
+    };
+    let prices: std::collections::HashMap<String, Value> = price_entries
+        .into_iter()
+        .filter_map(|e| {
+            let id = e["id"].as_str()?.to_string();
+            Some((id, e))
+        })
+        .collect();
+
+    // 3) Items dans l'ordre de la wishlist.
+    let cdn = "https://cdn.cloudflare.steamstatic.com/steam/apps";
+    appids
+        .iter()
+        .map(|&appid| {
+            let (game_id, title) = by_appid.remove(&appid).unwrap_or_default();
+            let mut item = WishlistItem {
+                app_id: appid,
+                cover_url: format!("{cdn}/{appid}/library_600x900.jpg"),
+                title,
+                game_id: game_id.clone(),
+                ..Default::default()
+            };
+            if let Some(entry) = prices.get(&game_id) {
+                item.history_low = num(&entry["historyLow"]["all"]["amount"]);
+                if let Some(deal) = best_deal(entry) {
+                    if let Some(p) = num(&deal["price"]["amount"]) {
+                        item.price = Some(p);
+                        item.normal_price = Some(num(&deal["regular"]["amount"]).unwrap_or(p));
+                        item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
+                        item.store_name =
+                            deal["shop"]["name"].as_str().unwrap_or_default().to_string();
+                        item.buy_url = deal["url"].as_str().unwrap_or_default().to_string();
+                    }
+                }
+            }
+            item
+        })
+        .collect()
 }
 
 /// Encodage minimal d'un paramètre de requête.

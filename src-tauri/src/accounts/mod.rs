@@ -66,6 +66,28 @@ pub fn steam_friends_list(config_dir: &Path) -> Vec<steam::Friend> {
     }
 }
 
+/// Appids de la wishlist Steam, via le WebAPIToken (avec régénération de session au besoin,
+/// comme les jeux possédés / les amis). Vide si Steam non connecté ou wishlist inaccessible.
+pub fn steam_wishlist_appids(config_dir: &Path) -> Vec<u64> {
+    let creds = secrets::load(config_dir);
+    let Some(steam_id) = creds.steam_id.clone().or_else(steam::detect_steam_id) else {
+        return Vec::new();
+    };
+    let token = creds
+        .steam_community
+        .clone()
+        .or_else(|| creds.steam_login_secure.clone())
+        .and_then(|c| steam::web_api_token(&steam_id, &c))
+        .or_else(|| {
+            let fresh = refresh_community_cookie(config_dir, &creds, Some(steam_id.as_str()))?;
+            steam::web_api_token(&steam_id, &fresh)
+        });
+    match token {
+        Some(t) => steam::wishlist(&steam_id, &t),
+        None => Vec::new(),
+    }
+}
+
 /// Récupère les jeux possédés via les comptes connectés (Steam, GOG et Epic).
 pub fn owned_games(config_dir: &Path) -> Vec<GameDto> {
     let creds = secrets::load(config_dir);

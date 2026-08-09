@@ -4,6 +4,12 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.2
+- Nouvelle section **Wishlist** : ta liste de souhaits Steam avec, pour chaque jeu, le meilleur prix du moment, la remise et le plus bas prix historique — pour repérer d'un coup d'œil ce qui est en promo.
+- Correction de la **liste d'amis Steam** qui restait vide pour les comptes ayant une URL personnalisée.
+- Boutique : **flèches de navigation** (et clavier) dans la visionneuse de captures d'écran.
+- Nouveau bouton **« Voir dans la boutique »** sur la fiche d'un jeu, pour comparer ses prix en un clic.
+
 ## 0.9.1
 - Correction de la **liste d'amis Steam vide** chez certains utilisateurs : la session communautaire est désormais régénérée automatiquement (comme la bibliothèque), et la connexion Steam génère un cookie propre même en présence d'une ancienne session héritée d'une version antérieure. Si ta liste d'amis n'apparaissait pas, reconnecte ton compte Steam une fois.
 

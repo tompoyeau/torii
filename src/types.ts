@@ -211,6 +211,23 @@ export interface FriendsCommon {
   fetchedAt: number;
 }
 
+/** Un jeu de la wishlist Steam enrichi de prix (commande Rust `steam_wishlist`). */
+export interface WishlistItem {
+  appId: number;
+  /** Identifiant ITAD (ouvre la fiche Boutique) ; vide si absent d'ITAD. */
+  gameId: string;
+  title: string;
+  coverUrl: string;
+  /** Meilleur prix actuel (EUR) ; null si aucune offre / non résolu. */
+  price?: number | null;
+  normalPrice?: number | null;
+  savings: number;
+  storeName: string;
+  buyUrl: string;
+  /** Plus bas prix historique (EUR), si connu. */
+  historyLow?: number | null;
+}
+
 export type AppMode = "bureau" | "salon";
 
 /** Critère de tri de la bibliothèque. */

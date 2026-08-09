@@ -99,6 +99,29 @@ function closeProduct() {
   productLoading.value = false;
 }
 
+/**
+ * Ouvre la fiche boutique correspondant au **titre** d'un jeu (depuis la bibliothèque) :
+ * on résout le meilleur résultat via l'autocomplétion (rapide), puis on ouvre sa fiche.
+ * Sans correspondance exacte, on bascule sur une recherche classique (grille de résultats).
+ */
+async function openForTitle(title: string) {
+  clearSuggestions();
+  // Affiche tout de suite l'overlay en chargement (évite un flash de la vitrine).
+  selectedGameId.value = "__loading__";
+  product.value = null;
+  productLoading.value = true;
+  const res = (await storeSuggest(title)) ?? mockSuggest(title);
+  const first = res[0];
+  if (!first) {
+    selectedGameId.value = null;
+    productLoading.value = false;
+    query.value = title;
+    void runSearch();
+    return;
+  }
+  await openProduct(first.gameId);
+}
+
 export function useStore() {
   // Premier affichage de la boutique : charge la vitrine une seule fois.
   if (!loadedOnce) {
@@ -119,6 +142,7 @@ export function useStore() {
     runSearch,
     setSort,
     openProduct,
+    openForTitle,
     closeProduct,
     fetchSuggestions,
     clearSuggestions,

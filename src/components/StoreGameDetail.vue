@@ -22,14 +22,26 @@ function hideBroken(e: Event) {
 }
 
 function onKey(e: KeyboardEvent) {
+  if (zoom.value != null) {
+    // La visionneuse capte les touches avant la fiche.
+    if (e.key === "Escape") zoom.value = null;
+    else if (e.key === "ArrowRight") stepZoom(1);
+    else if (e.key === "ArrowLeft") stepZoom(-1);
+    return;
+  }
   if (e.key === "Escape" && open.value) closeProduct();
 }
 onMounted(() => document.addEventListener("keydown", onKey));
 onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 
-/** Visionneuse plein écran des captures. */
+/** Visionneuse plein écran des captures (index dans `shots`, sinon fermée). */
 const zoom = ref<number | null>(null);
 const shots = computed(() => product.value?.screenshots ?? []);
+function stepZoom(delta: number) {
+  const n = shots.value.length;
+  if (zoom.value == null || n === 0) return;
+  zoom.value = (zoom.value + delta + n) % n;
+}
 </script>
 
 <template>
@@ -112,7 +124,14 @@ const shots = computed(() => product.value?.screenshots ?? []);
         <button class="lb-close" aria-label="Fermer" @click="zoom = null">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
+        <button v-if="shots.length > 1" class="lb-nav prev" aria-label="Capture précédente" @click.stop="stepZoom(-1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
+        </button>
         <img class="lb-img" :src="shots[zoom]" alt="" @error="hideBroken" />
+        <button v-if="shots.length > 1" class="lb-nav next" aria-label="Capture suivante" @click.stop="stepZoom(1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
+        </button>
+        <div v-if="shots.length > 1" class="lb-count">{{ zoom + 1 }} / {{ shots.length }}</div>
       </div>
     </template>
   </div>
@@ -181,6 +200,18 @@ const shots = computed(() => product.value?.screenshots ?? []);
 .lb-img { max-width: 100%; max-height: 92vh; border-radius: 12px; object-fit: contain; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6); }
 .lb-close { position: fixed; top: 20px; right: 22px; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(14, 10, 20, 0.55); color: #fff; }
 .lb-close svg { width: 20px; height: 20px; }
+.lb-nav {
+  position: fixed; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(14, 10, 20, 0.55); color: #fff; cursor: pointer;
+}
+.lb-nav:hover { background: rgba(40, 30, 55, 0.85); border-color: rgba(255, 255, 255, 0.35); }
+.lb-nav.prev { left: 20px; }
+.lb-nav.next { right: 20px; }
+.lb-nav svg { width: 24px; height: 24px; }
+.lb-count {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 13px; color: #fff;
+  background: rgba(14, 10, 20, 0.6); padding: 6px 12px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, 0.14);
+}
 
 @media (max-width: 980px) {
   .sd-body { grid-template-columns: minmax(0, 1fr); }

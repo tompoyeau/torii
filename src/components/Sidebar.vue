@@ -7,7 +7,7 @@ import type { LibraryFilter, PlatformId } from "../types";
 import { useFriends } from "../composables/useFriends";
 
 const { games } = useLibrary();
-const { section, filter, setFilter, showStore, showFriends, showCommon } = useUi();
+const { section, filter, setFilter, showStore, showFriends, showCommon, showWishlist } = useUi();
 const { activeCount: friendsOnline } = useFriends();
 
 // Les compteurs des vues normales excluent les jeux masqués.
@@ -115,6 +115,10 @@ const totalGb = 2000;
       <button class="nav-item" :class="{ active: section === 'common' }" @click="showCommon()">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="8.5" cy="12" r="5.2" /><circle cx="15.5" cy="12" r="5.2" /></svg>
         En commun
+      </button>
+      <button class="nav-item" :class="{ active: section === 'wishlist' }" @click="showWishlist()">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
+        Wishlist
       </button>
     </nav>
 

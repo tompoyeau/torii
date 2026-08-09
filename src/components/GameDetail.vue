@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
+import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
 import { launchGame, launchSource, openExternal, uninstallGame } from "../lib/tauri";
@@ -10,7 +11,17 @@ import PlatformIcon from "./PlatformIcon.vue";
 
 const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed } = useLibrary();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
-const { selectedGameId, closeGame } = useUi();
+const { openForTitle } = useStore();
+const { selectedGameId, closeGame, showStore } = useUi();
+
+/** Ouvre ce jeu dans la Boutique de Torii (comparatif de prix, plus bas historique). */
+function viewInStore() {
+  const g = game.value;
+  if (!g) return;
+  closeGame();
+  showStore();
+  void openForTitle(g.title);
+}
 
 const game = computed(() => byId(selectedGameId.value));
 
@@ -224,6 +235,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               @click.stop="toggleFavorite"
             >
               <svg viewBox="0 0 24 24" :fill="game.favorite ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg>
+            </button>
+            <button class="btn-ghost solid" title="Voir dans la boutique" aria-label="Voir dans la boutique" @click.stop="viewInStore">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 13.3 12.8 21a1.5 1.5 0 0 1-2.1 0l-7-7a1.4 1.4 0 0 1-.4-1V4.6A1.5 1.5 0 0 1 4.6 3h8.4a1.4 1.4 0 0 1 1 .4l6.5 6.5a2 2 0 0 1 0 2.8Z" /><circle cx="7.8" cy="7.8" r="1.4" fill="currentColor" stroke="none" /></svg>
             </button>
             <div v-if="game.installed" class="settings-wrap">
               <button
