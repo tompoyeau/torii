@@ -79,17 +79,27 @@ pub fn compute(config_dir: &Path, force: bool) -> Option<FriendsCommon> {
         }
     }
 
-    let fresh = fetch_live(&steam_id, &cookie)?;
+    // Jeton web (session ~24 h) ; s'il est expiré, on régénère le cookie via le refresh token
+    // (~200 j) et on persiste — sinon « En commun » resterait vide comme la liste d'amis.
+    let mut cookie = cookie;
+    let mut token = steam::web_api_token(&steam_id, &cookie);
+    if token.is_none() {
+        if let Some(fresh) = super::refresh_community_cookie(config_dir, &creds, Some(steam_id.as_str())) {
+            cookie = fresh;
+            token = steam::web_api_token(&steam_id, &cookie);
+        }
+    }
+    let token = token?;
+
+    let fresh = fetch_live(&steam_id, &cookie, &token)?;
     save_cache(config_dir, &fresh);
     Some(fresh)
 }
 
 /// Récupère en direct : mes jeux + la bibliothèque de chaque ami, puis le croisement.
-fn fetch_live(steam_id: &str, cookie: &str) -> Option<FriendsCommon> {
-    let token = steam::web_api_token(steam_id, cookie)?;
-
+fn fetch_live(steam_id: &str, cookie: &str, token: &str) -> Option<FriendsCommon> {
     // 1) Mes jeux Steam possédés (référentiel de l'intersection).
-    let mine = steam::owned_with_token(steam_id, &token);
+    let mine = steam::owned_with_token(steam_id, token);
     if mine.is_empty() {
         // Sans notre propre bibliothèque, aucun « en commun » possible.
         return Some(FriendsCommon {
@@ -113,7 +123,7 @@ fn fetch_live(steam_id: &str, cookie: &str) -> Option<FriendsCommon> {
 
     // 2) Bibliothèque de chaque ami, en parallèle.
     let friends = steam::friends(steam_id, cookie);
-    let libs = fetch_friend_libs(&friends, &token);
+    let libs = fetch_friend_libs(&friends, token);
 
     // 3) Croisement : pour chaque ami lisible, marquer les jeux communs.
     let mut friend_out = Vec::with_capacity(friends.len());
