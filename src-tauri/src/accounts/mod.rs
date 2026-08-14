@@ -66,6 +66,24 @@ pub fn steam_friends_list(config_dir: &Path) -> Vec<steam::Friend> {
     }
 }
 
+/// Profil Steam de l'utilisateur connecté (pseudo + avatar), pour l'en-tête. `None` si
+/// Steam non connecté ou profil inaccessible. Régénère la session au besoin (comme les amis).
+pub fn steam_me(config_dir: &Path) -> Option<steam::SteamProfile> {
+    let creds = secrets::load(config_dir);
+    let steam_id = creds.steam_id.clone().or_else(steam::detect_steam_id)?;
+    if let Some(cookie) = creds
+        .steam_community
+        .clone()
+        .or_else(|| creds.steam_login_secure.clone())
+    {
+        if let Some(p) = steam::profile(&steam_id, &cookie) {
+            return Some(p);
+        }
+    }
+    let fresh = refresh_community_cookie(config_dir, &creds, Some(steam_id.as_str()))?;
+    steam::profile(&steam_id, &fresh)
+}
+
 /// Appids de la wishlist Steam, via le WebAPIToken (avec régénération de session au besoin,
 /// comme les jeux possédés / les amis). Vide si Steam non connecté ou wishlist inaccessible.
 pub fn steam_wishlist_appids(config_dir: &Path) -> Vec<u64> {

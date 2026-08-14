@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useContextMenu } from "../composables/useContextMenu";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
-import { launchGame, uninstallGame } from "../lib/tauri";
+import { launchGame, openInstallDir, uninstallGame } from "../lib/tauri";
 
 const { ctx, closeContext } = useContextMenu();
 const { setFavorite, setHidden, removeManual, markPlayed } = useLibrary();
@@ -62,6 +62,10 @@ function onDetail() {
   if (game.value) openGame(game.value.id);
   closeContext();
 }
+function onOpenFolder() {
+  if (game.value?.installDir) openInstallDir(game.value.installDir);
+  closeContext();
+}
 
 // Fermeture au clavier (Échap) ou au défilement de la page.
 function onKey(e: KeyboardEvent) {
@@ -97,6 +101,10 @@ onBeforeUnmount(() => {
       <button class="ctx-item" @click="onDetail">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /><path d="M9 9h6M9 13h6M9 17h3" /></svg>
         <span>Voir la fiche</span>
+      </button>
+      <button v-if="game.installed && game.installDir" class="ctx-item" @click="onOpenFolder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
+        <span>Ouvrir l'emplacement du fichier</span>
       </button>
       <div class="ctx-sep" />
       <button class="ctx-item" @click="onFavorite">
