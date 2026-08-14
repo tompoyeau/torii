@@ -209,13 +209,31 @@ fn launch_epic(app_name: &str) -> Result<(), String> {
         return Ok(());
     }
 
-    // Échec (on est dans un job qui refuse le breakaway → `tauri dev`) : évasion via WMI.
-    launch_via_wmi(&exe, &uri)
+    // Repli en cas d'échec du spawn direct.
+    // - En RELEASE (app installée) il n'existe aucun job object → il suffit d'ouvrir le
+    //   deeplink via `ShellExecuteW` (comme un clic sur un lien). On évite ainsi tout appel
+    //   PowerShell/WMI, dont la seule présence dans le binaire est un motif « malware »
+    //   flaggé par Windows Defender (création de process via WMI).
+    // - En DEV (`tauri dev`), l'app tourne dans un job object qui interdit le breakaway : le
+    //   seul moyen de faire survivre le bootstrapper Epic est de créer le process HORS du job,
+    //   via le service WMI. Ce chemin n'est donc compilé qu'en debug.
+    #[cfg(not(debug_assertions))]
+    {
+        return open_uri(&uri);
+    }
+    #[cfg(debug_assertions)]
+    {
+        return launch_via_wmi(&exe, &uri);
+    }
 }
 
 /// Crée un process via `Win32_Process.Create` du **service WMI** : le process obtenu n'est
 /// PAS dans notre job object, il survit donc au confinement de `tauri dev`. Utilisé en repli
 /// quand le spawn direct est refusé (breakaway interdit).
+///
+/// ⚠️ Compilé **uniquement en debug** : en release, l'appel PowerShell/WMI est absent du binaire
+/// (motif heuristique « malware » pour Windows Defender), et il n'y sert à rien (pas de job object).
+#[cfg(debug_assertions)]
 fn launch_via_wmi(exe: &Path, uri: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;

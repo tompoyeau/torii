@@ -929,6 +929,16 @@ async fn steam_friends(app: tauri::AppHandle) -> Result<Vec<accounts::steam::Fri
         .map_err(|e| e.to_string())
 }
 
+/// Profil Steam de l'utilisateur connecté (pseudo + avatar), pour l'en-tête.
+/// `None` si Steam n'est pas connecté.
+#[tauri::command]
+async fn steam_me(app: tauri::AppHandle) -> Result<Option<accounts::steam::SteamProfile>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || accounts::steam_me(&dir))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Wishlist Steam enrichie de prix (ITAD) : meilleur prix actuel + plus bas historique
 /// par jeu. Vide si Steam n'est pas connecté.
 #[tauri::command]
@@ -1057,6 +1067,23 @@ fn record_launch(app: tauri::AppHandle, id: String) -> Result<i64, String> {
     platforms::playhistory::record(&dir, &id)
 }
 
+/// Ouvre le dossier d'installation d'un jeu dans l'explorateur de fichiers.
+/// Si le chemin pointe sur un fichier, ouvre son dossier parent.
+#[tauri::command]
+fn open_install_dir(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    let target = if p.is_file() {
+        p.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or(path.clone())
+    } else {
+        path.clone()
+    };
+    if !std::path::Path::new(&target).exists() {
+        return Err(format!("Dossier introuvable : {target}"));
+    }
+    tauri_plugin_opener::open_path(&target, None::<&str>)
+        .map_err(|e| format!("Impossible d'ouvrir le dossier : {e}"))
+}
+
 /// Déclenche la désinstallation d'un jeu installé (délègue à l'UI native du launcher).
 #[tauri::command]
 fn uninstall_game(
@@ -1096,6 +1123,7 @@ pub fn run() {
             launch_game,
             record_launch,
             uninstall_game,
+            open_install_dir,
             add_manual_game,
             remove_manual_game,
             connect_steam,
@@ -1115,6 +1143,7 @@ pub fn run() {
             store_suggest,
             store_game,
             steam_friends,
+            steam_me,
             steam_wishlist,
             friends_common,
             set_steam_key,

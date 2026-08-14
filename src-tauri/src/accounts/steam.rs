@@ -365,9 +365,49 @@ fn parse_friends_page(html: &str) -> Vec<Friend> {
     out
 }
 
+/// Le profil Steam de l'utilisateur connecté (pseudo + avatar), pour l'en-tête.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SteamProfile {
+    pub steam_id: String,
+    pub name: String,
+    pub avatar_url: String,
+    pub profile_url: String,
+}
+
+/// Récupère le profil de l'utilisateur (pseudo + avatar) par scrape de sa page
+/// communautaire publique. Le cookie de session couvre aussi les profils privés.
+pub fn profile(steam_id: &str, cookie: &str) -> Option<SteamProfile> {
+    let url = format!("https://steamcommunity.com/profiles/{steam_id}/");
+    let html = fetch_text(&url, cookie, "https://steamcommunity.com/")?;
+    parse_profile(steam_id, &html)
+}
+
+/// Extrait pseudo + avatar de la page profil (SSR). Pseudo via `actual_persona_name`
+/// (repli `og:title`, préfixé « Steam Community :: »), avatar via `og:image` (`_full`).
+fn parse_profile(steam_id: &str, html: &str) -> Option<SteamProfile> {
+    let name = slice_between(html, "actual_persona_name\">", "</span>")
+        .map(decode_entities)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            slice_between(html, "og:title\" content=\"", "\"")
+                .map(|s| decode_entities(s.trim_start_matches("Steam Community :: ")))
+        })
+        .filter(|s| !s.is_empty())?;
+    let avatar_url = slice_between(html, "og:image\" content=\"", "\"")
+        .unwrap_or_default()
+        .to_string();
+    Some(SteamProfile {
+        steam_id: steam_id.to_string(),
+        name,
+        avatar_url,
+        profile_url: format!("https://steamcommunity.com/profiles/{steam_id}/"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{extract_webapi_token, parse_friends_page};
+    use super::{extract_webapi_token, parse_friends_page, parse_profile};
 
     #[test]
     fn extracts_webapi_token() {
@@ -399,6 +439,28 @@ mod tests {
         assert_eq!(f[1].name, "Ecrevisse");
         assert_eq!(f[1].state, "online");
         assert_eq!(f[1].game_name, None);
+    }
+
+    // SSR calqué sur une vraie page profil Steam.
+    #[test]
+    fn parses_profile_page() {
+        let html = r#"
+        <meta property="og:title" content="Steam Community :: PomPoteau">
+        <meta property="og:image" content="https://av/3604ac_full.jpg">
+        <div class="persona_name"><span class="actual_persona_name">PomPoteau</span></div>"#;
+        let p = parse_profile("76561198258753323", html).unwrap();
+        assert_eq!(p.name, "PomPoteau");
+        assert_eq!(p.avatar_url, "https://av/3604ac_full.jpg");
+        assert_eq!(p.profile_url, "https://steamcommunity.com/profiles/76561198258753323/");
+    }
+
+    // Repli sur og:title (préfixe retiré) si actual_persona_name absent.
+    #[test]
+    fn parses_profile_fallback_title() {
+        let html = r#"<meta property="og:title" content="Steam Community :: Jean-Kevin">
+        <meta property="og:image" content="https://av/x_full.jpg">"#;
+        let p = parse_profile("76561198000000000", html).unwrap();
+        assert_eq!(p.name, "Jean-Kevin");
     }
 }
 

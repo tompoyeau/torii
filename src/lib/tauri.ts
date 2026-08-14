@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, StoreGame, StoreItem, StoreSuggestion, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SteamProfile, StoreGame, StoreItem, StoreSuggestion, WishlistItem } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -295,6 +295,23 @@ export async function setGameFavorite(id: string, favorite: boolean): Promise<st
   }
 }
 
+/** Ouvre le dossier d'installation d'un jeu dans l'explorateur de fichiers. No-op hors Tauri. */
+export async function openInstallDir(dir: string): Promise<void> {
+  let invoke: typeof import("@tauri-apps/api/core").invoke;
+  try {
+    ({ invoke } = await import("@tauri-apps/api/core"));
+  } catch (err) {
+    console.info("[ludo] open_install_dir indisponible hors Tauri", err);
+    return;
+  }
+  try {
+    await invoke("open_install_dir", { path: dir });
+  } catch (err) {
+    // Erreur backend réelle (ex. dossier disparu) : on la remonte visiblement en console.
+    console.error(`[ludo] impossible d'ouvrir le dossier « ${dir} »`, err);
+  }
+}
+
 /**
  * Déclenche la désinstallation d'un jeu installé : délègue à l'UI native du launcher
  * (Steam/Epic/GOG/Ubisoft/EA), qui affiche sa propre confirmation. Pour les jeux fusionnés,
@@ -352,6 +369,23 @@ export async function steamFriends(): Promise<Friend[] | null> {
   } catch (err) {
     console.info("[ludo] steam_friends indisponible hors Tauri", err);
     return null;
+  }
+}
+
+/** Profil Steam de l'utilisateur (pseudo + avatar). `null` hors Tauri ou si non connecté. */
+export async function steamMe(): Promise<SteamProfile | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<SteamProfile | null>("steam_me");
+  } catch (err) {
+    console.info("[ludo] steam_me indisponible hors Tauri", err);
+    // Hors Tauri (preview) : profil fictif pour la maquette.
+    return {
+      steamId: "0",
+      name: "PomPoteau",
+      avatarUrl: "https://avatars.fastly.steamstatic.com/3604ac34b47c87e187d151f22aa17e107253ce34_full.jpg",
+      profileUrl: "#",
+    };
   }
 }
 

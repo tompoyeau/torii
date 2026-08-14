@@ -184,6 +184,14 @@ export interface Friend {
   profileUrl: string;
 }
 
+/** Profil Steam de l'utilisateur connecté (commande Rust `steam_me`), pour l'en-tête. */
+export interface SteamProfile {
+  steamId: string;
+  name: string;
+  avatarUrl: string;
+  profileUrl: string;
+}
+
 /** Un ami dans la vue « Jeux en commun » (commande Rust `friends_common`). */
 export interface FriendLib {
   steamId: string;

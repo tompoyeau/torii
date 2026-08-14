@@ -4,6 +4,15 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.3
+- **Barre latérale repensée** : navigation plus nette, icônes officielles des launchers, et un élément sélectionné bien plus lisible.
+- **Amis** déplacé dans la barre du haut, avec une pastille indiquant le nombre d'amis en ligne.
+- Nouveau clic droit **« Ouvrir l'emplacement du fichier »** sur un jeu installé, pour ouvrir son dossier dans l'explorateur.
+- Correction : certains jeux **Epic désinstallés apparaissaient encore comme installés** (ex. Palia) — ils sont désormais correctement détectés.
+- L'**icône de profil** en haut affiche maintenant ta vraie identité Steam (pseudo et avatar).
+- Nettoyage de l'interface : la fausse barre de stockage a été retirée ; le bouton en bas de la barre indique désormais **« Connecter un launcher »** ou **« Gérer les connexions »** selon l'état de tes comptes.
+- Réduction des **faux positifs antivirus** (Windows Defender).
+
 ## 0.9.2
 - Nouvelle section **Wishlist** : ta liste de souhaits Steam avec, pour chaque jeu, le meilleur prix du moment, la remise et le plus bas prix historique — pour repérer d'un coup d'œil ce qui est en promo.
 - Correction de la **liste d'amis Steam** qui restait vide pour les comptes ayant une URL personnalisée.

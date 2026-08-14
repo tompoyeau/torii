@@ -49,6 +49,14 @@ pub fn scan() -> Vec<GameDto> {
         if item.incomplete || !is_base || item.install_location.is_empty() {
             continue;
         }
+        // Manifeste potentiellement périmé : Epic ne supprime pas toujours le `.item` quand
+        // le jeu est désinstallé ou son dossier déplacé/effacé (ex. Palia laissait un manifeste
+        // pointant vers un dossier disparu → jeu marqué installé à tort). On n'accepte l'entrée
+        // que si le dossier d'installation existe réellement ; sinon le jeu reste visible en tant
+        // que possédé/non installé via le compte Epic.
+        if !std::path::Path::new(&item.install_location).is_dir() {
+            continue;
+        }
 
         // Cible de lancement = AppName Epic → deeplink `com.epicgames.launcher://`.
         // On lance TOUJOURS via le launcher (et non l'exe en direct) : certains jeux
