@@ -6,8 +6,8 @@ import { formatEur } from "../lib/format";
 import type { StoreItem, StoreSuggestion } from "../types";
 
 const {
-  items, loading, sort, query, activeQuery, suggestions,
-  setSort, runSearch, openProduct, fetchSuggestions, clearSuggestions,
+  items, loading, sort, query, activeQuery, suggestions, randomLoading, randomMode,
+  setSort, runSearch, openProduct, pickRandom, fetchSuggestions, clearSuggestions,
 } = useStore();
 
 const SORTS: { key: StoreSort; label: string }[] = [
@@ -147,16 +147,25 @@ function onCoverError(url: string | null) {
 
     <div class="bar">
       <span class="ctx">
-        {{ activeQuery ? `Résultats pour « ${activeQuery} »` : "Sélection du moment" }}
+        {{ activeQuery ? `Résultats pour « ${activeQuery} »` : randomMode ? "Sélection au hasard" : "Sélection du moment" }}
         <span class="n">· {{ items.length }}</span>
       </span>
       <span class="spacer" />
+      <button
+        class="chip random"
+        :disabled="randomLoading"
+        title="Ouvrir un jeu au hasard"
+        @click="pickRandom"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none" /></svg>
+        {{ randomLoading ? "Pioche…" : "Au hasard" }}
+      </button>
       <template v-if="!activeQuery">
         <button
           v-for="s in SORTS"
           :key="s.key"
           class="chip"
-          :class="{ active: sort === s.key }"
+          :class="{ active: sort === s.key && !randomMode }"
           @click="setSort(s.key)"
         >
           {{ s.label }}
@@ -258,6 +267,15 @@ function onCoverError(url: string | null) {
 }
 .chip:hover { color: var(--text); border-color: var(--border-strong); }
 .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+/* Bouton « Au hasard » : accentué et distinct des puces de tri. */
+.chip.random {
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 600;
+  color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.chip.random svg { width: 15px; height: 15px; }
+.chip.random:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: var(--accent); color: var(--accent); }
+.chip.random:disabled { opacity: 0.6; cursor: default; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 22px 20px; transition: opacity 0.15s; }
 .grid.dim { opacity: 0.5; }

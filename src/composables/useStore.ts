@@ -20,6 +20,11 @@ const productLoading = ref(false);
 /** Suggestions d'autocomplétion de la barre de recherche. */
 const suggestions = ref<StoreSuggestion[]>([]);
 
+/** Pioche en cours (bouton « Au hasard »). */
+const randomLoading = ref(false);
+/** La grille affiche une sélection aléatoire (et non la vitrine triée). */
+const randomMode = ref(false);
+
 let loadedOnce = false;
 /** Jeton anti-course : seule la dernière requête lancée applique son résultat. */
 let reqToken = 0;
@@ -29,6 +34,7 @@ let suggestToken = 0;
 async function loadHome() {
   loading.value = true;
   activeQuery.value = "";
+  randomMode.value = false;
   const token = ++reqToken;
   const res = (await storeDeals(0, sort.value)) ?? mockDeals(sort.value);
   if (token !== reqToken) return; // une requête plus récente a pris le relais
@@ -46,6 +52,7 @@ async function runSearch() {
   }
   loading.value = true;
   activeQuery.value = q;
+  randomMode.value = false;
   const token = ++reqToken;
   const res = (await storeSearch(q)) ?? mockSearch(q);
   if (token !== reqToken) return;
@@ -73,7 +80,8 @@ function clearSuggestions() {
 }
 
 function setSort(s: StoreSort) {
-  if (sort.value === s) return;
+  // En mode aléatoire, cliquer un tri fait toujours revenir à la vitrine triée.
+  if (sort.value === s && !randomMode.value) return;
   sort.value = s;
   // Le tri ne concerne que la vitrine (pas les résultats de recherche).
   if (!activeQuery.value) void loadHome();
@@ -90,6 +98,44 @@ async function openProduct(gameId: string) {
   if (selectedGameId.value === gameId) {
     product.value = res;
     productLoading.value = false;
+  }
+}
+
+/** Mélange une copie du tableau (Fisher-Yates). */
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Remplit la grille d'une **sélection de jeux au hasard**. Pour varier au-delà des
+ * jeux déjà affichés, on tire une page + un tri aléatoires de la vitrine, puis on
+ * mélange le résultat (repli sur la vitrine courante si la page tirée est vide).
+ * Rappuyer repioche une nouvelle sélection.
+ */
+async function pickRandom() {
+  if (randomLoading.value) return;
+  randomLoading.value = true;
+  loading.value = true;
+  clearSuggestions();
+  activeQuery.value = "";
+  randomMode.value = true;
+  const token = ++reqToken;
+  try {
+    const sorts: StoreSort[] = ["featured", "savings", "price", "recent", "rating"];
+    const s = sorts[Math.floor(Math.random() * sorts.length)];
+    const page = Math.floor(Math.random() * 15);
+    const res = (await storeDeals(page, s)) ?? mockDeals(s);
+    if (token !== reqToken) return; // une requête plus récente a pris le relais
+    const pool = res.length ? res : items.value;
+    items.value = shuffle(pool);
+  } finally {
+    if (token === reqToken) loading.value = false;
+    randomLoading.value = false;
   }
 }
 
@@ -138,12 +184,15 @@ export function useStore() {
     product,
     productLoading,
     suggestions,
+    randomLoading,
+    randomMode,
     loadHome,
     runSearch,
     setSort,
     openProduct,
     openForTitle,
     closeProduct,
+    pickRandom,
     fetchSuggestions,
     clearSuggestions,
   };

@@ -939,6 +939,29 @@ async fn steam_me(app: tauri::AppHandle) -> Result<Option<accounts::steam::Steam
         .map_err(|e| e.to_string())
 }
 
+/// Succès Steam d'un jeu (`appid`) pour l'utilisateur connecté : nom, description, icône,
+/// date de déblocage par succès + total (succès cachés inclus). `None` si Steam non
+/// connecté, jeu sans succès, ou page indisponible.
+#[tauri::command]
+async fn steam_achievements(
+    app: tauri::AppHandle,
+    appid: u64,
+) -> Result<Option<accounts::steam::GameAchievements>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || accounts::steam_achievements(&dir, appid))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Nombre de joueurs en ce moment sur un jeu Steam (`appid`), via l'API publique
+/// (sans clé, sans session). `None` si indisponible.
+#[tauri::command]
+async fn steam_current_players(appid: u64) -> Result<Option<u32>, String> {
+    tauri::async_runtime::spawn_blocking(move || accounts::steam::current_players(appid))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Wishlist Steam enrichie de prix (ITAD) : meilleur prix actuel + plus bas historique
 /// par jeu. Vide si Steam n'est pas connecté.
 #[tauri::command]
@@ -1144,6 +1167,8 @@ pub fn run() {
             store_game,
             steam_friends,
             steam_me,
+            steam_achievements,
+            steam_current_players,
             steam_wishlist,
             friends_common,
             set_steam_key,

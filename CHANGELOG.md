@@ -4,6 +4,13 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.4
+- **Succès Steam sur la fiche d'un jeu** : tes vrais succès (icône, description, date de déblocage) avec la progression réelle et un aperçu repliable.
+- **Joueurs en ce moment** : le nombre de joueurs en direct sur les jeux Steam, dans les stats de la fiche.
+- **Vrais logos des launchers** : Epic, Ubisoft, Battle.net et Riot affichent désormais leur logo officiel.
+- **Fiche d'un jeu** : bouton d'options remis à la bonne taille, nouvel accès « Ouvrir l'emplacement du fichier », et les menus Jouer / Options ne restent plus ouverts en même temps.
+- **Boutique** : un bouton « Au hasard » pour piocher une sélection de jeux à découvrir.
+
 ## 0.9.3
 - **Barre latérale repensée** : navigation plus nette, icônes officielles des launchers, et un élément sélectionné bien plus lisible.
 - **Amis** déplacé dans la barre du haut, avec une pastille indiquant le nombre d'amis en ligne.
