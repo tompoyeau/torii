@@ -4,6 +4,13 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.5
+- **Installer un jeu depuis Torii** : pour un jeu possédé mais non installé, le bouton devient « Installer » et lance l'installation via le launcher (sans compter ça comme une partie jouée).
+- **Correction du lancement/installation Epic** des jeux non installés (ex. Just Cause 4).
+- **Détection des jeux EA installés** (l'app EA), pour un vrai « Jouer / Installer » comme les autres launchers.
+- **Boutique** : bouton « Au hasard » pour afficher une sélection de jeux au hasard.
+- **Fiche d'un jeu** : flèches pour faire défiler la galerie de captures d'écran.
+
 ## 0.9.4
 - **Succès Steam sur la fiche d'un jeu** : tes vrais succès (icône, description, date de déblocage) avec la progression réelle et un aperçu repliable.
 - **Joueurs en ce moment** : le nombre de joueurs en direct sur les jeux Steam, dans les stats de la fiche.

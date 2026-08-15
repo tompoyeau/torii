@@ -109,6 +109,10 @@ pub fn owned_games(config_dir: &Path, refresh_token: &str) -> Vec<GameDto> {
     // version de moteur (mêmes catalogItemId/titre) → sinon x10 doublons.
     let mut games = Vec::new();
     let mut seen = std::collections::HashSet::new();
+    // Triplet d'installation `namespace%3AcatalogItemId%3AappName` par appName : le deeplink
+    // Epic `action=install` l'exige (comme uninstall), et un jeu possédé NON installé n'a pas
+    // de manifeste local. On le persiste ici pour le résoudre au clic sur « Installer ».
+    let mut install_ids: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for asset in &assets {
         let Some(meta) = cache.get(&asset.catalog_item_id) else {
             continue; // résolution échouée (réseau) → réessai au prochain scan
@@ -119,6 +123,10 @@ pub fn owned_games(config_dir: &Path, refresh_token: &str) -> Vec<GameDto> {
         if !seen.insert(asset.catalog_item_id.clone()) {
             continue; // déjà ajouté (autre version de moteur du même item)
         }
+        install_ids.insert(
+            asset.app_name.clone(),
+            format!("{}%3A{}%3A{}", asset.namespace, asset.catalog_item_id, asset.app_name),
+        );
         games.push(GameDto {
             id: format!("epic:{}", asset.app_name),
             title: meta.title.clone().unwrap_or_else(|| asset.app_name.clone()),
@@ -132,6 +140,10 @@ pub fn owned_games(config_dir: &Path, refresh_token: &str) -> Vec<GameDto> {
             app_type: Some("game".into()),
             ..Default::default()
         });
+    }
+    // Cache des triplets d'installation (best-effort : une écriture ratée n'est pas bloquante).
+    if let Ok(json) = serde_json::to_string(&install_ids) {
+        let _ = std::fs::write(config_dir.join("epic_install_ids.json"), json);
     }
     games
 }

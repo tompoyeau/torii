@@ -131,6 +131,38 @@ pub fn launch(platform: &str, target: &str) -> Result<(), String> {
     }
 }
 
+/// Déclenche l'**installation** d'un jeu possédé mais non installé : on ouvre le launcher
+/// concerné sur son flux d'installation (deeplink de protocole). L'installation elle-même
+/// se fait dans l'UI du launcher (comme Playnite) — Torii ne télécharge rien lui-même.
+/// `config_dir` sert à résoudre le triplet d'installation Epic.
+pub fn install(platform: &str, target: &str, config_dir: &Path) -> Result<(), String> {
+    match platform {
+        // Steam ouvre sa boîte de dialogue d'installation.
+        "steam" => open_uri(&format!("steam://install/{target}")),
+        // Epic : `action=install`. ⚠️ exige l'identifiant canonique COMPLET
+        // (`namespace:catalogItemId:artifactId`) — avec le seul AppName, Epic s'ouvre mais
+        // ne cible aucun jeu. On le résout (manifeste ou cache du compte), repli AppName seul.
+        // On passe par le même chemin que le lancement (gère le job object de `tauri dev`).
+        "epic" => {
+            let id = epic::install_id(target, config_dir);
+            epic_deeplink(&format!("com.epicgames.launcher://apps/{id}?action=install"))
+        }
+        // GOG Galaxy : pas de deeplink d'installation direct → on ouvre la fiche du jeu,
+        // d'où l'utilisateur lance l'installation.
+        "gog" => open_uri(&format!("goggalaxy://openGameView/{target}")),
+        // Ubisoft Connect : URI d'installation.
+        "ubisoft" => open_uri(&format!("uplay://install/{target}")),
+        // App EA (ex-Origin) : on ne détecte pas l'état d'installation EA → on réutilise le
+        // deeplink de lancement avec `autoDownload=1`, qui LANCE si déjà installé et TÉLÉCHARGE
+        // sinon (robuste dans les deux cas, contrairement à un `download` qui ne lancerait pas).
+        "ea" => open_uri(&format!("origin2://game/launch?offerIds={target}&autoDownload=1")),
+        // Battle.net : le deeplink ouvre le client sur le jeu (installé ou non → propose l'install).
+        "battlenet" => open_uri(&format!("battlenet://{target}/")),
+        // Riot / manuel : pas d'installation à distance (jeux déjà installés / ajoutés à la main).
+        _ => Err(format!("Installation non prise en charge pour {platform}.")),
+    }
+}
+
 /// Déclenche la **désinstallation** d'un jeu installé. On délègue systématiquement à l'UI
 /// native du launcher (qui affiche sa propre confirmation et supprime les fichiers) plutôt
 /// que de toucher au disque nous-mêmes — c'est l'approche de Playnite, et rien n'est jamais
@@ -187,9 +219,18 @@ pub fn uninstall(platform: &str, target: &str, install_dir: Option<&str>) -> Res
 /// spawn **détaché** (qui marche pour l'app installée, hors job), et en cas d'échec on demande
 /// au **service WMI** — extérieur à notre job — de créer le process, qui survit alors.
 fn launch_epic(app_name: &str) -> Result<(), String> {
+    epic_deeplink(&format!(
+        "com.epicgames.launcher://apps/{app_name}?action=launch&silent=true"
+    ))
+}
+
+/// Ouvre un deeplink `com.epicgames.launcher://` (launch **ou** install) en gérant le
+/// confinement `tauri dev` (job object) comme [`launch_epic`] : spawn détaché, puis repli
+/// `ShellExecuteW` en release / WMI en debug.
+fn epic_deeplink(uri: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use std::process::Stdio;
-    let uri = format!("com.epicgames.launcher://apps/{app_name}?action=launch&silent=true");
+    let uri = uri.to_string();
     let Some(exe) = epic::launcher_exe() else {
         return open_uri(&uri); // repli : handler de protocole (app hors job)
     };

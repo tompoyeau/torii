@@ -5,6 +5,8 @@ import {
   addManualGame,
   enrichGame,
   enrichIgdb,
+  installGame,
+  launchGame,
   recordLaunch,
   removeManualGame,
   setGameFavorite,
@@ -190,6 +192,20 @@ export function useLibrary() {
    * de façon optimiste (remonte dans « Récemment joué ») et persiste côté Rust. Fournit
    * une date de dernière session aux jeux sans stats de launcher.
    */
+  /**
+   * Action du bouton « Jouer / Installer » : lance le jeu s'il est installé (et note la
+   * session), sinon déclenche son installation via le launcher — **sans** enregistrer de
+   * session (installer n'est pas jouer). Centralisé pour tous les points de lancement.
+   */
+  function launchOrInstall(game: Game) {
+    if (game.installed) {
+      void markPlayed(game.id);
+      void launchGame(game);
+    } else {
+      void installGame(game);
+    }
+  }
+
   async function markPlayed(id: string) {
     const now = Math.floor(Date.now() / 1000);
     const idx = games.value.findIndex((g) => g.id === id);
@@ -228,5 +244,6 @@ export function useLibrary() {
     addManual,
     removeManual,
     markPlayed,
+    launchOrInstall,
   };
 }

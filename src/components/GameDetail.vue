@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
-import { launchGame, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
-import type { FriendLib, SteamAchievements } from "../types";
+import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
+import type { FriendLib, GameSource, SteamAchievements } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
 
-const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed } = useLibrary();
+const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed, launchOrInstall } = useLibrary();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
 const { selectedGameId, closeGame, showStore } = useUi();
@@ -78,15 +78,15 @@ const sources = computed(() => game.value?.sources ?? []);
 const multiSource = computed(() => sources.value.length > 1);
 const launchMenuOpen = ref(false);
 
-/** Bouton « Jouer » : lance direct si une seule source, sinon ouvre le choix. */
+/** Bouton principal : lance (installé) ou installe (possédé non installé) ; ouvre le
+ * choix si multi-source. */
 function onPlay() {
   if (multiSource.value) {
     launchMenuOpen.value = !launchMenuOpen.value;
     uninstallMenuOpen.value = false; // les deux menus s'excluent
-  } else if (game.value) {
-    markPlayed(game.value.id);
-    launchGame(game.value);
+    return;
   }
+  if (game.value) launchOrInstall(game.value);
 }
 
 /** Bascule le menu d'options (engrenage) ; ferme le menu « Jouer » s'il était ouvert. */
@@ -94,9 +94,15 @@ function toggleSettingsMenu() {
   uninstallMenuOpen.value = !uninstallMenuOpen.value;
   launchMenuOpen.value = false;
 }
-function playFrom(platform: string, target?: string) {
-  if (game.value) markPlayed(game.value.id);
-  launchSource(platform, target);
+/** Action sur une provenance du menu multi-source : lancer si installée, sinon installer. */
+function playFrom(s: GameSource) {
+  if (!game.value) return;
+  if (s.installed) {
+    markPlayed(game.value.id);
+    launchSource(s.platform, s.launchTarget);
+  } else {
+    installSource(s.platform, s.launchTarget);
+  }
   launchMenuOpen.value = false;
 }
 
@@ -155,6 +161,35 @@ const fallbackShots = computed(() =>
 function hideBrokenCover(e: Event) {
   (e.target as HTMLElement).style.display = "none";
 }
+
+/* ── Défilement horizontal de la bande de captures ───────────────────────── */
+const shotsRow = ref<HTMLElement | null>(null);
+const shotsAtStart = ref(true);
+const shotsAtEnd = ref(true);
+
+/** Met à jour la visibilité des flèches selon la position de défilement. */
+function updateShotsScroll() {
+  const el = shotsRow.value;
+  if (!el) return;
+  shotsAtStart.value = el.scrollLeft <= 2;
+  shotsAtEnd.value = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+}
+/** Défile d'environ un écran de captures (sens −1 = gauche, +1 = droite). */
+function scrollShots(dir: number) {
+  const el = shotsRow.value;
+  if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: "smooth" });
+}
+// Recalcule (et remet à gauche) quand le jeu ou les captures changent.
+watch([selectedGameId, realShots], () => {
+  nextTick(() => {
+    if (shotsRow.value) shotsRow.value.scrollLeft = 0;
+    updateShotsScroll();
+  });
+});
+onMounted(() => {
+  nextTick(updateShotsScroll);
+  window.addEventListener("resize", updateShotsScroll);
+});
 
 /** Visionneuse plein écran des captures (index dans `realShots`, sinon fermée). */
 const zoomIndex = ref<number | null>(null);
@@ -247,7 +282,10 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") closeGame();
 }
 onMounted(() => document.addEventListener("keydown", onKey));
-onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", onKey);
+  window.removeEventListener("resize", updateShotsScroll);
+});
 </script>
 
 <template>
@@ -268,16 +306,18 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <div class="detail-actions">
             <div class="play-wrap">
               <button class="btn-play big" @click.stop="onPlay">
-                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>Jouer
+                <svg v-if="game.installed" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 21h14" /></svg>
+                {{ game.installed ? "Jouer" : "Installer" }}
                 <svg v-if="multiSource" class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6" /></svg>
               </button>
               <div v-if="multiSource && launchMenuOpen" class="launch-menu" @click.stop>
-                <div class="launch-menu-label">Jouer depuis…</div>
+                <div class="launch-menu-label">{{ game.installed ? "Jouer depuis…" : "Installer depuis…" }}</div>
                 <button
                   v-for="s in sources"
                   :key="s.platform + (s.launchTarget ?? '')"
                   class="launch-opt"
-                  @click="playFrom(s.platform, s.launchTarget)"
+                  @click="playFrom(s)"
                 >
                   <PlatformIcon :platform="s.platform" />
                   <span class="launch-opt-name">{{ platformName(s.platform) }}</span>
@@ -350,22 +390,42 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           </div>
           <div class="detail-section">
             <h4>Captures d'écran</h4>
-            <div class="shots no-scrollbar">
-              <template v-if="realShots.length">
-                <button
-                  v-for="(s, i) in realShots"
-                  :key="'r' + i"
-                  class="shot shot-btn"
-                  type="button"
-                  aria-label="Agrandir la capture"
-                  @click="openShot(i)"
-                >
-                  <img :src="s" alt="" loading="lazy" @error="hideBrokenCover" />
-                </button>
-              </template>
-              <template v-else>
-                <div v-for="(s, i) in fallbackShots" :key="'f' + i" class="shot" :style="s" />
-              </template>
+            <div class="shots-wrap">
+              <button
+                v-if="!shotsAtStart"
+                class="shots-nav prev"
+                type="button"
+                aria-label="Captures précédentes"
+                @click="scrollShots(-1)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
+              </button>
+              <div ref="shotsRow" class="shots no-scrollbar" @scroll="updateShotsScroll">
+                <template v-if="realShots.length">
+                  <button
+                    v-for="(s, i) in realShots"
+                    :key="'r' + i"
+                    class="shot shot-btn"
+                    type="button"
+                    aria-label="Agrandir la capture"
+                    @click="openShot(i)"
+                  >
+                    <img :src="s" alt="" loading="lazy" @error="hideBrokenCover" />
+                  </button>
+                </template>
+                <template v-else>
+                  <div v-for="(s, i) in fallbackShots" :key="'f' + i" class="shot" :style="s" />
+                </template>
+              </div>
+              <button
+                v-if="!shotsAtEnd"
+                class="shots-nav next"
+                type="button"
+                aria-label="Captures suivantes"
+                @click="scrollShots(1)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
+              </button>
             </div>
           </div>
           <div v-if="loadingAch || (steamAch && steamAch.items.length)" class="detail-section">
@@ -581,7 +641,19 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .owner-av img, .owner-av-fb { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; }
 .owner-av-fb { background: linear-gradient(140deg, #6b6f7a, #3a3d47); color: #fff; font-size: 11px; font-weight: 700; font-family: var(--mono); }
 .owner-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shots-wrap { position: relative; }
 .shots { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+.shots-nav {
+  position: absolute; top: calc(50% - 4px); transform: translateY(-50%); z-index: 6;
+  width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(14, 10, 20, 0.62); border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff; backdrop-filter: blur(8px); box-shadow: var(--shadow-card); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.shots-nav:hover { background: rgba(28, 20, 38, 0.9); border-color: rgba(255, 255, 255, 0.4); }
+.shots-nav.prev { left: 8px; }
+.shots-nav.next { right: 8px; }
+.shots-nav svg { width: 21px; height: 21px; }
 .shot {
   flex: none; width: 300px; aspect-ratio: 16 / 9; border-radius: 13px; border: 1px solid var(--border);
   box-shadow: var(--shadow-card); position: relative; overflow: hidden;

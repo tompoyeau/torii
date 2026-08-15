@@ -1081,6 +1081,13 @@ fn launch_game(platform: String, target: String) -> Result<(), String> {
     platforms::launch(&platform, &target)
 }
 
+/// Déclenche l'installation d'un jeu possédé non installé (ouvre le launcher sur l'install).
+#[tauri::command]
+fn install_game(app: tauri::AppHandle, platform: String, target: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::install(&platform, &target, &dir)
+}
+
 /// Enregistre « maintenant » comme dernière session du jeu (déclenché au clic sur Jouer).
 /// Fournit une date de dernière session pour les jeux sans stats de launcher. Renvoie
 /// l'horodatage Unix posé (pour la mise à jour optimiste du front).
@@ -1144,6 +1151,7 @@ pub fn run() {
             set_game_hidden,
             set_game_favorite,
             launch_game,
+            install_game,
             record_launch,
             uninstall_game,
             open_install_dir,

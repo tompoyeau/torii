@@ -125,6 +125,25 @@ pub fn full_app_id(app_name: &str) -> Option<String> {
     None
 }
 
+/// Identifiant pour le deeplink `action=install` : le triplet
+/// `namespace%3AcatalogItemId%3AappName`. Résolu depuis le manifeste `.item` (jeu déjà
+/// partiellement présent) sinon depuis le cache des jeux possédés écrit au scan du compte
+/// (`epic_install_ids.json`) ; repli sur l'AppName seul si rien n'est trouvé (Epic s'ouvrira
+/// au moins). `config_dir` = dossier de config de l'app.
+pub fn install_id(app_name: &str, config_dir: &std::path::Path) -> String {
+    full_app_id(app_name)
+        .or_else(|| owned_install_id(app_name, config_dir))
+        .unwrap_or_else(|| app_name.to_string())
+}
+
+/// Triplet d'installation d'un jeu **possédé** (non installé), mis en cache au dernier scan
+/// du compte Epic (accounts/epic.rs) sous forme `{ appName: "ns%3Acid%3Aapp" }`.
+fn owned_install_id(app_name: &str, config_dir: &std::path::Path) -> Option<String> {
+    let txt = fs::read_to_string(config_dir.join("epic_install_ids.json")).ok()?;
+    let map: std::collections::HashMap<String, String> = serde_json::from_str(&txt).ok()?;
+    map.get(app_name).cloned()
+}
+
 fn manifests_dir() -> Option<PathBuf> {
     let program_data = std::env::var("ProgramData").unwrap_or_else(|_| r"C:\ProgramData".into());
     let dir = PathBuf::from(program_data)

@@ -3,18 +3,14 @@ import { computed } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
-import { launchGame } from "../lib/tauri";
-
-const { spotlight, markPlayed } = useLibrary();
+const { spotlight, launchOrInstall } = useLibrary();
 const { openGame } = useUi();
 
 const game = computed(() => spotlight.value[0] ?? null);
 
-/** Note le jeu comme joué (dernière session) puis le lance. */
+/** Lance le jeu (installé) ou l'installe (non installé). */
 function play() {
-  if (!game.value) return;
-  markPlayed(game.value.id);
-  launchGame(game.value);
+  if (game.value) launchOrInstall(game.value);
 }
 
 function hideBrokenCover(e: Event) {
@@ -37,7 +33,9 @@ function hideBrokenCover(e: Event) {
     </div>
     <div class="hero-actions">
       <button class="btn-play" @click="play()">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>Jouer
+        <svg v-if="game.installed" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 21h14" /></svg>
+        {{ game.installed ? "Jouer" : "Installer" }}
       </button>
       <button class="btn-ghost" @click="openGame(game.id)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v.01M11 12h1v4h1" /></svg>Détails
