@@ -203,12 +203,84 @@ pub fn save_library(config_dir: &Path, games: &[GameDto]) {
     }
 }
 
-/// Charge le snapshot de la bibliothèque EA (vide si non connecté).
+/// Charge le snapshot de la bibliothèque EA (vide si non connecté), puis marque les
+/// jeux **installés** en croisant avec l'état local d'EA Desktop (voir [`installed_slugs`]).
 pub fn load_library(config_dir: &Path) -> Vec<GameDto> {
-    std::fs::read_to_string(library_path(config_dir))
+    let mut games: Vec<GameDto> = std::fs::read_to_string(library_path(config_dir))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Statut « installé » depuis EA Desktop (live), croisé par slug de titre.
+    let installed = installed_slugs();
+    if !installed.is_empty() {
+        for game in &mut games {
+            if let Some(path) = installed.get(&ea_slug(&game.title)) {
+                game.installed = true;
+                game.size_gb = GameDto::bytes_to_gb(crate::platforms::dir_size(Path::new(path)));
+                game.install_dir = Some(path.clone());
+            }
+        }
+    }
+    games
+}
+
+/// Jeux EA installés → table `slug -> chemin d'installation`.
+///
+/// EA Desktop (contrairement à Battle.net) ne crée pas d'entrée de désinstallation Windows
+/// exploitable. La source fiable est `%ProgramData%\EA Desktop\<hash>\IS.json` : chaque
+/// `installInfos[]` a un `baseSlug` (identifiant dérivé du titre) et un `baseInstallPath`
+/// (dossier d'installation, **vide si non installé**). On ne garde que les chemins réels
+/// existant sur le disque (les entrées gardent parfois un chemin périmé).
+fn installed_slugs() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let Some(program_data) = std::env::var_os("ProgramData") else {
+        return map;
+    };
+    let base = Path::new(&program_data).join("EA Desktop");
+    let Ok(entries) = std::fs::read_dir(&base) else {
+        return map;
+    };
+    for entry in entries.flatten() {
+        let is_json = entry.path().join("IS.json");
+        let Ok(text) = std::fs::read_to_string(&is_json) else {
+            continue;
+        };
+        let Ok(root) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        let Some(infos) = root["installInfos"].as_array() else {
+            continue;
+        };
+        for it in infos {
+            let (Some(slug), Some(path)) =
+                (it["baseSlug"].as_str(), it["baseInstallPath"].as_str())
+            else {
+                continue;
+            };
+            if !slug.is_empty() && !path.is_empty() && Path::new(path).is_dir() {
+                map.insert(slug.to_string(), path.to_string());
+            }
+        }
+    }
+    map
+}
+
+/// Slug EA d'un titre : minuscules, on ne garde que les groupes alphanumériques ASCII
+/// joints par `-` (retire ™®© / ponctuation / accents). Ex. « Battlefield™ 2042 » →
+/// `battlefield-2042`, « STAR WARS Jedi: Fallen Order » → `star-wars-jedi-fallen-order`.
+fn ea_slug(title: &str) -> String {
+    let mut out = String::new();
+    let mut prev_dash = false;
+    for c in title.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+            prev_dash = false;
+        } else if !out.is_empty() && !prev_dash {
+            out.push('-');
+            prev_dash = true;
+        }
+    }
+    out.trim_end_matches('-').to_string()
 }
 
 /// Vrai si une bibliothèque EA a été récupérée (= « connecté »).
@@ -219,4 +291,18 @@ pub fn is_connected(config_dir: &Path) -> bool {
 /// Efface le snapshot (déconnexion).
 pub fn disconnect(config_dir: &Path) {
     let _ = std::fs::remove_file(library_path(config_dir));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ea_slug;
+
+    #[test]
+    fn slugifies_ea_titles() {
+        // Doit reproduire le `baseSlug` d'EA Desktop (validé réel : Battlefield™ 2042).
+        assert_eq!(ea_slug("Battlefield™ 2042"), "battlefield-2042");
+        assert_eq!(ea_slug("STAR WARS Jedi: Fallen Order™"), "star-wars-jedi-fallen-order");
+        assert_eq!(ea_slug("The Sims™ 4"), "the-sims-4");
+        assert_eq!(ea_slug("STAR WARS™: Squadrons"), "star-wars-squadrons");
+    }
 }

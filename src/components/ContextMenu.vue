@@ -3,10 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useContextMenu } from "../composables/useContextMenu";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
-import { launchGame, openInstallDir, uninstallGame } from "../lib/tauri";
+import { openInstallDir, uninstallGame } from "../lib/tauri";
 
 const { ctx, closeContext } = useContextMenu();
-const { setFavorite, setHidden, removeManual, markPlayed } = useLibrary();
+const { setFavorite, setHidden, removeManual, launchOrInstall } = useLibrary();
 const { openGame } = useUi();
 
 const menuEl = ref<HTMLElement | null>(null);
@@ -37,10 +37,7 @@ const game = computed(() => ctx.game);
 const isManual = computed(() => game.value?.platform === "manual");
 
 function onPlay() {
-  if (game.value) {
-    markPlayed(game.value.id);
-    launchGame(game.value);
-  }
+  if (game.value) launchOrInstall(game.value);
   closeContext();
 }
 function onFavorite() {

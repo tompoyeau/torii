@@ -36,6 +36,27 @@ export async function launchSource(platform: string, target?: string): Promise<v
   }
 }
 
+/** Déclenche l'installation d'un jeu (ouvre le launcher sur son flux d'installation). */
+export async function installGame(game: Game): Promise<void> {
+  await installSource(game.platform, game.launchTarget);
+}
+
+/** Installe une provenance précise (plateforme + cible), pour les jeux multi-sources. */
+export async function installSource(platform: string, target?: string): Promise<void> {
+  let invoke: typeof import("@tauri-apps/api/core").invoke;
+  try {
+    ({ invoke } = await import("@tauri-apps/api/core"));
+  } catch (err) {
+    console.info(`[ludo] install_game indisponible hors Tauri (${platform})`, err);
+    return;
+  }
+  try {
+    await invoke("install_game", { platform, target: target ?? "" });
+  } catch (err) {
+    console.error(`[ludo] échec de l'installation (${platform} / ${target ?? ""})`, err);
+  }
+}
+
 /**
  * Enregistre « maintenant » comme dernière session du jeu (au clic sur Jouer).
  * Donne une date de dernière session aux jeux sans stats de launcher (Riot/EA/Battle.net…).
