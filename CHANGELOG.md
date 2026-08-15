@@ -4,6 +4,9 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.6
+- **Battle.net** : « Jouer » et « Installer » fonctionnent désormais même quand le client Battle.net est déjà ouvert (avant, rien ne se passait). « Jouer » lance directement le jeu.
+
 ## 0.9.5
 - **Installer un jeu depuis Torii** : pour un jeu possédé mais non installé, le bouton devient « Installer » et lance l'installation via le launcher (sans compter ça comme une partie jouée).
 - **Correction du lancement/installation Epic** des jeux non installés (ex. Just Cause 4).

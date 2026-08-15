@@ -115,8 +115,8 @@ pub fn launch(platform: &str, target: &str) -> Result<(), String> {
         "ubisoft" => open_uri(&format!("uplay://launch/{target}/0")),
         // EA (app EA / ex-Origin) : lance (ou installe) via l'app EA.
         "ea" => open_uri(&format!("origin2://game/launch?offerIds={target}&autoDownload=1")),
-        // Battle.net : deeplink protocole (ouvre le client sur le jeu, installé ou non).
-        "battlenet" => open_uri(&format!("battlenet://{target}/")),
+        // Battle.net : voir `launch_battlenet` (le deeplink seul est ignoré si le client tourne).
+        "battlenet" => launch_battlenet(target),
         // Riot : on lance via RiotClientServices.exe --launch-product=<id>.
         "riot" => {
             let client = riot::client_path().ok_or("Riot Client introuvable.")?;
@@ -156,8 +156,9 @@ pub fn install(platform: &str, target: &str, config_dir: &Path) -> Result<(), St
         // deeplink de lancement avec `autoDownload=1`, qui LANCE si déjà installé et TÉLÉCHARGE
         // sinon (robuste dans les deux cas, contrairement à un `download` qui ne lancerait pas).
         "ea" => open_uri(&format!("origin2://game/launch?offerIds={target}&autoDownload=1")),
-        // Battle.net : le deeplink ouvre le client sur le jeu (installé ou non → propose l'install).
-        "battlenet" => open_uri(&format!("battlenet://{target}/")),
+        // Battle.net : même chemin que le lancement (ouvre le client sur le jeu, propose
+        // l'install s'il n'est pas installé) — fiable que le client soit ouvert ou non.
+        "battlenet" => launch_battlenet(target),
         // Riot / manuel : pas d'installation à distance (jeux déjà installés / ajoutés à la main).
         _ => Err(format!("Installation non prise en charge pour {platform}.")),
     }
@@ -222,6 +223,35 @@ fn launch_epic(app_name: &str) -> Result<(), String> {
     epic_deeplink(&format!(
         "com.epicgames.launcher://apps/{app_name}?action=launch&silent=true"
     ))
+}
+
+/// Lance (ou ouvre l'install de) un jeu Battle.net. 🔑 Le deeplink `battlenet://<code>/` seul
+/// est **ignoré par un client Battle.net déjà lancé** (rien ne se passe ; il ne marche que si
+/// le client est fermé). On invoque donc l'exécutable directement avec `--exec="launch <code>"`
+/// — la voie fiable dans les deux cas (lance le jeu s'il est installé, propose l'install sinon).
+/// Repli sur le deeplink si l'exe est introuvable.
+fn launch_battlenet(code: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    use std::process::Stdio;
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+
+    if let Some(exe) = crate::accounts::battlenet::launcher_exe() {
+        let spawned = Command::new(&exe)
+            .arg(format!("--exec=launch {code}"))
+            .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .is_ok();
+        if spawned {
+            return Ok(());
+        }
+    }
+    // Repli : le deeplink (fonctionne au moins quand le client est fermé).
+    open_uri(&format!("battlenet://{code}/"))
 }
 
 /// Ouvre un deeplink `com.epicgames.launcher://` (launch **ou** install) en gérant le

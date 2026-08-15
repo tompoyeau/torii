@@ -144,6 +144,29 @@ pub fn load_library(config_dir: &Path) -> Vec<GameDto> {
     games
 }
 
+/// Chemin de `Battle.net.exe`, lu depuis la commande du protocole `battlenet://`
+/// (`HKCR\battlenet\shell\open\command` = `"…\Battle.net.exe" "--uri=%1"`). Sert à lancer
+/// un jeu via `--exec="launch <code>"`, qui fonctionne que le client soit ouvert ou non
+/// (contrairement au deeplink, ignoré par un client déjà lancé).
+#[cfg(windows)]
+pub fn launcher_exe() -> Option<PathBuf> {
+    use winreg::enums::HKEY_CLASSES_ROOT;
+    use winreg::RegKey;
+    let cmd: String = RegKey::predef(HKEY_CLASSES_ROOT)
+        .open_subkey(r"battlenet\shell\open\command")
+        .ok()?
+        .get_value("")
+        .ok()?;
+    // Premier segment entre guillemets = l'exécutable.
+    let exe = cmd.trim_start().strip_prefix('"').and_then(|s| s.split('"').next())?;
+    let path = PathBuf::from(exe);
+    path.exists().then_some(path)
+}
+#[cfg(not(windows))]
+pub fn launcher_exe() -> Option<PathBuf> {
+    None
+}
+
 /// Jeux Battle.net installés → table `code produit -> chemin d'installation`.
 ///
 /// Lus depuis les entrées de désinstallation Windows dont la commande contient
