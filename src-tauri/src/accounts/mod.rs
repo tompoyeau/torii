@@ -84,6 +84,24 @@ pub fn steam_me(config_dir: &Path) -> Option<steam::SteamProfile> {
     steam::profile(&steam_id, &fresh)
 }
 
+/// Succès Steam d'un jeu (`appid`) pour l'utilisateur connecté. `None` si Steam non connecté,
+/// jeu sans succès, ou page indisponible. Régénère la session au besoin (comme les amis / le profil).
+pub fn steam_achievements(config_dir: &Path, appid: u64) -> Option<steam::GameAchievements> {
+    let creds = secrets::load(config_dir);
+    let steam_id = creds.steam_id.clone().or_else(steam::detect_steam_id)?;
+    if let Some(cookie) = creds
+        .steam_community
+        .clone()
+        .or_else(|| creds.steam_login_secure.clone())
+    {
+        if let Some(a) = steam::achievements(&steam_id, appid, &cookie) {
+            return Some(a);
+        }
+    }
+    let fresh = refresh_community_cookie(config_dir, &creds, Some(steam_id.as_str()))?;
+    steam::achievements(&steam_id, appid, &fresh)
+}
+
 /// Appids de la wishlist Steam, via le WebAPIToken (avec régénération de session au besoin,
 /// comme les jeux possédés / les amis). Vide si Steam non connecté ou wishlist inaccessible.
 pub fn steam_wishlist_appids(config_dir: &Path) -> Vec<u64> {

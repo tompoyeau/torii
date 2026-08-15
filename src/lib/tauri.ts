@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SteamProfile, StoreGame, StoreItem, StoreSuggestion, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, WishlistItem } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -386,6 +386,46 @@ export async function steamMe(): Promise<SteamProfile | null> {
       avatarUrl: "https://avatars.fastly.steamstatic.com/3604ac34b47c87e187d151f22aa17e107253ce34_full.jpg",
       profileUrl: "#",
     };
+  }
+}
+
+/**
+ * Succès Steam d'un jeu (`appid`). `null` hors Tauri, jeu non-Steam, jeu sans succès,
+ * ou Steam non connecté. Hors Tauri (preview) : jeu de succès fictif pour la maquette.
+ */
+export async function steamAchievements(appid: string): Promise<SteamAchievements | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<SteamAchievements | null>("steam_achievements", { appid: Number(appid) });
+  } catch (err) {
+    console.info("[ludo] steam_achievements indisponible hors Tauri", err);
+    const icon = (h: string) =>
+      `https://shared.fastly.steamstatic.com/community_assets/images/apps/1086940/${h}.jpg`;
+    return {
+      unlocked: 3,
+      total: 8,
+      items: [
+        { name: "Fuite de l'Avernus", description: "Prendre le contrôle du nautiloïde et vous enfuir des Enfers.", icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: true, unlockedAt: "Débloqué le 30 aout 2023 à 10h28" },
+        { name: "De Charybde en Scylla", description: "Quitter l'acte 1 pour vous rendre dans un lieu bien plus sombre.", icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: true, unlockedAt: "Débloqué le 19 nov. 2023 à 8h24" },
+        { name: "La cité vous attend", description: "Quitter l'acte 2 pour rejoindre la Porte de Baldur.", icon: icon("3c6d05ff648b66925238963a658ee307e31ff870"), unlocked: true, unlockedAt: "Débloqué le 26 janv. 2024 à 14h31" },
+        { name: "Tout est bien qui finit bien", description: "Terminer le jeu.", icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: false, unlockedAt: null },
+        { name: "L'appel du sang", description: "Boire le sang d'un ennemi vaincu.", icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: false, unlockedAt: null },
+      ],
+    };
+  }
+}
+
+/**
+ * Nombre de joueurs en ce moment sur un jeu Steam (`appid`), via l'API publique.
+ * `null` hors Tauri (→ mock) ou si indisponible.
+ */
+export async function steamCurrentPlayers(appid: string): Promise<number | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<number | null>("steam_current_players", { appid: Number(appid) });
+  } catch (err) {
+    console.info("[ludo] steam_current_players indisponible hors Tauri", err);
+    return 40356; // mock preview
   }
 }
 

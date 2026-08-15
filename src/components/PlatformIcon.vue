@@ -4,6 +4,25 @@ import type { PlatformId } from "../types";
 
 const props = defineProps<{ platform: PlatformId }>();
 
+/**
+ * Vrais logos des launchers, déposés dans `assets/launchers/<platform>.<ext>`
+ * (png/svg/webp). Chargés à la compilation par Vite ; si un fichier existe pour
+ * la plateforme, on affiche le vrai logo, sinon on retombe sur l'icône SVG dessinée.
+ * Pour ajouter/remplacer un logo : glisser le fichier nommé d'après l'identifiant
+ * de plateforme (steam/epic/gog/riot/ubisoft/ea/battlenet/manual).
+ */
+const assets = import.meta.glob("../assets/launchers/*.{png,svg,webp,jpg,jpeg}", {
+  eager: true,
+  query: "?url",
+  import: "default",
+}) as Record<string, string>;
+const realIcons: Partial<Record<PlatformId, string>> = {};
+for (const [path, url] of Object.entries(assets)) {
+  const name = path.split("/").pop()?.replace(/\.\w+$/, "");
+  if (name) realIcons[name as PlatformId] = url;
+}
+const realIcon = computed(() => realIcons[props.platform]);
+
 const ICONS: Record<PlatformId, string> = {
   steam:
     '<svg viewBox="0 0 24 24" fill="var(--steam)"><path d="M12 2a10 10 0 0 0-9.9 8.7l5.3 2.2a2.8 2.8 0 0 1 1.6-.5h.1l2.4-3.4v-.1a3.8 3.8 0 1 1 3.8 3.8h-.1l-3.4 2.4v.1a2.8 2.8 0 0 1-5.6.2l-3.8-1.6A10 10 0 1 0 12 2ZM8.4 17.2l-1.2-.5a2.1 2.1 0 0 0 3.9-.9 2.1 2.1 0 0 0-2.9-2l1.3.5a1.6 1.6 0 1 1-1.1 3Zm7.8-6.6a2.5 2.5 0 1 1 0-5.1 2.5 2.5 0 0 1 0 5.1Zm0-.9a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2Z"/></svg>',
@@ -30,7 +49,10 @@ const svg = computed(() => ICONS[props.platform]);
 </script>
 
 <template>
-  <span class="platform-icon" v-html="svg" />
+  <span class="platform-icon">
+    <img v-if="realIcon" :src="realIcon" :alt="platform" class="platform-img" />
+    <span v-else class="platform-svg" v-html="svg" />
+  </span>
 </template>
 
 <style scoped>
@@ -38,8 +60,15 @@ const svg = computed(() => ICONS[props.platform]);
   display: inline-flex;
   line-height: 0;
 }
-.platform-icon :deep(svg) {
+.platform-icon :deep(svg),
+.platform-svg {
   width: 100%;
   height: 100%;
+}
+.platform-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 </style>

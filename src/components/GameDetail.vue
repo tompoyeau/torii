@@ -5,8 +5,8 @@ import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
-import { launchGame, launchSource, openExternal, uninstallGame } from "../lib/tauri";
-import type { FriendLib } from "../types";
+import { launchGame, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
+import type { FriendLib, SteamAchievements } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
 
 const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed } = useLibrary();
@@ -80,11 +80,19 @@ const launchMenuOpen = ref(false);
 
 /** Bouton « Jouer » : lance direct si une seule source, sinon ouvre le choix. */
 function onPlay() {
-  if (multiSource.value) launchMenuOpen.value = !launchMenuOpen.value;
-  else if (game.value) {
+  if (multiSource.value) {
+    launchMenuOpen.value = !launchMenuOpen.value;
+    uninstallMenuOpen.value = false; // les deux menus s'excluent
+  } else if (game.value) {
     markPlayed(game.value.id);
     launchGame(game.value);
   }
+}
+
+/** Bascule le menu d'options (engrenage) ; ferme le menu « Jouer » s'il était ouvert. */
+function toggleSettingsMenu() {
+  uninstallMenuOpen.value = !uninstallMenuOpen.value;
+  launchMenuOpen.value = false;
 }
 function playFrom(platform: string, target?: string) {
   if (game.value) markPlayed(game.value.id);
@@ -97,9 +105,15 @@ function toggleFavorite() {
   if (game.value) setFavorite(game.value.id, !game.value.favorite);
 }
 
-// Menu de désinstallation (engrenage) : ouvert seulement pour un jeu installé.
+// Menu d'options (engrenage) : ouvert seulement pour un jeu installé.
 const uninstallMenuOpen = ref(false);
 const uninstalling = ref(false);
+
+/** Ouvre l'explorateur au dossier d'installation du jeu (si connu). */
+function onOpenFolder() {
+  if (game.value?.installDir) openInstallDir(game.value.installDir);
+  uninstallMenuOpen.value = false;
+}
 async function onUninstall() {
   if (!game.value) return;
   uninstalling.value = true;
@@ -166,17 +180,61 @@ watch(selectedGameId, () => {
   uninstallMenuOpen.value = false;
 });
 
-const achievements = [
-  { name: "Premier sang", unlocked: true, rarity: 68 },
-  { name: "Explorateur", unlocked: true, rarity: 54 },
-  { name: "Sans une égratignure", unlocked: true, rarity: 40 },
-  { name: "Collectionneur", unlocked: false, rarity: 26 },
-];
-
-const achPct = computed(() => {
-  const a = game.value?.achievements;
-  return a ? Math.round((a.unlocked / a.total) * 100) : 0;
+/**
+ * Appid Steam du jeu affiché (jeu Steam direct, ou source Steam d'un jeu fusionné
+ * multi-plateforme). `null` si aucune provenance Steam → pas de succès à récupérer.
+ */
+const steamAppid = computed<string | null>(() => {
+  const g = game.value;
+  if (!g) return null;
+  if (g.platform === "steam") {
+    return g.launchTarget ?? (g.id.startsWith("steam:") ? g.id.slice(6) : null);
+  }
+  return g.sources?.find((s) => s.platform === "steam")?.launchTarget ?? null;
 });
+
+/** Vrais succès Steam (nom, icône, date de déblocage) récupérés à l'ouverture de la fiche. */
+const steamAch = ref<SteamAchievements | null>(null);
+const loadingAch = ref(false);
+const showAllAch = ref(false);
+
+/** Joueurs en ce moment sur le jeu Steam (API publique), affiché dans la stat-card. */
+const currentPlayers = ref<number | null>(null);
+const playersLabel = computed(() =>
+  currentPlayers.value != null ? currentPlayers.value.toLocaleString("fr-FR") : null,
+);
+
+/** Succès affichés : débloqués d'abord (tri backend), limités sauf « tout afficher ». */
+const ACH_PREVIEW = 8;
+const visibleAch = computed(() =>
+  showAllAch.value ? steamAch.value?.items ?? [] : (steamAch.value?.items ?? []).slice(0, ACH_PREVIEW),
+);
+const achPct = computed(() => {
+  const a = steamAch.value;
+  return a && a.total > 0 ? Math.round((a.unlocked / a.total) * 100) : 0;
+});
+
+// Charge les succès Steam à l'ouverture d'une fiche (anti-course par id).
+watch(
+  selectedGameId,
+  async (id) => {
+    steamAch.value = null;
+    showAllAch.value = false;
+    loadingAch.value = false;
+    currentPlayers.value = null;
+    const appid = steamAppid.value;
+    if (!id || !appid) return;
+    loadingAch.value = true;
+    // Joueurs en ce moment (rapide, public) en parallèle des succès (anti-course par id).
+    void steamCurrentPlayers(appid).then((n) => {
+      if (selectedGameId.value === id) currentPlayers.value = n;
+    });
+    const res = await steamAchievements(appid).catch(() => null);
+    if (selectedGameId.value === id) steamAch.value = res;
+    loadingAch.value = false;
+  },
+  { immediate: true },
+);
 
 function onKey(e: KeyboardEvent) {
   if (zoomIndex.value != null) {
@@ -244,12 +302,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
                 class="btn-ghost solid"
                 title="Options du jeu"
                 :aria-expanded="uninstallMenuOpen"
-                @click.stop="uninstallMenuOpen = !uninstallMenuOpen"
+                @click.stop="toggleSettingsMenu"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.3 1a7 7 0 0 0-1.7-1L14.5 2h-5l-.4 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.5 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 1.7 1l.4 2.5h5l.4-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.5-2-1.5a7 7 0 0 0 .1-1Z" /></svg>
               </button>
               <div v-if="uninstallMenuOpen" class="settings-menu" @click.stop>
                 <div class="settings-menu-label">Options</div>
+                <button v-if="game.installDir" class="settings-opt" @click="onOpenFolder">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
+                  <span>Ouvrir l'emplacement du fichier</span>
+                </button>
                 <button class="settings-opt danger" :disabled="uninstalling" @click="onUninstall">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6M10 11v6M14 11v6" /></svg>
                   <span>{{ uninstalling ? "Désinstallation…" : "Désinstaller" }}</span>
@@ -306,20 +368,33 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               </template>
             </div>
           </div>
-          <div v-if="game.achievements" class="detail-section">
-            <h4>Succès récents</h4>
-            <div class="ach-list">
-              <div v-for="a in achievements" :key="a.name" class="ach">
-                <div class="ach-badge" :class="{ locked: !a.unlocked }">
-                  <svg v-if="a.unlocked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3" /></svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
-                </div>
-                <div class="ach-info">
-                  <div class="ach-name">{{ a.name }}</div>
-                  <div class="ach-pct">{{ a.unlocked ? "Débloqué" : "Verrouillé" }} · obtenu par {{ a.rarity }}% des joueurs</div>
+          <div v-if="loadingAch || (steamAch && steamAch.items.length)" class="detail-section">
+            <h4>
+              Succès
+              <span v-if="steamAch" class="sec-count">{{ steamAch.unlocked }} / {{ steamAch.total }}</span>
+            </h4>
+            <p v-if="loadingAch && !steamAch" class="detail-desc dim">Chargement des succès…</p>
+            <template v-else-if="steamAch">
+              <div class="ach-list">
+                <div v-for="a in visibleAch" :key="a.name" class="ach" :class="{ locked: !a.unlocked }">
+                  <div class="ach-badge">
+                    <img :src="a.icon" alt="" loading="lazy" @error="hideBrokenCover" />
+                  </div>
+                  <div class="ach-info">
+                    <div class="ach-name">{{ a.name }}</div>
+                    <div v-if="a.description" class="ach-desc">{{ a.description }}</div>
+                    <div class="ach-pct">{{ a.unlocked ? (a.unlockedAt ?? "Débloqué") : "Verrouillé" }}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+              <button
+                v-if="steamAch.items.length > ACH_PREVIEW"
+                class="ach-toggle"
+                @click="showAllAch = !showAllAch"
+              >
+                {{ showAllAch ? "Réduire" : `Afficher tout (${steamAch.items.length})` }}
+              </button>
+            </template>
           </div>
         </div>
 
@@ -339,14 +414,15 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <div class="stat-rows">
             <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>Statut</span><span class="v">{{ game.installed ? "Installé" : "Non installé" }}</span></div>
             <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>Dernière session</span><span class="v">{{ game.lastPlayed ?? "—" }}</span></div>
+            <div v-if="playersLabel" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>En ce moment</span><span class="v">{{ playersLabel }}</span></div>
             <div v-if="game.developer" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10" /></svg>Développeur</span><span class="v">{{ game.developer }}</span></div>
             <div v-if="game.year" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></svg>Sortie</span><span class="v">{{ game.year }}</span></div>
             <div v-if="game.genre" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg>Genre</span><span class="v">{{ game.genre }}</span></div>
             <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>Taille</span><span class="v">{{ game.sizeGb ? game.sizeGb + " Go" : "—" }}</span></div>
             <div v-if="showFamily" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>Famille Steam</span><span class="v">{{ familyCopies }} copie{{ familyCopies > 1 ? "s" : "" }}</span></div>
           </div>
-          <div v-if="game.achievements" class="ach-progress">
-            <div class="top"><span>Succès</span><span><b>{{ game.achievements.unlocked }} / {{ game.achievements.total }} ({{ achPct }}%)</b></span></div>
+          <div v-if="steamAch && steamAch.total" class="ach-progress">
+            <div class="top"><span>Succès</span><span><b>{{ steamAch.unlocked }} / {{ steamAch.total }} ({{ achPct }}%)</b></span></div>
             <div class="ach-bar"><div class="ach-fill" :style="{ width: `${achPct}%` }" /></div>
           </div>
         </aside>
@@ -456,8 +532,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .btn-ghost.fav-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .btn-ghost.fav-on:hover { background: var(--accent-hover); }
 
-/* Engrenage « Options du jeu » → menu (désinstallation). Ouvert vers le haut, comme le menu Jouer. */
-.settings-wrap { position: relative; }
+/* Engrenage « Options du jeu » → menu. Ouvert vers le haut, comme le menu Jouer.
+   `display: flex` pour que le bouton s'étire à la hauteur de ses voisins (favori/boutique),
+   sinon le wrap s'étire mais pas le bouton → engrenage plus court que les autres. */
+.settings-wrap { position: relative; display: flex; }
 .settings-menu {
   position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 200; min-width: 190px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
@@ -472,6 +550,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   background: none; border: none; color: var(--text); font-size: 13.5px; text-align: left; width: 100%;
 }
 .settings-opt svg { width: 17px; height: 17px; flex: none; }
+.settings-opt:hover:not(:disabled) { background: var(--surface-2); }
 .settings-opt.danger { color: #ff6b6b; }
 .settings-opt.danger:hover { background: color-mix(in srgb, #ff6b6b 15%, transparent); }
 .settings-opt:disabled { opacity: 0.6; cursor: default; }
@@ -550,14 +629,25 @@ img.shot { object-fit: cover; }
 .ach-list { display: flex; flex-direction: column; gap: 12px; }
 .ach { display: flex; align-items: center; gap: 14px; }
 .ach-badge {
-  width: 44px; height: 44px; border-radius: 12px; flex: none; display: grid; place-items: center;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--accent);
+  width: 44px; height: 44px; border-radius: 10px; flex: none; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--border);
 }
-.ach-badge.locked { color: var(--text-faint); opacity: 0.6; }
-.ach-badge svg { width: 22px; height: 22px; }
+.ach-badge img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Succès verrouillé : icône désaturée + assombrie, texte atténué. */
+.ach.locked .ach-badge img { filter: grayscale(1) brightness(0.65); }
+.ach.locked .ach-name { color: var(--text-dim); }
 .ach-info { flex: 1; min-width: 0; }
 .ach-name { font-size: 14px; font-weight: 600; }
-.ach-pct { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); }
+.ach-desc {
+  font-size: 12.5px; color: var(--text-dim); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ach-pct { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+.ach-toggle {
+  margin-top: 16px; padding: 8px 14px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ach-toggle:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); }
 
 .stat-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px;

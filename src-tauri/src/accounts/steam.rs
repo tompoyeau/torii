@@ -405,9 +405,138 @@ fn parse_profile(steam_id: &str, html: &str) -> Option<SteamProfile> {
     })
 }
 
+/// Un succès Steam (débloqué ou non), pour la fiche détail.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Achievement {
+    pub name: String,
+    pub description: String,
+    pub icon: String,
+    pub unlocked: bool,
+    /// Texte de déblocage localisé (ex. « Débloqué le 30 aout 2023 à 10h28 »), si débloqué.
+    pub unlocked_at: Option<String>,
+}
+
+/// Les succès d'un jeu Steam pour l'utilisateur, envoyés au frontend.
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GameAchievements {
+    pub unlocked: u32,
+    pub total: u32,
+    pub items: Vec<Achievement>,
+}
+
+/// Succès Steam d'un jeu pour l'utilisateur connecté, par **scrape de la page perso**
+/// des succès (`ISteamUserStats/GetPlayerAchievements` exige une clé API ; le WebAPIToken
+/// ne marche PAS pour `ISteamUserStats`). Donne nom, description, icône et date de
+/// déblocage par succès. Le total exact (succès cachés inclus) vient du % global public.
+/// Nécessite le cookie de session (couvre aussi les profils privés, c'est le nôtre).
+/// `None` = jeu sans succès ou page indisponible.
+pub fn achievements(steam_id: &str, appid: u64, cookie: &str) -> Option<GameAchievements> {
+    let url = format!(
+        "https://steamcommunity.com/profiles/{steam_id}/stats/{appid}/achievements/?l=french"
+    );
+    let html = fetch_text(&url, cookie, "https://steamcommunity.com/")?;
+    let items = parse_achievements(&html);
+    if items.is_empty() {
+        return None;
+    }
+    let unlocked = items.iter().filter(|a| a.unlocked).count() as u32;
+    // Total exact (succès cachés non listés inclus) via le % global public, sans clé.
+    // Replis : la barre de progression de la page, puis le nombre de succès affichés.
+    let total = global_total(appid)
+        .filter(|&t| t >= unlocked)
+        .or_else(|| total_from_bar(&html, unlocked))
+        .unwrap_or(0)
+        .max(items.len() as u32);
+    Some(GameAchievements { unlocked, total, items })
+}
+
+/// Nombre de joueurs en ce moment sur un jeu Steam, via `GetNumberOfCurrentPlayers`
+/// (public, sans clé). `None` si indisponible (jeu sans stats, appid inconnu…).
+pub fn current_players(appid: u64) -> Option<u32> {
+    let url = format!(
+        "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid={appid}"
+    );
+    let json = get_json(&url)?;
+    // result==1 = donnée valide ; sinon player_count peut être 0 par défaut → on écarte.
+    (json["response"]["result"].as_u64() == Some(1))
+        .then(|| json["response"]["player_count"].as_u64())
+        .flatten()
+        .map(|n| n as u32)
+}
+
+/// Total des succès du jeu via `GetGlobalAchievementPercentagesForApp` (public, sans clé).
+fn global_total(appid: u64) -> Option<u32> {
+    let url = format!(
+        "https://api.steampowered.com/ISteamUserStats/\
+         GetGlobalAchievementPercentagesForApp/v2/?gameid={appid}"
+    );
+    let n = get_json(&url)?["achievementpercentages"]["achievements"]
+        .as_array()?
+        .len();
+    (n > 0).then_some(n as u32)
+}
+
+/// Total dérivé de la largeur de la barre de progression (« width: X% ») + le nb débloqué.
+fn total_from_bar(html: &str, unlocked: u32) -> Option<u32> {
+    let pct: f64 = slice_between(html, "achieveBarProgress\" style=\"width: ", "%")?
+        .trim()
+        .parse()
+        .ok()?;
+    (pct > 0.0).then(|| (unlocked as f64 * 100.0 / pct).round() as u32)
+}
+
+/// Parse les blocs `achieveRow` de la page perso des succès. Débloqués d'abord
+/// (ordre de la page conservé), puis verrouillés.
+fn parse_achievements(html: &str) -> Vec<Achievement> {
+    let mut out = Vec::new();
+    for chunk in html.split("class=\"achieveRow\"").skip(1) {
+        // Steam ajoute une ligne récapitulative « N succès cachés restants »
+        // (`achieveHiddenBox`, sans icône) : elle n'est pas un vrai succès → ignorée.
+        if chunk.contains("achieveHiddenBox") {
+            continue;
+        }
+        let name = match slice_between(chunk, "<h3 class=\"ellipsis\">", "</h3>") {
+            Some(n) => decode_entities(n),
+            None => continue,
+        };
+        if name.is_empty() {
+            continue;
+        }
+        let icon = slice_between(chunk, "src=\"", "\"").unwrap_or_default().to_string();
+        let description = slice_between(chunk, "<h5>", "</h5>")
+            .map(decode_entities)
+            .unwrap_or_default();
+        let unlocked = chunk.contains("achieveUnlockTime");
+        let unlocked_at = unlocked
+            .then(|| slice_between(chunk, "achieveUnlockTime\">", "</div>").map(clean_unlock_time))
+            .flatten()
+            .filter(|s| !s.is_empty());
+        out.push(Achievement { name, description, icon, unlocked, unlocked_at });
+    }
+    out.sort_by_key(|a| !a.unlocked); // stable : débloqués (false) avant verrouillés (true)
+    out
+}
+
+/// Nettoie le contenu du bloc de date : retire les balises (`<br/>`) et normalise les espaces.
+fn clean_unlock_time(s: &str) -> String {
+    let mut txt = String::new();
+    let mut in_tag = false;
+    for c in s.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => txt.push(c),
+            _ => {}
+        }
+    }
+    txt.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{extract_webapi_token, parse_friends_page, parse_profile};
+    use super::{extract_webapi_token, parse_achievements, parse_friends_page, parse_profile};
 
     #[test]
     fn extracts_webapi_token() {
@@ -439,6 +568,48 @@ mod tests {
         assert_eq!(f[1].name, "Ecrevisse");
         assert_eq!(f[1].state, "online");
         assert_eq!(f[1].game_name, None);
+    }
+
+    // Bloc calqué sur la vraie page perso des succès : 1 débloqué, 1 verrouillé,
+    // et la ligne récapitulative « succès cachés » (à ignorer).
+    #[test]
+    fn parses_achievements_page() {
+        let html = r##"
+        <div role="button" class="achieveRow">
+            <div class="achieveImgHolder"><img src="https://cdn/apps/1/aaa.jpg"></div>
+            <div class="achieveTxtHolder"><div class="achieveTxt">
+                <h3 class="ellipsis">Fuite de l&#39;Avernus</h3>
+                <h5>Prendre le contrôle du nautilo&amp;ide.</h5>
+            </div>
+            <div class="achieveUnlockTime">
+                Débloqué le 30 aout 2023 à 10h28<br/>
+            </div></div>
+        </div>
+        <div role="button" class="achieveRow">
+            <div class="achieveImgHolder"><img src="https://cdn/apps/1/bbb.jpg"></div>
+            <div class="achieveTxtHolder"><div class="achieveTxt">
+                <h3 class="ellipsis">Talent Show</h3>
+                <h5>Encore verrouillé.</h5>
+            </div></div>
+        </div>
+        <div role="button" class="achieveRow">
+            <div class="achieveHiddenBox"><span>+9</span></div>
+            <div class="achieveTxtHolder"><div class="achieveTxt">
+                <h3 class="ellipsis">9 succès cachés restants</h3>
+                <h5>Révélés une fois débloqués</h5>
+            </div></div>
+        </div>"##;
+        let a = parse_achievements(html);
+        assert_eq!(a.len(), 2); // la ligne "cachés restants" est ignorée
+        // Débloqué d'abord (tri stable).
+        assert_eq!(a[0].name, "Fuite de l'Avernus"); // entité &#39; décodée
+        assert_eq!(a[0].description, "Prendre le contrôle du nautilo&ide."); // &amp; décodé
+        assert_eq!(a[0].icon, "https://cdn/apps/1/aaa.jpg");
+        assert!(a[0].unlocked);
+        assert_eq!(a[0].unlocked_at.as_deref(), Some("Débloqué le 30 aout 2023 à 10h28"));
+        assert_eq!(a[1].name, "Talent Show");
+        assert!(!a[1].unlocked);
+        assert_eq!(a[1].unlocked_at, None);
     }
 
     // SSR calqué sur une vraie page profil Steam.

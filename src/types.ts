@@ -192,6 +192,23 @@ export interface SteamProfile {
   profileUrl: string;
 }
 
+/** Un succès Steam d'un jeu (commande Rust `steam_achievements`). */
+export interface SteamAchievement {
+  name: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  /** Texte de déblocage localisé (ex. « Débloqué le 30 aout 2023 à 10h28 »), si débloqué. */
+  unlockedAt?: string | null;
+}
+
+/** Les succès d'un jeu Steam pour l'utilisateur (commande Rust `steam_achievements`). */
+export interface SteamAchievements {
+  unlocked: number;
+  total: number;
+  items: SteamAchievement[];
+}
+
 /** Un ami dans la vue « Jeux en commun » (commande Rust `friends_common`). */
 export interface FriendLib {
   steamId: string;
