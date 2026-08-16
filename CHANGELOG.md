@@ -4,6 +4,18 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.7
+- **Paramètres repensés** : une vraie fenêtre de paramètres avec navigation par catégories (Généraux, Jeux masqués, Revendeurs masqués, Comptes & launchers, À propos). La gestion des connexions de launchers y est intégrée.
+- **Lancer Torii au démarrage de Windows** (option).
+- **Zone de notification** : Torii peut démarrer minimisé et/ou se réduire dans la zone de notification à la fermeture au lieu de quitter.
+- **Revenir à la fermeture d'un jeu** (option) : Torii se minimise pendant la partie puis rouvre la fiche du jeu quand tu le fermes.
+- **Nouveaux réglages** : mode au démarrage (Bureau/Salon), filtre/tri/affichage par défaut, densité de la bibliothèque, thème (clair/sombre/système), réduire les animations.
+- **À propos & maintenance** : numéro de version, vérification manuelle des mises à jour, bouton pour vider le cache.
+- **Boutique** : possibilité de masquer les revendeurs de ton choix dans le comparatif de prix (liste gérable depuis les Paramètres), et flèches de défilement sur la galerie de captures.
+- **Navigation** : le bouton « précédent » de la souris revient en arrière dans l'application.
+- **Battle.net** : « Désinstaller » ouvre désormais le client sur la page du jeu au lieu de l'explorateur de fichiers.
+- Retrait de la catégorie « Récents » de la barre latérale.
+
 ## 0.9.6
 - **Battle.net** : « Jouer » et « Installer » fonctionnent désormais même quand le client Battle.net est déjà ouvert (avant, rien ne se passait). « Jouer » lance directement le jeu.
 

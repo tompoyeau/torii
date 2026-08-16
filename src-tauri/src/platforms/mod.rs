@@ -201,8 +201,15 @@ pub fn uninstall(platform: &str, target: &str, install_dir: Option<&str>) -> Res
                     .map_err(|e| format!("Désinstallateur GOG introuvable ({e}))"))
             }
         }
-        // Battle.net / Riot : pas de mécanisme de désinstallation par jeu fiable — on ouvre
-        // le dossier d'installation pour laisser l'utilisateur passer par l'outil du launcher.
+        // Battle.net n'expose aucune commande CLI de désinstallation par jeu, mais l'option
+        // « Désinstaller » vit sous la roue crantée de la page du jeu dans le client. On ouvre
+        // donc le client Battle.net sur cette page (deeplink `battlenet://<code>/`) plutôt que
+        // l'explorateur de fichiers — cohérent avec les autres launchers qui délèguent leur UI.
+        // ⚠️ Comme pour le lancement, le deeplink ouvre bien la page quand le client est fermé ;
+        // si le client tourne déjà, Windows lance un 2e process que l'instance en cours ignore.
+        "battlenet" => open_uri(&format!("battlenet://{target}/")),
+        // Riot : pas de mécanisme de désinstallation par jeu — on ouvre le dossier
+        // d'installation pour laisser l'utilisateur passer par l'outil du launcher.
         _ => match install_dir {
             Some(dir) => tauri_plugin_opener::open_path(dir, None::<&str>)
                 .map_err(|e| format!("Impossible d'ouvrir le dossier du jeu : {e}")),

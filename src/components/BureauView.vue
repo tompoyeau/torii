@@ -215,7 +215,7 @@ function title(f: LibraryFilter): string {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 600;
 }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 22px 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 178px), 1fr)); gap: 22px 20px; }
 .grid.list { grid-template-columns: 1fr; gap: 8px; }
 .grid.list :deep(.card) { flex-direction: row; align-items: center; gap: 16px; padding: 8px; border-radius: 14px; }
 .grid.list :deep(.card:hover) { background: var(--surface); }
