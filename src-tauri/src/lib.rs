@@ -1336,6 +1336,13 @@ fn reveal_window(app: &tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // ⚠️ DOIT être enregistré en premier. Empêche une 2e instance : quand l'app
+        // tourne déjà (ex. réduite dans le tray via « fermer dans la zone de notification »)
+        // et qu'on la relance, la nouvelle instance se ferme et la fenêtre existante est
+        // ramenée au premier plan (au lieu d'ouvrir un doublon qui bloque l'ouverture).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            reveal_window(app);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
