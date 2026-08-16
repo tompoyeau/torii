@@ -482,6 +482,101 @@ export async function getSettings(): Promise<Settings | null> {
   }
 }
 
+/**
+ * Vide les caches de métadonnées/jaquettes/prix. Renvoie le nombre de fichiers
+ * supprimés, ou null hors Tauri.
+ */
+export async function clearCaches(): Promise<number | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<number>("clear_caches");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Arme le suivi d'une session de jeu : Torii se minimise, surveille le process du
+ * jeu (sous `installDir`) et, à sa fermeture, revient au premier plan puis émet
+ * l'événement `game-exited`. No-op hors Tauri.
+ */
+export async function startGameWatch(gameId: string, installDir: string): Promise<void> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("start_game_watch", { gameId, installDir });
+  } catch {
+    /* hors Tauri : no-op. */
+  }
+}
+
+/** S'abonne à la fermeture d'un jeu suivi ; renvoie une fonction de désabonnement. */
+export async function onGameExited(cb: (gameId: string) => void): Promise<() => void> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<{ id: string }>("game-exited", (e) => cb(e.payload.id));
+  } catch {
+    return () => {};
+  }
+}
+
+/** Préférences de fenêtre (démarrage minimisé, fermeture dans le tray). */
+export interface WindowPrefs {
+  startMinimized: boolean;
+  closeToTray: boolean;
+}
+export async function getWindowPrefs(): Promise<WindowPrefs> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<WindowPrefs>("get_window_prefs");
+  } catch {
+    return { startMinimized: false, closeToTray: false };
+  }
+}
+export async function setWindowPrefs(prefs: WindowPrefs): Promise<void> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("set_window_prefs", {
+      startMinimized: prefs.startMinimized,
+      closeToTray: prefs.closeToTray,
+    });
+  } catch {
+    /* hors Tauri : no-op. */
+  }
+}
+
+/** Version de l'application (depuis Tauri), ou null hors Tauri. */
+export async function appVersion(): Promise<string | null> {
+  try {
+    const { getVersion } = await import("@tauri-apps/api/app");
+    return await getVersion();
+  } catch {
+    return null;
+  }
+}
+
+/** Indique si Torii démarre automatiquement avec Windows (false hors Tauri). */
+export async function getAutostart(): Promise<boolean> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<boolean>("get_autostart");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Active/désactive le démarrage automatique avec Windows. Renvoie l'état effectif
+ * (hors Tauri : renvoie la valeur demandée, sans effet).
+ */
+export async function setAutostart(enabled: boolean): Promise<boolean> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<boolean>("set_autostart", { enabled });
+  } catch {
+    return enabled;
+  }
+}
+
 /** S'abonne à la progression de l'enrichissement. Renvoie une fonction de désabonnement. */
 export async function onEnrichProgress(
   cb: (done: number, total: number) => void,

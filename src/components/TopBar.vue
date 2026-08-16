@@ -8,7 +8,7 @@ import { openExternal, steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
 import ModeSwitch from "./ModeSwitch.vue";
 
-const { section, query, listView, toggleListView, openAddGame, showFriends } = useUi();
+const { section, query, listView, toggleListView, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
 const { toggle: toggleTheme } = useTheme();
 const { loading, enriching, enrichProgress, reload } = useLibrary();
 const { activeCount: friendsOnline, refresh: refreshFriends } = useFriends();
@@ -58,6 +58,9 @@ function openMe() {
     </button>
     <button class="icon-btn" title="Thème clair / sombre" @click="toggleTheme">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5Z" /></svg>
+    </button>
+    <button class="icon-btn" :class="{ active: settingsOpen }" title="Paramètres" @click="openSettings()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3.1" /><path d="M19.4 13a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H8a1.6 1.6 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V8a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></svg>
     </button>
     <button v-if="me" class="me" :title="`${me.name} — voir le profil Steam`" @click="openMe">
       <img v-if="me.avatarUrl" class="me-avatar" :src="me.avatarUrl" :alt="me.name" />

@@ -20,9 +20,14 @@ export function useTheme() {
   function toggle() {
     const current = theme.value ?? (systemPrefersDark() ? "dark" : "light");
     const next: Theme = current === "dark" ? "light" : "dark";
-    theme.value = next;
-    localStorage.setItem("ludo-theme", next);
-    apply(next);
+    setTheme(next);
   }
-  return { theme, toggle };
+  /** Fixe le thème : "dark"/"light", ou null pour suivre le système. */
+  function setTheme(value: Theme | null) {
+    theme.value = value;
+    if (value) localStorage.setItem("ludo-theme", value);
+    else localStorage.removeItem("ludo-theme");
+    apply(value);
+  }
+  return { theme, toggle, setTheme };
 }

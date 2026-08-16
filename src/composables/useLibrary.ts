@@ -11,9 +11,13 @@ import {
   removeManualGame,
   setGameFavorite,
   setGameHidden,
+  startGameWatch,
   type ManualInput,
 } from "../lib/tauri";
+import { usePreferences } from "./usePreferences";
 import type { Game, LibraryFilter } from "../types";
+
+const { prefs } = usePreferences();
 
 const games = ref<Game[]>([]);
 const loading = ref(false);
@@ -201,6 +205,10 @@ export function useLibrary() {
     if (game.installed) {
       void markPlayed(game.id);
       void launchGame(game);
+      // Suivi de session : minimise Torii puis rouvre la fiche à la fermeture du jeu.
+      if (prefs.returnOnGameExit && game.installDir) {
+        void startGameWatch(game.id, game.installDir);
+      }
     } else {
       void installGame(game);
     }

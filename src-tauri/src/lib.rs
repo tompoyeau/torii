@@ -16,6 +16,12 @@ struct EnrichProgress {
     total: usize,
 }
 
+/// Émis quand un jeu suivi se ferme (→ le front ouvre sa fiche).
+#[derive(Clone, Serialize)]
+struct GameExited {
+    id: String,
+}
+
 /// État des connexions de comptes, exposé au frontend (sans secrets).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1005,6 +1011,42 @@ fn get_settings(app: tauri::AppHandle) -> Settings {
     Settings::from_creds(&creds, path)
 }
 
+/// Vide les caches de métadonnées/jaquettes/prix (fichiers `*cache*.json` de l'app),
+/// sans toucher aux identifiants, favoris, masqués, wishlist ni snapshots de bibliothèque.
+/// Renvoie le nombre de fichiers supprimés.
+#[tauri::command]
+fn clear_caches(app: tauri::AppHandle) -> Result<u32, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let mut removed = 0u32;
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.contains("cache") && name.ends_with(".json") && std::fs::remove_file(entry.path()).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
+}
+
+/// Indique si Torii est réglé pour démarrer automatiquement avec Windows.
+#[tauri::command]
+fn get_autostart(app: tauri::AppHandle) -> bool {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+/// Active ou désactive le démarrage automatique de Torii avec Windows (clé de registre
+/// `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`). Renvoie l'état effectif après coup.
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    let result = if enabled { manager.enable() } else { manager.disable() };
+    result.map_err(|e| format!("Impossible de modifier le démarrage automatique : {e}"))?;
+    Ok(manager.is_enabled().unwrap_or(enabled))
+}
+
 /// Agrège toutes les bibliothèques détectées (Steam, Epic, GOG, manuel).
 #[tauri::command]
 fn scan_library(app: tauri::AppHandle) -> Vec<GameDto> {
@@ -1138,12 +1180,192 @@ fn remove_manual_game(app: tauri::AppHandle, id: String) -> Result<Vec<GameDto>,
     platforms::manual::remove(&dir, &id)
 }
 
+/// Arme le suivi d'une session de jeu : minimise Torii, attend l'apparition puis la
+/// disparition d'un process situé sous `install_dir` (le jeu), et à sa fermeture
+/// restaure la fenêtre au premier plan et émet `game-exited` (le front ouvre la fiche).
+/// Ne concerne que les jeux **installés lancés depuis Torii** (dossier connu).
+#[tauri::command]
+fn start_game_watch(app: tauri::AppHandle, game_id: String, install_dir: String) {
+    let dir = std::path::PathBuf::from(&install_dir);
+    if !dir.is_dir() {
+        return;
+    }
+    // Torii se réduit pendant la partie.
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.minimize();
+    }
+    std::thread::spawn(move || game_watch_loop(app, game_id, dir));
+}
+
+/// `true` si un process en cours a son exécutable sous `dir` (le jeu tourne).
+fn process_running_in(sys: &sysinfo::System, dir: &std::path::Path) -> bool {
+    sys.processes()
+        .values()
+        .any(|p| p.exe().map(|e| e.starts_with(dir)).unwrap_or(false))
+}
+
+/// Boucle de surveillance d'une session (thread dédié).
+fn game_watch_loop(app: tauri::AppHandle, game_id: String, dir: std::path::PathBuf) {
+    use std::time::{Duration, Instant};
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+
+    let mut sys = System::new();
+    let poll = Duration::from_secs(3);
+    let refresh = |sys: &mut System| {
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::new().with_exe(sysinfo::UpdateKind::Always),
+        );
+    };
+
+    // 1) Attendre que le jeu démarre (le launcher met quelques secondes) — max 2 min.
+    let start = Instant::now();
+    let mut seen = false;
+    while start.elapsed() < Duration::from_secs(120) {
+        std::thread::sleep(poll);
+        refresh(&mut sys);
+        if process_running_in(&sys, &dir) {
+            seen = true;
+            break;
+        }
+    }
+    // Lancement non détecté (exe hors dossier, échec…) : on ne force rien.
+    if !seen {
+        return;
+    }
+
+    // 2) Attendre la fermeture du jeu.
+    loop {
+        std::thread::sleep(poll);
+        refresh(&mut sys);
+        if !process_running_in(&sys, &dir) {
+            break;
+        }
+    }
+
+    // 3) Retour : restaurer, premier plan, agrandir, puis le front ouvre la fiche.
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        let _ = win.maximize();
+    }
+    let _ = app.emit("game-exited", GameExited { id: game_id });
+}
+
+/// Préférences liées à la fenêtre, lues côté Rust (au démarrage et à la fermeture)
+/// donc persistées dans un fichier plutôt qu'en localStorage.
+#[derive(Serialize, serde::Deserialize, Clone, Copy, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct WindowPrefs {
+    /// Démarrer réduit dans la zone de notification (fenêtre cachée au lancement).
+    start_minimized: bool,
+    /// Fermer la fenêtre la réduit dans le tray au lieu de quitter l'application.
+    close_to_tray: bool,
+}
+
+fn load_window_prefs(app: &tauri::AppHandle) -> WindowPrefs {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("window_prefs.json"))
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+fn get_window_prefs(app: tauri::AppHandle) -> WindowPrefs {
+    load_window_prefs(&app)
+}
+
+#[tauri::command]
+fn set_window_prefs(app: tauri::AppHandle, start_minimized: bool, close_to_tray: bool) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).ok();
+    let prefs = WindowPrefs { start_minimized, close_to_tray };
+    let json = serde_json::to_string(&prefs).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("window_prefs.json"), json).map_err(|e| e.to_string())
+}
+
+/// Construit l'icône de la zone de notification (tray) avec son menu.
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+    let show = MenuItem::with_id(app, "show", "Ouvrir Torii", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show, &quit])?;
+
+    let mut builder = TrayIconBuilder::new()
+        .tooltip("Torii")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => reveal_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                reveal_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon().cloned() {
+        builder = builder.icon(icon);
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
+/// Affiche et met au premier plan la fenêtre principale (depuis le tray).
+fn reveal_window(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Démarrage automatique avec Windows (clé HKCU\…\Run). L'état est piloté par le
+        // toggle des Réglages et, si l'utilisateur l'a choisi, préréglé par l'installeur.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .setup(|app| {
+            // Icône dans la zone de notification (tray).
+            build_tray(app)?;
+            // Démarrage réduit : on cache la fenêtre au lancement si l'utilisateur l'a choisi.
+            if load_window_prefs(&app.handle().clone()).start_minimized {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.hide();
+                }
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // « Fermer = réduire dans le tray » : on intercepte la fermeture et on cache
+            // la fenêtre au lieu de quitter (l'app continue en arrière-plan).
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if load_window_prefs(&window.app_handle().clone()).close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             scan_library,
             enrich_metadata,
@@ -1180,7 +1402,13 @@ pub fn run() {
             steam_wishlist,
             friends_common,
             set_steam_key,
-            get_settings
+            get_settings,
+            get_autostart,
+            set_autostart,
+            clear_caches,
+            get_window_prefs,
+            set_window_prefs,
+            start_game_watch
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

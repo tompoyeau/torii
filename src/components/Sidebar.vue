@@ -100,10 +100,6 @@ const platforms: { id: PlatformId; label: string }[] = [
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3" /><circle cx="17" cy="15" r="3" /><path d="M3 20a6 6 0 0 1 12 0M13 20a5 5 0 0 1 8 0" /></svg></span>
         Famille <span class="count">{{ count("family").value }}</span>
       </button>
-      <button class="nav-item" :class="{ active: section === 'library' && filter ==='recent' }" @click="setFilter('recent')">
-        <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></span>
-        Récents <span class="count">{{ count("recent").value }}</span>
-      </button>
       <button class="nav-item" :class="{ active: section === 'library' && filter ==='favorite' }" @click="setFilter('favorite')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg></span>
         Favoris <span class="count">{{ count("favorite").value }}</span>
@@ -111,10 +107,6 @@ const platforms: { id: PlatformId; label: string }[] = [
       <button class="nav-item" :class="{ active: section === 'library' && filter ==='installed' }" @click="setFilter('installed')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" /></svg></span>
         Installés <span class="count">{{ count("installed").value }}</span>
-      </button>
-      <button v-if="count('hidden').value" class="nav-item" :class="{ active: section === 'library' && filter ==='hidden' }" @click="setFilter('hidden')">
-        <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg></span>
-        Masqués <span class="count">{{ count("hidden").value }}</span>
       </button>
     </nav>
 
@@ -143,7 +135,7 @@ const platforms: { id: PlatformId; label: string }[] = [
       </button>
     </nav>
 
-    <button class="add-launcher" :class="{ manage: allConnected }" @click="openSettings">
+    <button class="add-launcher" :class="{ manage: allConnected }" @click="openSettings('accounts')">
       <svg v-if="allConnected" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="2" fill="var(--surface)" /><circle cx="15" cy="12" r="2" fill="var(--surface)" /><circle cx="8" cy="18" r="2" fill="var(--surface)" /></svg>
       <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M12 9v6M9 12h6" /></svg>
       <span>{{ launcherLabel }}</span>

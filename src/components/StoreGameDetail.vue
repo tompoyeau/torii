@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "../composables/useStore";
 import { openExternal } from "../lib/tauri";
 import { formatEur } from "../lib/format";
 
-const { product, productLoading, selectedGameId, closeProduct } = useStore();
+const { product, productLoading, selectedGameId, closeProduct, isStoreExcluded, toggleStoreExcluded } =
+  useStore();
 
 const open = computed(() => selectedGameId.value != null);
 
 const price = formatEur;
 
-/** Meilleure offre (1re du comparatif, trié par prix croissant). */
-const best = computed(() => product.value?.prices[0] ?? null);
+/** Offres retenues (hors boutiques exclues par l'utilisateur), triées par prix croissant. */
+const visiblePrices = computed(() => (product.value?.prices ?? []).filter((p) => !isStoreExcluded(p.storeName)));
+/** Offres masquées par l'utilisateur (liste d'exclusion perso). */
+const hiddenPrices = computed(() => (product.value?.prices ?? []).filter((p) => isStoreExcluded(p.storeName)));
+/** Affiche/replie la liste des boutiques masquées (pour les réafficher). */
+const showHidden = ref(false);
+
+/** Meilleure offre = 1re offre NON exclue (jamais une boutique masquée). */
+const best = computed(() => visiblePrices.value[0] ?? null);
 
 function buy(url: string) {
   openExternal(url);
@@ -42,6 +50,31 @@ function stepZoom(delta: number) {
   if (zoom.value == null || n === 0) return;
   zoom.value = (zoom.value + delta + n) % n;
 }
+
+/* ── Défilement horizontal de la bande de captures ───────────────────────── */
+const shotsRow = ref<HTMLElement | null>(null);
+const shotsAtStart = ref(true);
+const shotsAtEnd = ref(true);
+
+/** Met à jour la visibilité des flèches selon la position de défilement. */
+function updateShotsScroll() {
+  const el = shotsRow.value;
+  if (!el) return;
+  shotsAtStart.value = el.scrollLeft <= 2;
+  shotsAtEnd.value = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+}
+/** Défile d'environ un écran de captures (sens −1 = gauche, +1 = droite). */
+function scrollShots(dir: number) {
+  const el = shotsRow.value;
+  if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: "smooth" });
+}
+// Recalcule (et remet à gauche) quand le jeu ou les captures changent.
+watch([selectedGameId, shots], () => {
+  nextTick(() => {
+    if (shotsRow.value) shotsRow.value.scrollLeft = 0;
+    updateShotsScroll();
+  });
+});
 </script>
 
 <template>
@@ -78,9 +111,29 @@ function stepZoom(delta: number) {
             </section>
             <section v-if="shots.length" class="sd-sec">
               <h4>Captures d'écran</h4>
-              <div class="shots no-scrollbar">
-                <button v-for="(s, i) in shots" :key="i" class="shot" @click="zoom = i">
-                  <img :src="s" alt="" loading="lazy" @error="hideBroken" />
+              <div class="shots-wrap">
+                <button
+                  v-if="!shotsAtStart"
+                  class="shots-nav prev"
+                  type="button"
+                  aria-label="Captures précédentes"
+                  @click="scrollShots(-1)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
+                </button>
+                <div ref="shotsRow" class="shots no-scrollbar" @scroll="updateShotsScroll">
+                  <button v-for="(s, i) in shots" :key="i" class="shot" @click="zoom = i">
+                    <img :src="s" alt="" loading="lazy" @error="hideBroken" />
+                  </button>
+                </div>
+                <button
+                  v-if="!shotsAtEnd"
+                  class="shots-nav next"
+                  type="button"
+                  aria-label="Captures suivantes"
+                  @click="scrollShots(1)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
                 </button>
               </div>
             </section>
@@ -105,18 +158,36 @@ function stepZoom(delta: number) {
           </div>
 
           <div v-if="product && product.prices.length > 1" class="compare">
-            <div class="compare-label">Comparer ({{ product.prices.length }} boutiques)</div>
-            <div v-for="(p, i) in product.prices" :key="p.storeName + p.buyUrl + i" class="row">
+            <div class="compare-label">Comparer ({{ visiblePrices.length }} boutique{{ visiblePrices.length > 1 ? "s" : "" }})</div>
+            <div v-for="(p, i) in visiblePrices" :key="p.storeName + p.buyUrl + i" class="row">
               <span class="row-store">{{ p.storeName }}</span>
               <span v-if="p.savings > 0" class="row-save">-{{ p.savings }}%</span>
               <span class="row-price">{{ price(p.price) }}</span>
+              <button class="row-icon" title="Masquer ce vendeur" @click="toggleStoreExcluded(p.storeName)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /><path d="M3 3l18 18" /></svg>
+              </button>
               <button class="row-buy" title="Acheter" @click="buy(p.buyUrl)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </button>
             </div>
+
+            <template v-if="hiddenPrices.length">
+              <button class="hidden-toggle" @click="showHidden = !showHidden">
+                {{ showHidden ? "▾" : "▸" }} {{ hiddenPrices.length }} vendeur{{ hiddenPrices.length > 1 ? "s" : "" }} masqué{{ hiddenPrices.length > 1 ? "s" : "" }}
+              </button>
+              <div v-if="showHidden" class="hidden-list">
+                <div v-for="(p, i) in hiddenPrices" :key="'h' + p.storeName + i" class="row muted">
+                  <span class="row-store">{{ p.storeName }}</span>
+                  <span class="row-price">{{ price(p.price) }}</span>
+                  <button class="row-icon" title="Réafficher ce vendeur" @click="toggleStoreExcluded(p.storeName)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
 
-          <p class="disclaimer">Prix indicatifs en euros (CheapShark convertis au taux du jour ; Instant Gaming natif). L'achat se fait sur la boutique du marchand.</p>
+          <p class="disclaimer">Prix indicatifs en euros. Masque les vendeurs que tu ne veux plus voir avec l'icône œil. L'achat se fait sur la boutique du marchand.</p>
         </aside>
       </div>
 
@@ -165,7 +236,19 @@ function stepZoom(delta: number) {
 .sd-sec h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); font-weight: 700; margin: 0 0 16px; }
 .desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 90ch; }
 .desc.dim { color: var(--text-faint); font-style: italic; }
+.shots-wrap { position: relative; }
 .shots { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+.shots-nav {
+  position: absolute; top: calc(50% - 4px); transform: translateY(-50%); z-index: 6;
+  width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(14, 10, 20, 0.62); border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff; backdrop-filter: blur(8px); box-shadow: var(--shadow-card); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.shots-nav:hover { background: rgba(28, 20, 38, 0.9); border-color: rgba(255, 255, 255, 0.4); }
+.shots-nav.prev { left: 8px; }
+.shots-nav.next { right: 8px; }
+.shots-nav svg { width: 21px; height: 21px; }
 .shot { flex: none; width: 300px; aspect-ratio: 16 / 9; border-radius: 13px; overflow: hidden; border: 1px solid var(--border); padding: 0; cursor: zoom-in; background: none; }
 .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
@@ -191,6 +274,13 @@ function stepZoom(delta: number) {
 .row-buy { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); flex: none; }
 .row-buy:hover { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .row-buy svg { width: 15px; height: 15px; }
+.row-icon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: none; border: 1px solid transparent; color: var(--text-faint); flex: none; }
+.row-icon:hover { color: var(--text); border-color: var(--border); background: var(--surface-2); }
+.row-icon svg { width: 15px; height: 15px; }
+.row.muted { opacity: 0.55; }
+.hidden-toggle { margin-top: 6px; background: none; border: none; color: var(--text-faint); font-size: 11.5px; font-family: var(--mono); padding: 6px 0 2px; cursor: pointer; }
+.hidden-toggle:hover { color: var(--text-dim); }
+.hidden-list .row:first-child { border-top: 1px solid var(--border); }
 .disclaimer { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin: 4px 2px 0; }
 
 .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin 0.7s linear infinite; display: inline-block; }

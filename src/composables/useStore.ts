@@ -30,6 +30,47 @@ let loadedOnce = false;
 let reqToken = 0;
 let suggestToken = 0;
 
+/**
+ * Liste d'exclusion de boutiques, gérée par l'utilisateur (persistée en localStorage).
+ * Une boutique exclue est entièrement masquée du comparatif et n'est jamais retenue
+ * comme « meilleur prix ». Clé = nom de la boutique (fonctionne aussi pour Instant Gaming,
+ * scrapé hors ITAD). Distinct de la catégorisation officiel/revendeur (celle-ci = factuelle,
+ * fournie par le backend ; l'exclusion = choix perso de l'utilisateur).
+ */
+const STORE_EXCL_KEY = "ludo-excluded-stores";
+function loadExcluded(): string[] {
+  try {
+    const raw = localStorage.getItem(STORE_EXCL_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+const excludedStores = ref<string[]>(loadExcluded());
+function persistExcluded() {
+  try {
+    localStorage.setItem(STORE_EXCL_KEY, JSON.stringify(excludedStores.value));
+  } catch {
+    /* stockage indisponible : on garde l'exclusion en mémoire pour la session. */
+  }
+}
+/** true si la boutique est dans la liste d'exclusion de l'utilisateur. */
+function isStoreExcluded(name: string): boolean {
+  return excludedStores.value.includes(name);
+}
+/** Ajoute/retire une boutique de la liste d'exclusion (et persiste). */
+function toggleStoreExcluded(name: string) {
+  excludedStores.value = isStoreExcluded(name)
+    ? excludedStores.value.filter((n) => n !== name)
+    : [...excludedStores.value, name];
+  persistExcluded();
+}
+/** Vide la liste d'exclusion (réaffiche toutes les boutiques). */
+function clearExcludedStores() {
+  excludedStores.value = [];
+  persistExcluded();
+}
+
 /** Charge la vitrine (mises en avant / promos) selon le tri courant. */
 async function loadHome() {
   loading.value = true;
@@ -195,6 +236,10 @@ export function useStore() {
     pickRandom,
     fetchSuggestions,
     clearSuggestions,
+    excludedStores,
+    isStoreExcluded,
+    toggleStoreExcluded,
+    clearExcludedStores,
   };
 }
 
