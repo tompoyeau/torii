@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useStore, type StoreSort } from "../composables/useStore";
+import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { gradientFor } from "../lib/covers";
 import { formatEur } from "../lib/format";
 import type { StoreItem, StoreSuggestion } from "../types";
@@ -9,6 +10,7 @@ const {
   items, loading, sort, query, activeQuery, suggestions, randomLoading, randomMode,
   setSort, runSearch, openProduct, pickRandom, fetchSuggestions, clearSuggestions,
 } = useStore();
+const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 
 const SORTS: { key: StoreSort; label: string }[] = [
   { key: "featured", label: "Mises en avant" },
@@ -200,6 +202,15 @@ function onCoverError(url: string | null) {
             @error="onCoverError(coverSrc(it))"
           />
           <span v-if="it.savings > 0" class="badge">-{{ it.savings }}%</span>
+          <span
+            class="wish-dot"
+            :class="{ on: isWishlisted(it.gameId) }"
+            role="button"
+            :title="isWishlisted(it.gameId) ? 'Retirer de la wishlist' : 'Ajouter à la wishlist'"
+            @click.stop="toggleWishlist({ gameId: it.gameId, title: it.title, coverUrl: it.coverUrl })"
+          >
+            <svg viewBox="0 0 24 24" :fill="isWishlisted(it.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
+          </span>
           <span class="cover-scrim" />
           <span class="cover-title">{{ it.title }}</span>
         </div>
@@ -296,6 +307,16 @@ function onCoverError(url: string | null) {
   padding: 3px 8px; border-radius: 8px; color: #fff;
   background: linear-gradient(135deg, #3ad07f, #1fa862); box-shadow: 0 3px 10px -3px rgba(31, 168, 98, 0.7);
 }
+.wish-dot {
+  position: absolute; top: 8px; left: 8px; z-index: 3; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: rgba(14, 10, 20, 0.6); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff;
+  opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.card:hover .wish-dot { opacity: 1; }
+.wish-dot:hover { background: rgba(28, 20, 38, 0.9); }
+.wish-dot.on { opacity: 1; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.wish-dot svg { width: 16px; height: 16px; }
 .card:hover .cover { transform: translateY(-6px); box-shadow: 0 26px 50px -20px rgba(0, 0, 0, 0.75); }
 .meta { display: flex; align-items: baseline; gap: 8px; padding: 0 2px; }
 .price { display: flex; align-items: baseline; gap: 7px; }

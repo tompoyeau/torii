@@ -675,6 +675,18 @@ pub fn owned_games(api_key: &str, steam_id: &str) -> Vec<GameDto> {
 /// avec `nonce=<refresh_token>` → `transfer_info` (URLs `settoken`) → POST le `settoken`
 /// communautaire → le `Set-Cookie` renvoie le `steamLoginSecure` frais.
 pub fn refresh_web_cookie(refresh_token: &str, steam_id: &str) -> Option<String> {
+    refresh_domain_cookie(refresh_token, steam_id, "steamcommunity.com")
+}
+
+/// Comme [`refresh_web_cookie`] mais pour le domaine **store** (`store.steampowered.com`),
+/// requis par l'API wishlist du store (`addtowishlist`).
+pub fn refresh_store_cookie(refresh_token: &str, steam_id: &str) -> Option<String> {
+    refresh_domain_cookie(refresh_token, steam_id, "store.steampowered.com")
+}
+
+/// Régénère un cookie `steamLoginSecure` frais pour un **domaine** donné (communautaire ou
+/// store) à partir du refresh token, en rejouant le flux de login (finalizelogin → settoken).
+fn refresh_domain_cookie(refresh_token: &str, steam_id: &str, domain: &str) -> Option<String> {
     let sessionid = random_sessionid();
 
     // 1) finalizelogin : échange le refresh token contre les URLs settoken par domaine.
@@ -692,11 +704,11 @@ pub fn refresh_web_cookie(refresh_token: &str, steam_id: &str) -> Option<String>
         .into_json()
         .ok()?;
 
-    // 2) On prend l'entrée du domaine communautaire.
+    // 2) On prend l'entrée du domaine demandé.
     let comm = fin["transfer_info"]
         .as_array()?
         .iter()
-        .find(|t| t["url"].as_str().is_some_and(|u| u.contains("steamcommunity.com")))?;
+        .find(|t| t["url"].as_str().is_some_and(|u| u.contains(domain)))?;
     let url = comm["url"].as_str()?;
     let nonce = comm["params"]["nonce"].as_str()?;
     let auth = comm["params"]["auth"].as_str()?;
@@ -719,6 +731,27 @@ pub fn refresh_web_cookie(refresh_token: &str, steam_id: &str) -> Option<String>
         }
     }
     None
+}
+
+/// Ajoute (`add=true`) ou retire un jeu de la **vraie wishlist Steam**, via l'endpoint
+/// AJAX du store (`store.steampowered.com/api/addtowishlist` / `removefromwishlist`) —
+/// le même que le bouton « Ajouter à la liste de souhaits » du site. Utilise le cookie
+/// de session **store** (`steamLoginSecure`) + un `sessionid` (double-submit CSRF).
+/// Renvoie `true` si Steam confirme. ⚠️ API interne non documentée → à valider en réel.
+pub fn set_wishlist(appid: u64, add: bool, store_cookie: &str) -> Result<bool, String> {
+    let sessionid = random_sessionid();
+    let endpoint = if add { "addtowishlist" } else { "removefromwishlist" };
+    let resp = ureq::post(&format!("https://store.steampowered.com/api/{endpoint}"))
+        .timeout(Duration::from_secs(15))
+        .set("User-Agent", BROWSER_UA)
+        .set("Cookie", &format!("{store_cookie}; sessionid={sessionid}"))
+        .set("Origin", "https://store.steampowered.com")
+        .set("Referer", &format!("https://store.steampowered.com/app/{appid}/"))
+        .set("X-Requested-With", "XMLHttpRequest")
+        .send_form(&[("appid", &appid.to_string()), ("sessionid", &sessionid)])
+        .map_err(|e| e.to_string())?;
+    let v: Value = resp.into_json().unwrap_or(Value::Null);
+    Ok(v["success"].as_bool().unwrap_or(false))
 }
 
 /// `sessionid` aléatoire (24 hex) requis par `finalizelogin` (appariement CSRF ; il

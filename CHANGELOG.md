@@ -4,6 +4,14 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.9
+- **Wishlist universelle** : ajoute n'importe quel jeu à ta wishlist depuis la Boutique (bouton ♥ sur la fiche et sur les cartes). Si le jeu existe sur Steam, il est aussi ajouté à ta wishlist Steam. Un petit message confirme l'ajout.
+- **Alertes de prix** : elles suivent désormais toute ta wishlist (Steam + jeux ajoutés dans Torii).
+- **Instant Gaming** : les offres en rupture de stock sont signalées (« Rupture de stock ») et ne sont plus proposées comme meilleur prix.
+- **Écran de démarrage** pendant le chargement de la bibliothèque.
+- **Correctifs zone de notification** : plus d'instance « fantôme » qui reste dans le tray, la relance rouvre bien la fenêtre existante, et le démarrage ne fait plus clignoter la fenêtre.
+- Retrait de la catégorie « Récents » et du bouton grille/liste (l'affichage par défaut se règle dans les Paramètres).
+
 ## 0.9.8
 - **Correctif** : quand Torii reste actif en arrière-plan (option « fermer dans la zone de notification »), le relancer ramène désormais la fenêtre existante au premier plan au lieu d'ouvrir une seconde instance qui empêchait l'ouverture.
 

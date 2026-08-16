@@ -25,6 +25,8 @@ pub struct IgOffer {
     pub savings: u32,
     /// Lien d'achat (page produit Instant Gaming).
     pub url: String,
+    /// `false` si le jeu est en rupture de stock sur IG (page produit sans « add to cart »).
+    pub available: bool,
 }
 
 /// Clé de rapprochement d'un titre (minuscules alphanumériques).
@@ -99,7 +101,27 @@ pub fn price(title: &str) -> Option<IgOffer> {
         .ok()?
         .into_string()
         .ok()?;
-    parse(&body, &want)
+    let mut offer = parse(&body, &want)?;
+    // Le fragment de recherche n'indique jamais le stock : on va lire la page produit.
+    // Rupture = page sans bouton « add to cart » (IG affiche alors `nostock` / « Out of stock »).
+    offer.available = is_available(&offer.url);
+    Some(offer)
+}
+
+/// Vérifie la disponibilité d'un jeu sur sa page produit IG. En rupture, IG retire le
+/// bouton d'ajout au panier (`addtocart`). En cas d'échec réseau on suppose disponible
+/// (on ne masque pas une offre par excès de prudence).
+fn is_available(product_url: &str) -> bool {
+    match ureq::get(product_url)
+        .set("User-Agent", BROWSER_UA)
+        .timeout(std::time::Duration::from_secs(12))
+        .call()
+        .ok()
+        .and_then(|r| r.into_string().ok())
+    {
+        Some(body) => body.contains("addtocart"),
+        None => true,
+    }
 }
 
 /// Extrait la meilleure offre PC d'un fragment HTML de recherche IG, pour un titre
@@ -160,6 +182,7 @@ fn parse(body: &str, want: &str) -> Option<IgOffer> {
             price,
             savings,
             url: href.to_string(),
+            available: true, // rempli par `price()` après lecture de la page produit
         };
         best = match best {
             Some(b) if b.price <= offer.price => Some(b),

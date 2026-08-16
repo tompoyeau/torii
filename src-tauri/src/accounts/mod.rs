@@ -124,6 +124,34 @@ pub fn steam_wishlist_appids(config_dir: &Path) -> Vec<u64> {
     }
 }
 
+/// Pousse (ou retire) un jeu vers la **vraie wishlist Steam** (bonus). Best-effort :
+/// nécessite le cookie de session store (`steam_login_secure`). Renvoie `true` si Steam
+/// a confirmé ; `false` sinon (le jeu reste de toute façon dans la wishlist Torii).
+pub fn steam_set_wishlist(config_dir: &Path, appid: u64, add: bool) -> bool {
+    let creds = secrets::load(config_dir);
+
+    // 1) Cookie store déjà stocké (peut être expiré ~24 h).
+    if let Some(cookie) = creds.steam_login_secure.clone() {
+        if steam::set_wishlist(appid, add, &cookie).unwrap_or(false) {
+            return true;
+        }
+    }
+
+    // 2) Régénère un cookie store frais via le refresh token (comme pour la biblio/amis),
+    //    le persiste, puis réessaie. Couvre le cas « connecté en flux communautaire »
+    //    (pas de cookie store stocké) et le cookie store expiré.
+    let steam_id = creds.steam_id.clone().or_else(steam::detect_steam_id);
+    if let (Some(rt), Some(id)) = (creds.steam_refresh_token.clone(), steam_id) {
+        if let Some(cookie) = steam::refresh_store_cookie(&rt, &id) {
+            let mut updated = creds.clone();
+            updated.steam_login_secure = Some(cookie.clone());
+            let _ = secrets::save(config_dir, &updated);
+            return steam::set_wishlist(appid, add, &cookie).unwrap_or(false);
+        }
+    }
+    false
+}
+
 /// Récupère les jeux possédés via les comptes connectés (Steam, GOG et Epic).
 pub fn owned_games(config_dir: &Path) -> Vec<GameDto> {
     let creds = secrets::load(config_dir);

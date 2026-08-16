@@ -8,7 +8,7 @@ import { openExternal, steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
 import ModeSwitch from "./ModeSwitch.vue";
 
-const { section, query, listView, toggleListView, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
+const { section, query, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
 const { toggle: toggleTheme } = useTheme();
 const { loading, enriching, enrichProgress, reload } = useLibrary();
 const { activeCount: friendsOnline, refresh: refreshFriends } = useFriends();
@@ -51,10 +51,6 @@ function openMe() {
     </button>
     <button class="icon-btn" title="Resynchroniser" :disabled="loading" @click="reload()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
-    </button>
-    <button class="icon-btn" title="Grille / liste" @click="toggleListView">
-      <svg v-if="listView" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
-      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
     </button>
     <button class="icon-btn" title="Thème clair / sombre" @click="toggleTheme">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5Z" /></svg>

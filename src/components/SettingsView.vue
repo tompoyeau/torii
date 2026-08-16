@@ -305,6 +305,21 @@ function unhide(id: string) {
               </div>
               <span class="switch" :class="{ on: prefs.reduceMotion }"><span class="knob" /></span>
             </button>
+
+            <div class="divider" />
+
+            <button
+              class="pref toggle-row"
+              role="switch"
+              :aria-checked="prefs.wishlistNotifications"
+              @click="prefs.wishlistNotifications = !prefs.wishlistNotifications"
+            >
+              <div class="row-text">
+                <span class="row-title">Alertes de prix (wishlist)</span>
+                <span class="row-sub">Une notification quand un jeu de ta wishlist Steam passe en promo ou atteint son plus bas prix historique. (Torii doit tourner, même réduit dans le tray.)</span>
+              </div>
+              <span class="switch" :class="{ on: prefs.wishlistNotifications }"><span class="knob" /></span>
+            </button>
           </template>
 
           <!-- À propos & maintenance -->

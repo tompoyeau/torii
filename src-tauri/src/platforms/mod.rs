@@ -7,6 +7,7 @@ pub mod playhistory;
 pub mod riot;
 pub mod steam;
 pub mod ubisoft;
+pub mod wishlist;
 
 use crate::models::GameDto;
 use std::collections::HashMap;

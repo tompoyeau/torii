@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted } from "vue";
 import { useUi } from "./composables/useUi";
 import { useStore } from "./composables/useStore";
 import { onGameExited } from "./lib/tauri";
+import { startWishlistNotifier } from "./composables/useWishlistNotifier";
 import BureauView from "./components/BureauView.vue";
 import SalonView from "./components/SalonView.vue";
 import GameDetail from "./components/GameDetail.vue";
@@ -11,6 +12,8 @@ import SettingsView from "./components/SettingsView.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AddGameModal from "./components/AddGameModal.vue";
 import UpdateBanner from "./components/UpdateBanner.vue";
+import Toast from "./components/Toast.vue";
+import SplashScreen from "./components/SplashScreen.vue";
 
 const { mode, addGameOpen, closeAddGame, goBack, openGame } = useUi();
 const { selectedGameId: storeProductId, closeProduct } = useStore();
@@ -52,6 +55,7 @@ onMounted(async () => {
   window.addEventListener("mousedown", onMouseDown);
   window.addEventListener("mouseup", onMouseUp);
   unlistenGameExit = await onGameExited((id) => openGame(id));
+  startWishlistNotifier();
 });
 onBeforeUnmount(() => {
   window.removeEventListener("mousedown", onMouseDown);
@@ -70,5 +74,7 @@ onBeforeUnmount(() => {
     <ContextMenu />
     <AddGameModal />
     <UpdateBanner />
+    <Toast />
+    <SplashScreen />
   </div>
 </template>
