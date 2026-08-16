@@ -153,6 +153,8 @@ export interface StorePrice {
   savings: number;
   /** Lien d'achat direct vers la boutique. */
   buyUrl: string;
+  /** false = en rupture de stock (Instant Gaming). Absent/undefined = disponible. */
+  available?: boolean;
 }
 
 /** Fiche produit boutique : comparatif de prix + métadonnée descriptive (IGDB). */

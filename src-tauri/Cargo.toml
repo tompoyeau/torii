@@ -1,6 +1,6 @@
 [package]
 name = "ludo"
-version = "0.9.8"
+version = "0.9.9"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -32,6 +32,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
 # Empêche une 2e instance (l'app reste en tâche de fond avec « fermer dans le tray »).
 tauri-plugin-single-instance = "2"
 # Surveillance des process (détection lancement/fermeture des jeux).

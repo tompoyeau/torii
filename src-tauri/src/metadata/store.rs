@@ -64,6 +64,9 @@ pub struct StorePrice {
     pub retail_price: f64,
     pub savings: u32,
     pub buy_url: String,
+    /// `false` si l'offre est en rupture de stock (Instant Gaming). Les offres ITAD
+    /// sont toujours considérées disponibles (elles proviennent de deals en cours).
+    pub available: bool,
 }
 
 /// Fiche produit : comparatif de prix + métadonnée descriptive (IGDB).
@@ -293,6 +296,7 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
                         retail_price: num(&d["regular"]["amount"]).unwrap_or(price),
                         savings: num(&d["cut"]).unwrap_or(0.0).round() as u32,
                         buy_url: d["url"].as_str().unwrap_or_default().to_string(),
+                        available: true, // offres ITAD = deals en cours
                     })
                 })
                 .collect()
@@ -311,6 +315,7 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
             },
             savings: ig.savings,
             buy_url: ig.url,
+            available: ig.available,
         });
     }
     prices.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(std::cmp::Ordering::Equal));
@@ -488,6 +493,67 @@ pub fn wishlist(appids: &[u64]) -> Vec<WishlistItem> {
                         item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
                         item.store_name =
                             deal["shop"]["name"].as_str().unwrap_or_default().to_string();
+                        item.buy_url = deal["url"].as_str().unwrap_or_default().to_string();
+                    }
+                }
+            }
+            item
+        })
+        .collect()
+}
+
+/// Résout l'appid Steam d'un jeu depuis son id ITAD (via `games/info/v2`). None si le
+/// jeu n'est pas sur Steam. Permet de pousser vers la wishlist Steam même depuis une carte.
+pub fn steam_appid_for(itad_id: &str) -> Option<u64> {
+    let info = get_json(&format!("games/info/v2?id={}", urlencode(itad_id)))?;
+    info["appid"].as_u64()
+}
+
+/// Enrichit des entrées de wishlist **Torii** (id ITAD + appid éventuel + titre + jaquette)
+/// avec les prix ITAD (un seul POST). Utilisé pour les jeux ajoutés dans Torii (Steam ou non).
+pub fn wishlist_custom(entries: &[(String, u64, String, Option<String>)]) -> Vec<WishlistItem> {
+    if entries.is_empty() {
+        return Vec::new();
+    }
+    let ids: Vec<String> = entries.iter().map(|(id, ..)| id.clone()).filter(|s| !s.is_empty()).collect();
+    let price_entries = if ids.is_empty() {
+        Vec::new()
+    } else {
+        post_json(&format!("games/prices/v3?country={COUNTRY}"), &json!(ids))
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default()
+    };
+    let prices: std::collections::HashMap<String, Value> = price_entries
+        .into_iter()
+        .filter_map(|e| Some((e["id"].as_str()?.to_string(), e)))
+        .collect();
+
+    let cdn = "https://cdn.cloudflare.steamstatic.com/steam/apps";
+    entries
+        .iter()
+        .map(|(id, appid, title, cover)| {
+            let cover_url = cover.clone().unwrap_or_else(|| {
+                if *appid > 0 {
+                    format!("{cdn}/{appid}/library_600x900.jpg")
+                } else {
+                    String::new()
+                }
+            });
+            let mut item = WishlistItem {
+                app_id: *appid,
+                game_id: id.clone(),
+                title: title.clone(),
+                cover_url,
+                ..Default::default()
+            };
+            if let Some(entry) = prices.get(id) {
+                item.history_low = num(&entry["historyLow"]["all"]["amount"]);
+                if let Some(deal) = best_deal(entry) {
+                    if let Some(p) = num(&deal["price"]["amount"]) {
+                        item.price = Some(p);
+                        item.normal_price = Some(num(&deal["regular"]["amount"]).unwrap_or(p));
+                        item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
+                        item.store_name = deal["shop"]["name"].as_str().unwrap_or_default().to_string();
                         item.buy_url = deal["url"].as_str().unwrap_or_default().to_string();
                     }
                 }

@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { getSettings, steamWishlist } from "../lib/tauri";
+import { getSettings, wishlistAll } from "../lib/tauri";
 import type { WishlistItem } from "../types";
 
 // État partagé (singleton).
@@ -14,7 +14,7 @@ let reqToken = 0;
 async function refresh() {
   loading.value = true;
   const token = ++reqToken;
-  const [list, settings] = await Promise.all([steamWishlist(), getSettings()]);
+  const [list, settings] = await Promise.all([wishlistAll(), getSettings()]);
   if (token !== reqToken) return; // un rafraîchissement plus récent a pris le relais
   if (settings) steamConnected.value = settings.steamConnected;
   if (list) {

@@ -24,6 +24,8 @@ interface Prefs {
    * lancé depuis Torii) et, à la fermeture, revient au premier plan sur la fiche du jeu.
    */
   returnOnGameExit: boolean;
+  /** Notifier quand un jeu de la wishlist passe en promo ou atteint son plus bas historique. */
+  wishlistNotifications: boolean;
 }
 
 const DEFAULTS: Prefs = {
@@ -34,6 +36,7 @@ const DEFAULTS: Prefs = {
   density: "normal",
   reduceMotion: false,
   returnOnGameExit: false,
+  wishlistNotifications: false,
 };
 
 const KEY = "ludo-prefs";

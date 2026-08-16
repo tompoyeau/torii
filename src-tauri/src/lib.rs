@@ -983,6 +983,82 @@ async fn steam_wishlist(
     .map_err(|e| e.to_string())
 }
 
+/// Wishlist **unifiée** : wishlist Steam native ∪ wishlist Torii (universelle, tout jeu),
+/// dédupliquée et enrichie de prix (ITAD). Les entrées Torius déjà présentes sur Steam
+/// (même appid) ne sont pas doublées.
+#[tauri::command]
+async fn wishlist_all(app: tauri::AppHandle) -> Result<Vec<metadata::store::WishlistItem>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let steam_appids = accounts::steam_wishlist_appids(&dir);
+        let steam_set: std::collections::HashSet<u64> = steam_appids.iter().copied().collect();
+        let mut items = metadata::store::wishlist(&steam_appids);
+        let extra: Vec<(String, u64, String, Option<String>)> = platforms::wishlist::load(&dir)
+            .into_iter()
+            .filter(|e| e.steam_appid.map_or(true, |a| !steam_set.contains(&a)))
+            .map(|e| (e.id, e.steam_appid.unwrap_or(0), e.title, e.cover_url))
+            .collect();
+        items.extend(metadata::store::wishlist_custom(&extra));
+        items
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Ids de la wishlist Torii (pour refléter l'état des boutons « ♥ » côté Boutique). Local, rapide.
+#[tauri::command]
+fn wishlist_ids(app: tauri::AppHandle) -> Vec<String> {
+    let dir = match app.path().app_config_dir() {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    platforms::wishlist::load(&dir).into_iter().map(|e| e.id).collect()
+}
+
+/// Ajoute un jeu à la wishlist Torii (universelle). L'appid Steam est résolu automatiquement
+/// (via ITAD) : si le jeu existe sur Steam, il est **en bonus** ajouté à la vraie wishlist
+/// Steam. Renvoie `true` si le push Steam a réussi.
+#[tauri::command]
+async fn wishlist_add(
+    app: tauri::AppHandle,
+    id: String,
+    title: String,
+    cover_url: Option<String>,
+) -> Result<bool, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let steam_appid = metadata::store::steam_appid_for(&id);
+        let _ = platforms::wishlist::add(
+            &dir,
+            platforms::wishlist::WishEntry { id, steam_appid, title, cover_url },
+        );
+        match steam_appid {
+            Some(a) => accounts::steam_set_wishlist(&dir, a, true),
+            None => false,
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Retire un jeu de la wishlist Torii (et de Steam si le jeu y était, via l'appid mémorisé).
+#[tauri::command]
+async fn wishlist_remove(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let appid = platforms::wishlist::load(&dir)
+            .into_iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.steam_appid);
+        let _ = platforms::wishlist::remove(&dir, &id);
+        if let Some(a) = appid {
+            accounts::steam_set_wishlist(&dir, a, false);
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Jeux en commun avec les amis Steam : ma bibliothèque croisée avec celle de chaque ami
 /// (dont le profil est lisible). `force` recalcule en ignorant le cache disque. Renvoie une
 /// charge vide si Steam n'est pas connecté.
@@ -1009,6 +1085,18 @@ fn get_settings(app: tauri::AppHandle) -> Settings {
         .unwrap_or_default();
     let path = dir.as_deref().unwrap_or_else(|| std::path::Path::new(""));
     Settings::from_creds(&creds, path)
+}
+
+/// Affiche une notification système (utilisée pour les baisses de prix de la wishlist).
+#[tauri::command]
+fn notify_user(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
 }
 
 /// Vide les caches de métadonnées/jaquettes/prix (fichiers `*cache*.json` de l'app),
@@ -1324,12 +1412,16 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Affiche et met au premier plan la fenêtre principale (depuis le tray).
+/// Affiche et met au premier plan la fenêtre principale (depuis le tray ou une 2e instance).
+/// 🔑 Sur Windows, un process en arrière-plan ne peut pas voler le focus : on force le
+/// passage au premier plan via un aller-retour `always_on_top`.
 fn reveal_window(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
         let _ = win.unminimize();
+        let _ = win.set_always_on_top(true);
         let _ = win.set_focus();
+        let _ = win.set_always_on_top(false);
     }
 }
 
@@ -1341,11 +1433,17 @@ pub fn run() {
         // et qu'on la relance, la nouvelle instance se ferme et la fenêtre existante est
         // ramenée au premier plan (au lieu d'ouvrir un doublon qui bloque l'ouverture).
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            reveal_window(app);
+            // La 2e instance déclenche ce callback dans l'instance déjà en cours : on révèle
+            // la fenêtre sur le **thread principal** (les opérations fenêtre depuis le thread
+            // du callback échouent sinon — symptôme : « relancer ne rouvre pas, il faut le tray »).
+            let handle = app.clone();
+            let inner = handle.clone();
+            let _ = handle.run_on_main_thread(move || reveal_window(&inner));
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         // Démarrage automatique avec Windows (clé HKCU\…\Run). L'état est piloté par le
         // toggle des Réglages et, si l'utilisateur l'a choisi, préréglé par l'installeur.
         .plugin(tauri_plugin_autostart::init(
@@ -1355,21 +1453,28 @@ pub fn run() {
         .setup(|app| {
             // Icône dans la zone de notification (tray).
             build_tray(app)?;
-            // Démarrage réduit : on cache la fenêtre au lancement si l'utilisateur l'a choisi.
-            if load_window_prefs(&app.handle().clone()).start_minimized {
+            // La fenêtre est créée cachée (`visible:false`) pour éviter tout flash au
+            // démarrage : on l'affiche seulement si « Démarrer minimisé » n'est PAS actif.
+            // (Sinon elle reste dans le tray, sans clignotement.)
+            if !load_window_prefs(&app.handle().clone()).start_minimized {
                 if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.hide();
+                    let _ = win.show();
                 }
             }
             Ok(())
         })
         .on_window_event(|window, event| {
-            // « Fermer = réduire dans le tray » : on intercepte la fermeture et on cache
-            // la fenêtre au lieu de quitter (l'app continue en arrière-plan).
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if load_window_prefs(&window.app_handle().clone()).close_to_tray {
+                    // « Fermer = réduire dans le tray » : on cache au lieu de quitter.
                     api.prevent_close();
                     let _ = window.hide();
+                } else {
+                    // Sinon on QUITTE vraiment. Sans ça, l'icône du tray garde le process
+                    // vivant après destruction de la fenêtre → instance fantôme sans fenêtre
+                    // qui bloque les relances (single-instance ne trouve plus de fenêtre à
+                    // révéler). On force donc la sortie complète.
+                    window.app_handle().exit(0);
                 }
             }
         })
@@ -1407,6 +1512,10 @@ pub fn run() {
             steam_achievements,
             steam_current_players,
             steam_wishlist,
+            wishlist_all,
+            wishlist_ids,
+            wishlist_add,
+            wishlist_remove,
             friends_common,
             set_steam_key,
             get_settings,
@@ -1415,7 +1524,8 @@ pub fn run() {
             clear_caches,
             get_window_prefs,
             set_window_prefs,
-            start_game_watch
+            start_game_watch,
+            notify_user
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

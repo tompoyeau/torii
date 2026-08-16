@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "../composables/useStore";
+import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { openExternal } from "../lib/tauri";
 import { formatEur } from "../lib/format";
 
 const { product, productLoading, selectedGameId, closeProduct, isStoreExcluded, toggleStoreExcluded } =
   useStore();
+const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 
 const open = computed(() => selectedGameId.value != null);
 
@@ -18,8 +20,8 @@ const hiddenPrices = computed(() => (product.value?.prices ?? []).filter((p) => 
 /** Affiche/replie la liste des boutiques masquées (pour les réafficher). */
 const showHidden = ref(false);
 
-/** Meilleure offre = 1re offre NON exclue (jamais une boutique masquée). */
-const best = computed(() => visiblePrices.value[0] ?? null);
+/** Meilleure offre = 1re offre NON exclue ET disponible (jamais une rupture de stock). */
+const best = computed(() => visiblePrices.value.find((p) => p.available !== false) ?? null);
 
 function buy(url: string) {
   openExternal(url);
@@ -152,6 +154,15 @@ watch([selectedGameId, shots], () => {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z" /><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M6 6 5 3H2" /></svg>
               Acheter chez {{ best.storeName }}
             </button>
+            <button
+              v-if="product"
+              class="wish"
+              :class="{ on: isWishlisted(product.gameId) }"
+              @click="toggleWishlist({ gameId: product.gameId, title: product.title, coverUrl: product.coverUrl })"
+            >
+              <svg viewBox="0 0 24 24" :fill="isWishlisted(product.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
+              {{ isWishlisted(product.gameId) ? "Dans la wishlist" : "Ajouter à la wishlist" }}
+            </button>
             <div v-if="product?.cheapestEver != null" class="ever">
               Plus bas historique : <b>{{ price(product.cheapestEver) }}</b>
             </div>
@@ -159,14 +170,15 @@ watch([selectedGameId, shots], () => {
 
           <div v-if="product && product.prices.length > 1" class="compare">
             <div class="compare-label">Comparer ({{ visiblePrices.length }} boutique{{ visiblePrices.length > 1 ? "s" : "" }})</div>
-            <div v-for="(p, i) in visiblePrices" :key="p.storeName + p.buyUrl + i" class="row">
+            <div v-for="(p, i) in visiblePrices" :key="p.storeName + p.buyUrl + i" class="row" :class="{ oos: p.available === false }">
               <span class="row-store">{{ p.storeName }}</span>
-              <span v-if="p.savings > 0" class="row-save">-{{ p.savings }}%</span>
+              <span v-if="p.available === false" class="row-oos">Rupture de stock</span>
+              <span v-else-if="p.savings > 0" class="row-save">-{{ p.savings }}%</span>
               <span class="row-price">{{ price(p.price) }}</span>
               <button class="row-icon" title="Masquer ce vendeur" @click="toggleStoreExcluded(p.storeName)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /><path d="M3 3l18 18" /></svg>
               </button>
-              <button class="row-buy" title="Acheter" @click="buy(p.buyUrl)">
+              <button class="row-buy" :title="p.available === false ? 'Voir sur la boutique' : 'Acheter'" @click="buy(p.buyUrl)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </button>
             </div>
@@ -262,6 +274,14 @@ watch([selectedGameId, shots], () => {
 .buy { margin-top: 16px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 12px; border-radius: 12px; font-size: 14.5px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border: none; }
 .buy:hover { background: var(--accent-hover); }
 .buy svg { width: 17px; height: 17px; }
+.wish {
+  margin-top: 8px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px; border-radius: 11px; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+}
+.wish:hover { color: var(--text); border-color: var(--border-strong); }
+.wish.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
+.wish svg { width: 16px; height: 16px; }
 .ever { margin-top: 14px; font-size: 12.5px; color: var(--text-faint); text-align: center; }
 .ever b { color: var(--text-dim); font-family: var(--mono); }
 
@@ -270,6 +290,9 @@ watch([selectedGameId, shots], () => {
 .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
 .row-store { font-size: 13.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-save { font-family: var(--mono); font-size: 10.5px; color: #1fa862; }
+.row.oos { opacity: 0.5; }
+.row.oos .row-price { text-decoration: line-through; }
+.row-oos { font-family: var(--mono); font-size: 10px; font-weight: 700; color: #e0554e; text-transform: uppercase; letter-spacing: 0.03em; }
 .row-price { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .row-buy { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); flex: none; }
 .row-buy:hover { background: var(--accent); color: var(--accent-ink); border-color: transparent; }

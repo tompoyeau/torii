@@ -21,6 +21,8 @@ const { prefs } = usePreferences();
 
 const games = ref<Game[]>([]);
 const loading = ref(false);
+/** false tant que le tout premier scan n'a pas abouti (pilote l'écran de démarrage). */
+const booted = ref(false);
 const enriching = ref(false);
 const enrichProgress = ref<{ done: number; total: number } | null>(null);
 const enrichingId = ref<string | null>(null);
@@ -77,7 +79,10 @@ function load() {
       // En tâche de fond : IGDB peuple toute la métadonnée descriptive.
       void fillIgdb();
     })
-    .finally(() => (loading.value = false));
+    .finally(() => {
+      loading.value = false;
+      booted.value = true;
+    });
 }
 
 /**
@@ -238,6 +243,7 @@ export function useLibrary() {
   return {
     games,
     loading,
+    booted,
     enriching,
     enrichProgress,
     enrichingId,

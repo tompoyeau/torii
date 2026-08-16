@@ -461,6 +461,49 @@ export async function steamWishlist(): Promise<WishlistItem[] | null> {
   }
 }
 
+/** Wishlist unifiée (Steam native ∪ Torii) enrichie de prix. `null` hors Tauri (→ mock). */
+export async function wishlistAll(): Promise<WishlistItem[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<WishlistItem[]>("wishlist_all");
+  } catch {
+    return null;
+  }
+}
+
+/** Ids (ITAD) présents dans la wishlist Torii (état des boutons ♥). [] hors Tauri. */
+export async function wishlistIds(): Promise<string[]> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<string[]>("wishlist_ids");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Ajoute un jeu à la wishlist Torii (et à Steam en bonus si le jeu y existe).
+ * Renvoie `true` si le push vers Steam a réussi. No-op → false hors Tauri.
+ */
+export async function wishlistAdd(id: string, title: string, coverUrl?: string | null): Promise<boolean> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<boolean>("wishlist_add", { id, title, coverUrl: coverUrl ?? null });
+  } catch {
+    return false;
+  }
+}
+
+/** Retire un jeu de la wishlist Torii (et de Steam si applicable). */
+export async function wishlistRemove(id: string): Promise<void> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("wishlist_remove", { id });
+  } catch {
+    /* hors Tauri : no-op. */
+  }
+}
+
 /** Jeux en commun avec les amis Steam. `null` hors Tauri (→ mock). */
 export async function friendsCommon(force = false): Promise<FriendsCommon | null> {
   try {
@@ -516,6 +559,16 @@ export async function onGameExited(cb: (gameId: string) => void): Promise<() => 
     return await listen<{ id: string }>("game-exited", (e) => cb(e.payload.id));
   } catch {
     return () => {};
+  }
+}
+
+/** Affiche une notification système (no-op hors Tauri). */
+export async function notify(title: string, body: string): Promise<void> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("notify_user", { title, body });
+  } catch {
+    /* hors Tauri : no-op. */
   }
 }
 
