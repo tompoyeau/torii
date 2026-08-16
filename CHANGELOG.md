@@ -4,6 +4,9 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.9.8
+- **Correctif** : quand Torii reste actif en arrière-plan (option « fermer dans la zone de notification »), le relancer ramène désormais la fenêtre existante au premier plan au lieu d'ouvrir une seconde instance qui empêchait l'ouverture.
+
 ## 0.9.7
 - **Paramètres repensés** : une vraie fenêtre de paramètres avec navigation par catégories (Généraux, Jeux masqués, Revendeurs masqués, Comptes & launchers, À propos). La gestion des connexions de launchers y est intégrée.
 - **Lancer Torii au démarrage de Windows** (option).
