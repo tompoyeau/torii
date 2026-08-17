@@ -6,17 +6,51 @@ import ModeSwitch from "./ModeSwitch.vue";
 import SalonHero from "./SalonHero.vue";
 import SalonRow from "./SalonRow.vue";
 
+import { useSalonNav } from "../composables/useSalonNav";
+
 const { games } = useLibrary();
 const { toggle: toggleTheme } = useTheme();
 
-const rows = computed(() =>
-  [
-    { title: "Reprendre", games: games.value.filter((g) => g.recent) },
-    { title: "Tes favoris", games: games.value.filter((g) => g.favorite) },
-    { title: "Installés", games: games.value.filter((g) => g.installed) },
-    { title: "Toute la bibliothèque", games: games.value },
-  ].filter((row) => row.games.length > 0),
-);
+const rows = computed(() => {
+  const visible = games.value.filter((g) => !g.hidden);
+  const now = Date.now() / 1000;
+  const SIXTY_DAYS = 60 * 24 * 3600;
+
+  const recent = [...visible]
+    .filter((g) => g.recent)
+    .sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0));
+
+  // À redécouvrir : déjà joués mais pas récemment (> 60 j), du plus ancien au plus récent.
+  const rediscover = visible
+    .filter((g) => !g.recent && (g.hoursPlayed ?? 0) > 0 && g.lastPlayedAt && now - g.lastPlayedAt > SIXTY_DAYS)
+    .sort((a, b) => (a.lastPlayedAt ?? 0) - (b.lastPlayedAt ?? 0))
+    .slice(0, 20);
+
+  // Genres les mieux fournis (≥ 3 jeux) → une rangée chacun, jusqu'à 2.
+  const byGenre = new Map<string, number>();
+  for (const g of visible) if (g.genre) byGenre.set(g.genre, (byGenre.get(g.genre) ?? 0) + 1);
+  const topGenres = [...byGenre.entries()]
+    .filter(([, n]) => n >= 3)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([genre]) => genre);
+  const genreRows = topGenres.map((genre) => ({
+    title: genre,
+    games: visible.filter((g) => g.genre === genre),
+  }));
+
+  return [
+    { title: "Reprendre", games: recent },
+    { title: "Tes favoris", games: visible.filter((g) => g.favorite) },
+    { title: "À redécouvrir", games: rediscover },
+    ...genreRows,
+    { title: "Installés", games: visible.filter((g) => g.installed) },
+    { title: "Toute la bibliothèque", games: [...visible].sort((a, b) => a.title.localeCompare(b.title, "fr")) },
+  ].filter((row) => row.games.length > 0);
+});
+
+// Navigation clavier / manette : rangée 0 = hero, rangées 1..N = contenu.
+const { active, row, col, heroIndex, heroActive, setHero } = useSalonNav(() => rows.value);
 </script>
 
 <template>
@@ -44,10 +78,16 @@ const rows = computed(() =>
       <div class="avatar">T</div>
     </div>
 
-    <SalonHero />
+    <SalonHero :index="heroIndex" :focused="heroActive" @select="setHero" />
 
     <div class="salon-rows">
-      <SalonRow v-for="row in rows" :key="row.title" :title="row.title" :games="row.games" />
+      <SalonRow
+        v-for="(r, i) in rows"
+        :key="r.title"
+        :title="r.title"
+        :games="r.games"
+        :active-col="active && row === i + 1 ? col : -1"
+      />
     </div>
   </div>
 </template>
@@ -82,4 +122,20 @@ const rows = computed(() =>
   color: #fff; font-weight: 700; font-size: 14px;
 }
 .salon-rows { padding: 8px 0 70px; display: flex; flex-direction: column; gap: 38px; position: relative; z-index: 2; }
+
+/* Apparition en cascade des rangées au chargement du Salon. */
+.salon-rows > * { animation: salon-rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+.salon-rows > *:nth-child(1) { animation-delay: 0.02s; }
+.salon-rows > *:nth-child(2) { animation-delay: 0.08s; }
+.salon-rows > *:nth-child(3) { animation-delay: 0.14s; }
+.salon-rows > *:nth-child(4) { animation-delay: 0.2s; }
+.salon-rows > *:nth-child(5) { animation-delay: 0.26s; }
+.salon-rows > *:nth-child(n + 6) { animation-delay: 0.32s; }
+@keyframes salon-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .salon-rows > * { animation: none; }
+}
 </style>

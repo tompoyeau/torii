@@ -1,13 +1,23 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from "vue";
 import type { Game } from "../types";
 import { platformName } from "../data/platforms";
 import { useContextMenu } from "../composables/useContextMenu";
 import PlatformIcon from "./PlatformIcon.vue";
 
-const props = defineProps<{ game: Game }>();
+const props = defineProps<{ game: Game; focused?: boolean }>();
 defineEmits<{ (e: "open"): void }>();
 
 const { openContext } = useContextMenu();
+const el = ref<HTMLElement | null>(null);
+
+// Quand la tuile prend le focus clavier/manette, l'amener au centre de la vue.
+watch(
+  () => props.focused,
+  (on) => {
+    if (on) void nextTick(() => el.value?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" }));
+  },
+);
 
 function hideBrokenCover(e: Event) {
   (e.target as HTMLElement).style.display = "none";
@@ -15,7 +25,7 @@ function hideBrokenCover(e: Event) {
 </script>
 
 <template>
-  <button class="tile" @click="$emit('open')" @contextmenu="openContext($event, props.game)">
+  <button ref="el" class="tile" :class="{ focused }" @click="$emit('open')" @contextmenu="openContext($event, props.game)">
     <div class="tile-art" :style="{ background: game.cover }">
       <img
         v-if="game.heroUrl"
@@ -77,8 +87,12 @@ function hideBrokenCover(e: Event) {
   opacity: 0; transform: scale(0.7); transition: all 0.2s;
 }
 .tile-play svg { width: 18px; height: 18px; margin-left: 2px; }
-.tile:hover .tile-art { transform: scale(1.045); box-shadow: 0 30px 60px -22px rgba(0, 0, 0, 0.8); outline-color: var(--accent); }
-.tile:hover .tile-play { opacity: 1; transform: scale(1); }
+.tile:hover .tile-art,
+.tile.focused .tile-art { transform: scale(1.045); box-shadow: 0 30px 60px -22px rgba(0, 0, 0, 0.8); outline-color: var(--accent); }
+.tile:hover .tile-play,
+.tile.focused .tile-play { opacity: 1; transform: scale(1); }
+/* Focus clavier/manette : anneau plus marqué que le survol (repère à distance). */
+.tile.focused .tile-art { outline-width: 3px; outline-offset: 4px; box-shadow: 0 30px 60px -22px rgba(0, 0, 0, 0.85), 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent); }
 .tile-sub {
   font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); margin-top: 10px;
   display: flex; gap: 7px;

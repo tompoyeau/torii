@@ -1,32 +1,23 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
+
+// L'index courant et le défilement automatique sont pilotés par `useSalonNav`
+// (parent), pour rester cohérents avec la navigation clavier/manette.
+const props = defineProps<{ index: number; focused?: boolean }>();
+const emit = defineEmits<{ (e: "select", i: number): void }>();
+
 const { spotlight, launchOrInstall } = useLibrary();
 const { openGame } = useUi();
 
-const index = ref(0);
-const game = computed(() => spotlight.value[index.value] ?? null);
+const game = computed(() => spotlight.value[props.index] ?? null);
 
 /** Lance le jeu (installé) ou l'installe (non installé). */
 function play() {
   if (game.value) launchOrInstall(game.value);
 }
-
-let timer: number | undefined;
-function restart() {
-  clearInterval(timer);
-  timer = window.setInterval(() => {
-    if (spotlight.value.length) index.value = (index.value + 1) % spotlight.value.length;
-  }, 6000);
-}
-function select(i: number) {
-  index.value = i;
-  restart();
-}
-watch(spotlight, restart, { immediate: true });
-onBeforeUnmount(() => clearInterval(timer));
 
 function hideBrokenCover(e: Event) {
   (e.target as HTMLElement).style.display = "none";
@@ -34,7 +25,7 @@ function hideBrokenCover(e: Event) {
 </script>
 
 <template>
-  <section v-if="game" class="salon-hero">
+  <section v-if="game" class="salon-hero" :class="{ focused }">
     <div class="salon-hero-art" :style="{ background: game.cover }" />
     <img v-if="game.heroUrl" :key="game.id" class="salon-hero-img" :src="game.heroUrl" alt="" @error="hideBrokenCover" />
     <div class="salon-hero-scrim" />
@@ -61,7 +52,7 @@ function hideBrokenCover(e: Event) {
     </div>
     <div class="salon-dots">
       <button v-for="(g, i) in spotlight" :key="g.id" :class="{ on: i === index }"
-              :aria-label="`Mettre en avant ${g.title}`" @click="select(i)" />
+              :aria-label="`Mettre en avant ${g.title}`" @click="emit('select', i)" />
     </div>
   </section>
 </template>
@@ -79,6 +70,13 @@ function hideBrokenCover(e: Event) {
 }
 .salon-hero-img {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; z-index: -2; display: block;
+  /* Fondu à l'apparition (l'image est remontée à chaque changement de jeu) + léger Ken Burns. */
+  animation: hero-fade 0.7s ease both, hero-kenburns 18s ease-out both;
+}
+@keyframes hero-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hero-kenburns { from { transform: scale(1.06); } to { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .salon-hero-img { animation: hero-fade 0.7s ease both; }
 }
 .salon-hero-scrim {
   position: absolute; inset: 0; z-index: -1;
@@ -113,6 +111,11 @@ function hideBrokenCover(e: Event) {
 .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 :root[data-theme="light"] .salon-hero .btn-ghost {
   background: rgba(20, 15, 30, 0.08); color: var(--text); border-color: var(--border);
+}
+/* Anneau de focus clavier/manette sur le bouton principal du hero. */
+.salon-hero.focused .btn-play.big {
+  outline: 3px solid var(--accent); outline-offset: 4px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 26%, transparent);
 }
 .salon-dots { display: flex; gap: 8px; margin-top: 22px; }
 .salon-dots button {

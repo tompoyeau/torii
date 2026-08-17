@@ -4,7 +4,10 @@ import type { Game } from "../types";
 import { useUi } from "../composables/useUi";
 import SalonTile from "./SalonTile.vue";
 
-defineProps<{ title: string; games: Game[] }>();
+/** `activeCol` = index de la tuile focus clavier/manette dans cette rangée (-1 = aucune). */
+const props = withDefaults(defineProps<{ title: string; games: Game[]; activeCol?: number }>(), {
+  activeCol: -1,
+});
 
 const { openGame } = useUi();
 const scroller = ref<HTMLElement | null>(null);
@@ -29,7 +32,13 @@ function scroll(dir: number) {
       </div>
     </div>
     <div ref="scroller" class="row-scroller no-scrollbar">
-      <SalonTile v-for="g in games" :key="g.id" :game="g" @open="openGame(g.id)" />
+      <SalonTile
+        v-for="(g, ci) in games"
+        :key="g.id"
+        :game="g"
+        :focused="ci === props.activeCol"
+        @open="openGame(g.id)"
+      />
     </div>
   </div>
 </template>
