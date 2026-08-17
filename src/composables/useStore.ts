@@ -1,5 +1,13 @@
 import { ref } from "vue";
-import { storeDeals, storeGame, storeSearch, storeSuggest } from "../lib/tauri";
+import {
+  clearExcludedStores as clearExcludedStoresBackend,
+  getExcludedStores,
+  setStoreExcluded,
+  storeDeals,
+  storeGame,
+  storeSearch,
+  storeSuggest,
+} from "../lib/tauri";
 import type { StoreGame, StoreItem, StoreSuggestion } from "../types";
 
 /** Critère de tri de la vitrine (mappé côté Rust vers CheapShark). */
@@ -31,44 +39,39 @@ let reqToken = 0;
 let suggestToken = 0;
 
 /**
- * Liste d'exclusion de boutiques, gérée par l'utilisateur (persistée en localStorage).
+ * Liste d'exclusion de boutiques, gérée par l'utilisateur (persistée côté Rust dans
+ * `excluded_stores.json`, comme les jeux masqués — survit donc à la fermeture de l'appli).
  * Une boutique exclue est entièrement masquée du comparatif et n'est jamais retenue
  * comme « meilleur prix ». Clé = nom de la boutique (fonctionne aussi pour Instant Gaming,
  * scrapé hors ITAD). Distinct de la catégorisation officiel/revendeur (celle-ci = factuelle,
  * fournie par le backend ; l'exclusion = choix perso de l'utilisateur).
  */
-const STORE_EXCL_KEY = "ludo-excluded-stores";
-function loadExcluded(): string[] {
-  try {
-    const raw = localStorage.getItem(STORE_EXCL_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
+const excludedStores = ref<string[]>([]);
+
+/** Charge la liste d'exclusion depuis le backend (une fois, au premier usage). */
+async function loadExcludedStores() {
+  const res = await getExcludedStores();
+  if (res) excludedStores.value = res;
 }
-const excludedStores = ref<string[]>(loadExcluded());
-function persistExcluded() {
-  try {
-    localStorage.setItem(STORE_EXCL_KEY, JSON.stringify(excludedStores.value));
-  } catch {
-    /* stockage indisponible : on garde l'exclusion en mémoire pour la session. */
-  }
-}
+
 /** true si la boutique est dans la liste d'exclusion de l'utilisateur. */
 function isStoreExcluded(name: string): boolean {
   return excludedStores.value.includes(name);
 }
-/** Ajoute/retire une boutique de la liste d'exclusion (et persiste). */
-function toggleStoreExcluded(name: string) {
-  excludedStores.value = isStoreExcluded(name)
-    ? excludedStores.value.filter((n) => n !== name)
-    : [...excludedStores.value, name];
-  persistExcluded();
+/** Ajoute/retire une boutique de la liste d'exclusion (persiste côté Rust). */
+async function toggleStoreExcluded(name: string) {
+  const excluded = !isStoreExcluded(name);
+  // Optimiste : met à jour l'UI immédiatement, puis on aligne sur le backend.
+  excludedStores.value = excluded
+    ? [...excludedStores.value, name]
+    : excludedStores.value.filter((n) => n !== name);
+  const res = await setStoreExcluded(name, excluded);
+  if (res) excludedStores.value = res;
 }
 /** Vide la liste d'exclusion (réaffiche toutes les boutiques). */
-function clearExcludedStores() {
+async function clearExcludedStores() {
   excludedStores.value = [];
-  persistExcluded();
+  await clearExcludedStoresBackend();
 }
 
 /** Charge la vitrine (mises en avant / promos) selon le tri courant. */
@@ -214,6 +217,7 @@ export function useStore() {
   if (!loadedOnce) {
     loadedOnce = true;
     void loadHome();
+    void loadExcludedStores();
   }
   return {
     items,

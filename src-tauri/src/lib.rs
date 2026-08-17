@@ -1205,6 +1205,33 @@ fn set_game_favorite(
     platforms::favorites::set(&dir, &id, favorite)
 }
 
+/// Renvoie la liste des boutiques masquées par l'utilisateur (revendeurs exclus).
+#[tauri::command]
+fn get_excluded_stores(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let mut list: Vec<String> = platforms::excluded_stores::load(&dir).into_iter().collect();
+    list.sort();
+    Ok(list)
+}
+
+/// Masque ou réaffiche une boutique (revendeur) ; renvoie la liste des exclus à jour.
+#[tauri::command]
+fn set_store_excluded(
+    app: tauri::AppHandle,
+    name: String,
+    excluded: bool,
+) -> Result<Vec<String>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::excluded_stores::set(&dir, &name, excluded)
+}
+
+/// Réaffiche toutes les boutiques (vide la liste d'exclusion) ; renvoie la liste vide.
+#[tauri::command]
+fn clear_excluded_stores(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::excluded_stores::clear(&dir)
+}
+
 /// Lance un jeu selon sa plateforme et sa cible.
 #[tauri::command]
 fn launch_game(platform: String, target: String) -> Result<(), String> {
@@ -1484,6 +1511,9 @@ pub fn run() {
             enrich_game,
             set_game_hidden,
             set_game_favorite,
+            get_excluded_stores,
+            set_store_excluded,
+            clear_excluded_stores,
             launch_game,
             install_game,
             record_launch,

@@ -305,6 +305,39 @@ export async function setGameHidden(id: string, hidden: boolean): Promise<string
   }
 }
 
+/** Renvoie les boutiques masquées (revendeurs exclus), persistées côté Rust. Vide hors Tauri. */
+export async function getExcludedStores(): Promise<string[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<string[]>("get_excluded_stores");
+  } catch (err) {
+    console.info("[ludo] get_excluded_stores indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Masque ou réaffiche une boutique (revendeur). Renvoie les noms exclus à jour. */
+export async function setStoreExcluded(name: string, excluded: boolean): Promise<string[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<string[]>("set_store_excluded", { name, excluded });
+  } catch (err) {
+    console.info("[ludo] set_store_excluded indisponible hors Tauri", err);
+    return null;
+  }
+}
+
+/** Réaffiche toutes les boutiques (vide la liste d'exclusion). Renvoie la liste vide. */
+export async function clearExcludedStores(): Promise<string[] | null> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<string[]>("clear_excluded_stores");
+  } catch (err) {
+    console.info("[ludo] clear_excluded_stores indisponible hors Tauri", err);
+    return null;
+  }
+}
+
 /** Épingle ou retire un jeu des favoris. Renvoie les ids favoris. */
 export async function setGameFavorite(id: string, favorite: boolean): Promise<string[]> {
   try {
