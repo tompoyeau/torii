@@ -42,14 +42,40 @@ const CORS = {
 };
 
 /**
+ * Durée de cache (secondes) selon l'endpoint ITAD. La vitrine `deals` est identique
+ * pour tous et bouge lentement → TTL long ; la recherche → TTL moyen. Mutualiser ces
+ * réponses au cache edge évite de taper ITAD à chaque appel (démarrages, tris, reloads)
+ * et donc les 429 (rate-limit ITAD). 0 = pas de cache.
+ */
+function cacheTtl(pathname) {
+  if (pathname.startsWith("/itad/deals/")) return 600; // 10 min : vitrine commune
+  if (pathname.startsWith("/itad/games/search/")) return 300; // 5 min : autocomplétion/recherche
+  if (pathname.startsWith("/itad/games/")) return 300; // 5 min : info/overview d'un jeu
+  return 0; // le reste (prix POST, etc.) n'est pas caché ici
+}
+
+/**
  * Relaye une requête vers l'API IsThereAnyDeal en injectant la clé côté serveur.
  * Le chemin `/itad/<reste>` devient `https://api.isthereanydeal.com/<reste>` ; la
  * query string est conservée, `key` est ajoutée. GET et POST supportés.
+ *
+ * Les GET éligibles (cf. `cacheTtl`) sont servis/écrits dans le cache edge Cloudflare,
+ * clé = URL du proxy (sans la clé ITAD, jamais exposée). Seuls les 200 sont mis en cache.
  */
-async function proxyItad(request, url, env) {
+async function proxyItad(request, url, env, ctx) {
   if (!env.ITAD_API_KEY) {
     return new Response("ITAD_API_KEY manquant côté serveur", { status: 500, headers: CORS });
   }
+
+  // Cache edge (GET uniquement). Clé stable = URL entrante du proxy.
+  const ttl = request.method === "GET" ? cacheTtl(url.pathname) : 0;
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), { method: "GET" });
+  if (ttl > 0) {
+    const hit = await cache.match(cacheKey);
+    if (hit) return hit;
+  }
+
   const rest = url.pathname.slice("/itad/".length);
   const target = new URL(`https://api.isthereanydeal.com/${rest}`);
   for (const [k, v] of url.searchParams) target.searchParams.set(k, v);
@@ -62,14 +88,17 @@ async function proxyItad(request, url, env) {
   }
   const resp = await fetch(target, init);
   const text = await resp.text();
-  return new Response(text, {
-    status: resp.status,
-    headers: { ...CORS, "content-type": "application/json" },
-  });
+  const headers = { ...CORS, "content-type": "application/json" };
+  if (ttl > 0 && resp.ok) headers["Cache-Control"] = `public, max-age=${ttl}`;
+  const out = new Response(text, { status: resp.status, headers });
+
+  // N'écrit au cache que les succès ; `waitUntil` pour ne pas retarder la réponse.
+  if (ttl > 0 && resp.ok) ctx.waitUntil(cache.put(cacheKey, out.clone()));
+  return out;
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
 
     const url = new URL(request.url);
@@ -81,7 +110,7 @@ export default {
 
     // --- IsThereAnyDeal (GET/POST) ---
     if (url.pathname.startsWith("/itad/")) {
-      return proxyItad(request, url, env);
+      return proxyItad(request, url, env, ctx);
     }
 
     // --- IGDB (POST uniquement) ---
