@@ -1,4 +1,5 @@
 pub mod epic;
+pub mod excluded_stores;
 pub mod favorites;
 pub mod gog;
 pub mod hidden;
