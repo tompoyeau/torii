@@ -28,9 +28,39 @@ async function refresh() {
   loading.value = false;
 }
 
+/** Retire un jeu de la liste affichée sans appel réseau (maj optimiste par id ITAD). */
+function removeLocal(gameId: string) {
+  if (!gameId) return;
+  items.value = items.value.filter((i) => i.gameId !== gameId);
+}
+
+/**
+ * Ajoute un jeu à la liste affichée sans appel réseau : item minimal (titre + jaquette),
+ * prix « à venir » jusqu'au prochain rafraîchissement manuel / relance. Évite de rappeler
+ * l'enrichissement ITAD (coûteux, rate-limité) à chaque ajout.
+ */
+function addLocal(item: { gameId: string; title: string; coverUrl?: string | null }) {
+  if (!item.gameId || items.value.some((i) => i.gameId === item.gameId)) return;
+  items.value = [
+    {
+      appId: 0,
+      gameId: item.gameId,
+      title: item.title,
+      coverUrl: item.coverUrl ?? "",
+      price: null,
+      normalPrice: null,
+      savings: 0,
+      storeName: "",
+      buyUrl: "",
+      historyLow: null,
+    },
+    ...items.value,
+  ];
+}
+
 export function useWishlist() {
   const onSaleCount = computed(() => items.value.filter((i) => i.savings > 0).length);
-  return { items, loading, loaded, steamConnected, onSaleCount, refresh };
+  return { items, loading, loaded, steamConnected, onSaleCount, refresh, removeLocal, addLocal };
 }
 
 // --- Données fictives (preview web hors Tauri) ---

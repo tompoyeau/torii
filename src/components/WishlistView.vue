@@ -68,7 +68,7 @@ function atLow(it: WishlistItem): boolean {
     </div>
 
     <div v-else class="grid">
-      <button v-for="it in items" :key="it.appId" class="card" @click="open(it)">
+      <button v-for="it in items" :key="it.appId || it.gameId" class="card" @click="open(it)">
         <div class="cover" :style="{ background: gradientFor(String(it.appId)) }">
           <img v-if="coverOk(it)" :src="it.coverUrl" alt="" loading="lazy" @error="onImgError(it.coverUrl)" />
           <span v-else class="cover-title">{{ it.title || "Jeu Steam" }}</span>
