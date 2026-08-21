@@ -4,6 +4,14 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.12.0
+- **Réseau Torii** : crée un compte et vois à quoi jouent tes amis **quel que soit leur launcher** — Steam, Epic, GOG, Riot, un jeu ajouté à la main… Ce que ni Steam ni Discord ne savent faire.
+- **Connexion sans mot de passe** : tu saisis ton adresse, tu reçois un code à 6 chiffres, et c'est tout. Rien à retenir, rien à perdre.
+- **Ajouter un ami** se fait avec un code court que tu lui donnes de la main à la main. Personne ne peut te retrouver en devinant ton adresse e-mail.
+- **Le partage est coupé par défaut.** Tant que tu ne l'actives pas, absolument rien de ce que tu joues ne quitte ton PC. Une pastille « Visible / Invisible » permet de disparaître en un clic, et le clic droit sur un jeu suffit à ne jamais le diffuser.
+- **Une seule liste d'amis**, alimentée par Steam et par Torii : la même personne n'apparaît qu'une fois, avec son avatar Steam et le jeu vu par Torii. Aucune des deux sources ne remplace l'autre — Steam sait qui est en ligne même quand Torii est fermé, Torii voit les jeux de tous les launchers.
+- **Aucun historique** n'est conservé : ta présence expire au bout de 90 secondes et n'est jamais archivée.
+
 ## 0.11.0
 - **« Récemment joué » enfin juste** : Torii repère les parties lancées **depuis n'importe où** — Steam, le bureau, un raccourci — et plus seulement celles démarrées depuis Torii. Un jeu apparaît en tête de liste dans les secondes qui suivent, daté de l'heure réelle à laquelle il a démarré (et non de l'instant où Torii s'en aperçoit).
 - **Plus léger pendant que tu joues** : la surveillance des parties consomme désormais environ 140 fois moins qu'avant. Concrètement, elle est invisible pour les performances en jeu.
