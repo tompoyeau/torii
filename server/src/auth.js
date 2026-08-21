@@ -67,33 +67,59 @@ export async function requestCode(request, env) {
   return await deliver(env, email, code);
 }
 
+/** Corps du message, en texte et en HTML — les deux, pour le rendu et pour l'antispam. */
+function codeMessage(code) {
+  return {
+    subject: `${code} — ton code de connexion Torii`,
+    text: [
+      `Ton code de connexion Torii : ${code}`,
+      "",
+      "Il est valable 10 minutes et ne sert qu'une fois.",
+      "Si tu n'as rien demandé, ignore ce message : personne ne peut se connecter sans ce code.",
+    ].join("\n"),
+    html:
+      `<p>Ton code de connexion Torii :</p>` +
+      `<p style="font-size:30px;font-weight:700;letter-spacing:.18em;margin:16px 0">${code}</p>` +
+      `<p>Il est valable 10 minutes et ne sert qu'une fois.</p>` +
+      `<p style="color:#666">Si tu n'as rien demandé, ignore ce message : personne ne peut se connecter sans ce code.</p>`,
+  };
+}
+
 /**
- * Achemine le code. Deux modes, choisis par la configuration :
- *   * **production** : binding `EMAIL` de Cloudflare Email Sending (exige un domaine
- *     à soi, onboardé via `wrangler email sending enable`) ;
- *   * **développement** : `DEV_CODES=1` renvoie le code dans la réponse HTTP, ce qui
- *     permet de tout tester sans domaine. ⚠️ À ne JAMAIS laisser actif en production :
- *     n'importe qui pourrait alors se connecter avec n'importe quelle adresse.
+ * Achemine le code. Trois modes, choisis par la configuration présente — dans cet ordre :
+ *
+ *   1. **Resend** (`RESEND_API_KEY`) : envoi HTTP depuis le Worker. C'est la voie retenue,
+ *      parce que l'envoi natif de Cloudflare exige le plan Workers payant.
+ *   2. **Cloudflare Email Sending** (binding `EMAIL`) : gardé pour le jour où le plan
+ *      change — décommenter `[[send_email]]` suffira alors à basculer.
+ *   3. **développement** (`DEV_CODES=1`) : le code revient dans la réponse HTTP, ce qui
+ *      permet de tester sans aucun service d'envoi. ⚠️ Jamais en production : il suffit
+ *      alors de lire la réponse pour se connecter avec n'importe quelle adresse.
  */
 async function deliver(env, email, code) {
-  if (env.EMAIL) {
-    const from = env.EMAIL_FROM || "torii@example.com";
-    await env.EMAIL.send({
-      to: email,
-      from: { email: from, name: "Torii" },
-      subject: `${code} — ton code de connexion Torii`,
-      text: [
-        `Ton code de connexion Torii : ${code}`,
-        "",
-        "Il est valable 10 minutes et ne sert qu'une fois.",
-        "Si tu n'as rien demandé, ignore ce message : personne ne peut se connecter sans ce code.",
-      ].join("\n"),
-      html:
-        `<p>Ton code de connexion Torii :</p>` +
-        `<p style="font-size:30px;font-weight:700;letter-spacing:.18em;margin:16px 0">${code}</p>` +
-        `<p>Il est valable 10 minutes et ne sert qu'une fois.</p>` +
-        `<p style="color:#666">Si tu n'as rien demandé, ignore ce message : personne ne peut se connecter sans ce code.</p>`,
+  const from = env.EMAIL_FROM || "torii@example.com";
+  const msg = codeMessage(code);
+
+  if (env.RESEND_API_KEY) {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ from: `Torii <${from}>`, to: [email], ...msg }),
     });
+    if (!r.ok) {
+      // Le détail part dans les journaux, jamais au client : il contient l'adresse visée
+      // et la raison exacte du refus.
+      console.error("resend", r.status, await r.text());
+      return fail(502, "envoi_impossible", "Impossible d'envoyer le code pour l'instant.");
+    }
+    return json({ ok: true, sent: true });
+  }
+
+  if (env.EMAIL) {
+    await env.EMAIL.send({ to: email, from: { email: from, name: "Torii" }, ...msg });
     return json({ ok: true, sent: true });
   }
 
@@ -101,11 +127,7 @@ async function deliver(env, email, code) {
     return json({ ok: true, sent: false, devCode: code });
   }
 
-  return fail(
-    503,
-    "email_indisponible",
-    "L'envoi d'e-mails n'est pas configuré sur ce serveur.",
-  );
+  return fail(503, "email_indisponible", "L'envoi d'e-mails n'est pas configuré sur ce serveur.");
 }
 
 /**
