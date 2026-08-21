@@ -40,17 +40,18 @@ const mutedList = computed(() =>
 
 /** SteamID de l'utilisateur, pour pouvoir lier son compte Torii à son compte Steam. */
 const mySteamId = ref<string | null>(null);
-onMounted(async () => {
-  mySteamId.value = (await getSettings())?.steamId ?? null;
-});
 
 /**
  * Lie le compte Torii au compte Steam connecté, ou rompt le lien. Les deux vont
  * ensemble : sans SteamID enregistré, « visible par mes amis Steam » n'a aucun effet.
  */
 async function onToggleSteamLink() {
-  const linked = !!toriiAccount.value?.steamId;
-  await setSteamLink(linked ? null : mySteamId.value, !linked);
+  // 🔑 L'état du bouton suit `steamDiscoverable`, et RIEN d'autre. Avant, l'affichage
+  // suivait `steamDiscoverable` mais l'action se décidait sur `steamId` : dès que les
+  // deux divergeaient, chaque clic était lu comme « délier » et le bouton ne répondait
+  // plus. On envoie donc toujours les deux champs ensemble, cohérents par construction.
+  const visible = !toriiAccount.value?.steamDiscoverable;
+  await setSteamLink(visible ? mySteamId.value : "", visible);
 }
 
 /** Le lien Steam n'a de sens que si un compte Steam est connecté dans Torii. */
@@ -146,6 +147,9 @@ const autostartBusy = ref(false);
 const startMinimized = ref(false);
 const closeToTray = ref(false);
 async function refreshSystemPrefs() {
+  // Relu à chaque ouverture : quelqu'un qui vient de connecter Steam ne doit pas avoir
+  // à redémarrer Torii pour que « visible par mes amis Steam » devienne cliquable.
+  mySteamId.value = (await getSettings())?.steamId ?? null;
   autostart.value = await getAutostart();
   const wp = await getWindowPrefs();
   startMinimized.value = wp.startMinimized;

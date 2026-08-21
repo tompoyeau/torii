@@ -86,7 +86,10 @@ async function setDisplayName(name: string) {
   account.value = await toriiSetProfile({ displayName: name });
 }
 
-/** Lie (ou délie) son compte Steam, et autorise ou non les amis Steam à nous trouver. */
+/**
+ * Lie (ou délie) son compte Steam, et autorise ou non les amis Steam à nous trouver.
+ * `steamId` vide = délier : un `null` ne saurait pas exprimer « efface » (cf. `social.rs`).
+ */
 async function setSteamLink(steamId: string | null, discoverable: boolean) {
   account.value = await toriiSetProfile({ steamId, steamDiscoverable: discoverable });
 }
