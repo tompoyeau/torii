@@ -4,6 +4,7 @@ import { useUi } from "../composables/useUi";
 import { useTheme } from "../composables/useTheme";
 import { useLibrary } from "../composables/useLibrary";
 import { useFriends } from "../composables/useFriends";
+import { useFriendList } from "../composables/useFriendList";
 import { openExternal, steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
 import ModeSwitch from "./ModeSwitch.vue";
@@ -11,7 +12,9 @@ import ModeSwitch from "./ModeSwitch.vue";
 const { section, query, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
 const { toggle: toggleTheme } = useTheme();
 const { loading, reload } = useLibrary();
-const { activeCount: friendsOnline, refresh: refreshFriends } = useFriends();
+const { refresh: refreshFriends } = useFriends();
+// La pastille compte les amis des DEUX sources, dédoublonnés.
+const { activeCount: friendsOnline } = useFriendList();
 
 // Identité de l'utilisateur (Steam) affichée dans l'en-tête. Masquée si non connecté.
 const me = ref<SteamProfile | null>(null);

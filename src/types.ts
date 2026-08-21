@@ -267,6 +267,8 @@ export type ToriiStatus = "in-game" | "online" | "away" | "offline";
 export interface ToriiFriend {
   id: string;
   displayName: string;
+  /** SteamID si l'ami s'est rendu découvrable : permet de fusionner avec sa fiche Steam. */
+  steamId?: string | null;
   status: ToriiStatus;
   /** Clé de jeu cross-launcher, pour reconnaître le même jeu d'un launcher à l'autre. */
   gameKey?: string | null;

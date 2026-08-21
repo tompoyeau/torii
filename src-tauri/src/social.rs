@@ -16,7 +16,11 @@ use tauri::{Emitter, Manager};
 
 /// URL de l'API. Surchargeable par `TORII_API` pour développer contre un serveur local
 /// (`npx wrangler dev` dans `server/`), sans quoi il faudrait recompiler pour tester.
-const DEFAULT_API: &str = "https://torii-api.toriiapp.workers.dev";
+///
+/// 🔑 Domaine propre, PAS l'URL `*.workers.dev` : cette adresse part codée en dur dans
+/// chaque version installée (et demain dans l'application mobile). Un domaine à soi
+/// permet de changer d'hébergeur sans avoir à republier chez tous les utilisateurs.
+const DEFAULT_API: &str = "https://torii-api.topo-host.com";
 
 fn api() -> String {
     std::env::var("TORII_API").unwrap_or_else(|_| DEFAULT_API.to_string())
@@ -45,6 +49,10 @@ pub struct Account {
 pub struct Friend {
     pub id: String,
     pub display_name: String,
+    /// SteamID, si l'ami s'est rendu découvrable — sert à fusionner sa ligne avec sa
+    /// fiche Steam (avatar, présence Steam) au lieu d'afficher deux fois la personne.
+    #[serde(default)]
+    pub steam_id: Option<String>,
     #[serde(default)]
     pub status: String,
     #[serde(default)]

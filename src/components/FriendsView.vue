@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useFriends } from "../composables/useFriends";
+import { useFriendList, type UnifiedFriend } from "../composables/useFriendList";
+import { useTorii } from "../composables/useTorii";
 import { useUi } from "../composables/useUi";
 import { openExternal } from "../lib/tauri";
-import type { Friend } from "../types";
+import ToriiPanel from "./ToriiPanel.vue";
 
-const { loading, loaded, steamConnected, inGame, online, offline, activeCount, refresh } = useFriends();
+const { loaded, steamConnected, refresh } = useFriends();
+const { inGame, online, offline, activeCount, loading } = useFriendList();
+const { connected: toriiConnected, refresh: refreshTorii } = useTorii();
 const { openSettings } = useUi();
 
 /** Rafraîchit la présence en direct pendant que la vue est ouverte. */
 let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
   void refresh();
+  void refreshTorii();
+  // La présence Torii arrive toute seule (battement de cœur toutes les 30 s) ; ce
+  // rafraîchissement ne concerne que la présence Steam, qu'il faut aller chercher.
   timer = setInterval(() => void refresh(), 60_000);
 });
 onBeforeUnmount(() => clearInterval(timer));
@@ -23,15 +30,30 @@ const groups = computed(() => [
 ]);
 
 /** Libellé lisible d'un statut. */
-function stateLabel(f: Friend): string {
-  if (f.state === "in-game") return f.gameName ? `Joue à ${f.gameName}` : "En jeu";
+function stateLabel(f: UnifiedFriend): string {
+  if (f.state === "in-game") {
+    const jeu = f.gameName ? `Joue à ${f.gameName}` : "En jeu";
+    const duree = playingFor(f.since);
+    return duree ? `${jeu} · ${duree}` : jeu;
+  }
   switch (f.state) {
     case "online": return "En ligne";
     case "away": return "Absent";
-    case "busy": return "Occupé";
-    case "snooze": return "Inactif";
-    default: return "Hors ligne";
+    // « Hors ligne » veut dire « pas de nouvelles » : pour un ami Torii, ça signifie
+    // qu'il n'a pas l'application ouverte, pas qu'il ne joue pas.
+    default: return f.source === "torii" ? "Torii fermé" : "Hors ligne";
   }
+}
+
+/** « depuis 1 h 20 » — connu seulement pour les amis Torii. */
+function playingFor(since: number | null): string | null {
+  if (!since) return null;
+  const minutes = Math.floor((Date.now() / 1000 - since) / 60);
+  if (minutes < 2) return "vient de commencer";
+  if (minutes < 60) return `depuis ${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `depuis ${h} h ${String(m).padStart(2, "0")}` : `depuis ${h} h`;
 }
 
 /** Initiales pour l'avatar de secours. */
@@ -39,14 +61,14 @@ function initials(name: string): string {
   return name.trim().slice(0, 2).toUpperCase();
 }
 const failed = ref(new Set<string>());
-function avatar(f: Friend): string | null {
+function avatar(f: UnifiedFriend): string | null {
   return f.avatarUrl && !failed.value.has(f.avatarUrl) ? f.avatarUrl : null;
 }
 function onAvatarError(url: string) {
   failed.value = new Set(failed.value).add(url);
 }
 
-function openProfile(f: Friend) {
+function openProfile(f: UnifiedFriend) {
   if (f.profileUrl && f.profileUrl !== "#") openExternal(f.profileUrl);
 }
 </script>
@@ -64,9 +86,11 @@ function openProfile(f: Friend) {
       </button>
     </div>
 
-    <!-- Steam non connecté -->
-    <div v-if="loaded && !steamConnected" class="empty">
-      <p>Connecte ton compte Steam pour voir tes amis et qui joue à quoi.</p>
+    <ToriiPanel />
+
+    <!-- Aucune source connectée -->
+    <div v-if="loaded && !steamConnected && !toriiConnected" class="empty">
+      <p>Connecte ton compte Steam ou ton compte Torii pour voir qui joue à quoi.</p>
       <button class="btn-connect" @click="openSettings()">Ouvrir les réglages</button>
     </div>
 
@@ -88,7 +112,7 @@ function openProfile(f: Friend) {
         <div class="rows">
           <button
             v-for="f in g.list"
-            :key="f.steamId"
+            :key="f.key"
             class="friend"
             :class="{ ingame: f.state === 'in-game', off: f.state === 'offline' }"
             @click="openProfile(f)"
@@ -99,7 +123,14 @@ function openProfile(f: Friend) {
               <span class="dot" :class="f.state" />
             </span>
             <span class="info">
-              <span class="name">{{ f.name }}</span>
+              <span class="name">
+                {{ f.name }}
+                <!-- D'où vient l'information : Torii voit tous les launchers, Steam voit
+                     aussi les gens qui n'ont pas Torii ouvert. -->
+                <span v-if="f.source !== 'steam'" class="src" :title="f.source === 'both'
+                  ? 'Ami Torii, rapproché de son compte Steam'
+                  : 'Ami Torii'">⛩</span>
+              </span>
               <span class="status" :class="f.state">{{ stateLabel(f) }}</span>
             </span>
           </button>
@@ -126,6 +157,8 @@ function openProfile(f: Friend) {
 .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin 0.7s linear infinite; display: inline-block; }
 .spin.big { width: 26px; height: 26px; border-width: 3px; margin-bottom: 14px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.src { font-size: 11px; color: var(--accent); margin-left: 5px; vertical-align: 1px; }
 
 .group { margin-bottom: 26px; }
 .group h4 {

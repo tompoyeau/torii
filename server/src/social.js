@@ -31,6 +31,10 @@ const STATUSES = new Set(["in-game", "online", "away"]);
 async function loadCircle(env, accountId) {
   const rows = await env.DB.prepare(
     `SELECT a.id, a.display_name, a.friend_code, f.state, f.requester_id,
+            -- SteamID communiqué aux amis UNIQUEMENT si la personne s'est rendue
+            -- découvrable : c'est ce qui permet de fusionner sa fiche Torii et sa fiche
+            -- Steam dans une seule ligne côté client (avatar, dédoublonnage).
+            CASE WHEN a.steam_discoverable = 1 THEN a.steam_id END AS steam_id,
             p.status, p.game_key, p.game_title, p.since
        FROM friendships f
        JOIN accounts a
@@ -46,7 +50,7 @@ async function loadCircle(env, accountId) {
   const outgoing = [];
 
   for (const r of rows.results || []) {
-    const person = { id: r.id, displayName: r.display_name };
+    const person = { id: r.id, displayName: r.display_name, steamId: r.steam_id || null };
     if (r.state === "accepted") {
       friends.push({
         ...person,
