@@ -339,6 +339,37 @@ cargo run --example community        # jeux possédés + famille (via session st
   `~"x"` sans wildcards ne matche pas (`~ *"x"*` = contains) ; `="x"` = exact sensible à la casse. Ratés : Overwatch 2
   (absent d'IGDB en jeu de base) + ~7 % niche. Proxy URL en dur (`PROXY_URL`). Recherche Steam-par-titre pour jaquettes RETIRÉE.
 
+## Détection des parties — `procwatch.rs` (fait)
+
+- Un **seul fil** surveille les process et date « Récemment joué », **y compris pour les
+  parties lancées hors de Torii** (Steam, bureau, raccourci). Remplace l'ancien
+  `game_watch_loop` (sysinfo) ET complète l'enregistrement au clic sur « Jouer ».
+- 🔑 **Ne pas revenir à `sysinfo`.** Mesuré sur 370 process : `refresh_processes_specifics`
+  avec chemins = **11,9 ms** par passage, et l'ancien suivi le faisait toutes les 3 s
+  *pendant la partie*. Ici : `K32EnumProcesses` (tableau de PID brut) puis
+  `QueryFullProcessImageNameW` sur les seuls PID **nouveaux** → **0,42 ms** par tick
+  mesuré, 28× moins. FFI directe sur `kernel32`, aucune dépendance (comme la DPAPI).
+  `sysinfo` a été retiré du `Cargo.toml`.
+- Rythme : 5 s au repos, **15 s dès qu'un jeu tourne** (on n'attend plus qu'une fermeture,
+  autant se faire oublier pendant que le joueur joue). Zéro appel système tant que la
+  bibliothèque n'a pas été scannée (`targets` vide).
+- 🔑 La date posée est l'**heure de démarrage réelle du process** (`GetProcessTimes`,
+  FILETIME → Unix), pas l'instant de la détection : ça absorbe la latence du sondage et
+  date correctement un jeu déjà lancé quand Torii s'ouvre. `playhistory::record_at` ne
+  **recule** jamais une date connue.
+- Rapprochement par préfixe de chemin sur `install_dir` (repli : l'exe pour un jeu manuel
+  sans dossier). Le `\` final dans `under()` évite qu'un dossier voisin plus long
+  (« Portal 2 Demo ») passe pour le jeu (« Portal 2 »).
+- `start_game_watch` ne détecte plus rien : il **arme** juste le jeu dont la fermeture doit
+  ramener la fenêtre (option « revenir à la fermeture »). Sans ça, Torii surgirait à la fin
+  de n'importe quelle partie lancée ailleurs.
+- Front : événement `game-launched` → `useLibrary.notePlayed(id, at)` (maj du store sans
+  re-persister, le backend l'a déjà fait).
+- ⚠️ Comportement assumé : une application Steam permanente (Wallpaper Engine…) est bien
+  détectée comme « en cours » — c'est ce que fait Steam aussi. Elle est datée de son vrai
+  démarrage, pas remise en tête à chaque ouverture de Torii.
+- Diagnostic : `cargo run --release --example watch` (jeux détectés + heure de démarrage).
+
 ## Dernière session « maison » (fait)
 
 - Pour les jeux sans stats de launcher (Riot/EA/Battle.net/Ubisoft/manuel…), Torii enregistre l'instant du

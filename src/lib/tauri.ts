@@ -134,6 +134,19 @@ export async function startGameWatch(gameId: string, installDir: string): Promis
 }
 
 /** S'abonne à la fermeture d'un jeu suivi ; renvoie une fonction de désabonnement. */
+export async function onGameLaunched(
+  cb: (gameId: string, at: number) => void,
+): Promise<() => void> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<{ id: string; at: number }>("game-launched", (e) =>
+      cb(e.payload.id, e.payload.at),
+    );
+  } catch {
+    return () => {};
+  }
+}
+
 export async function onGameExited(cb: (gameId: string) => void): Promise<() => void> {
   try {
     const { listen } = await import("@tauri-apps/api/event");

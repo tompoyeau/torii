@@ -29,7 +29,15 @@ pub fn record(config_dir: &Path, id: &str) -> Result<i64, String> {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
+    record_at(config_dir, id, now)
+}
+
+/// Enregistre une date de session précise (heure de démarrage réelle du process).
+/// 🔑 Ne recule JAMAIS la date connue : une partie détectée après coup (Torii ouvert
+/// alors que le jeu tournait déjà) ne doit pas écraser un lancement plus récent.
+pub fn record_at(config_dir: &Path, id: &str, at: i64) -> Result<i64, String> {
     let mut history = load(config_dir);
+    let now = history.get(id).copied().unwrap_or(0).max(at);
     history.insert(id.to_string(), now);
     std::fs::create_dir_all(config_dir).map_err(|e| e.to_string())?;
     let json = serde_json::to_string(&history).map_err(|e| e.to_string())?;
