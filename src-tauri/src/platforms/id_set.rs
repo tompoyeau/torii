@@ -15,6 +15,11 @@ pub struct IdSet(&'static str);
 pub const HIDDEN: IdSet = IdSet("hidden.json");
 /// Jeux épinglés par l'utilisateur (filtre « Favoris »).
 pub const FAVORITES: IdSet = IdSet("favorites.json");
+/// Jeux à ne JAMAIS diffuser aux amis. Indispensable : une application permanente
+/// (Wallpaper Engine et consorts) annoncerait sinon une partie 24 h sur 24, et
+/// certains jeux ne regardent personne.
+pub const PRESENCE_MUTED: IdSet = IdSet("presence_muted.json");
+
 /// Revendeurs masqués du comparatif de prix (choix perso, distinct de la
 /// catégorisation officiel/revendeur qui, elle, est factuelle).
 pub const EXCLUDED_STORES: IdSet = IdSet("excluded_stores.json");

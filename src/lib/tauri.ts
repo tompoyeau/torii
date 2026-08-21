@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, ToriiAccount, ToriiCircle, ToriiPerson, WishlistItem } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -257,6 +257,107 @@ export async function enrichGame(game: Game): Promise<GameMeta | null> {
     },
     null,
   );
+}
+
+// --- Service social (comptes, amis, présence) -----------------------------------
+//
+// Ces ponts NE masquent PAS les erreurs, contrairement au reste du fichier : le message
+// du serveur (« Code incorrect. », « Aucun compte ne correspond à ce code. ») est écrit
+// pour être montré tel quel à l'utilisateur. Les avaler laisserait un formulaire muet.
+
+async function social<T>(cmd: string, args?: Args): Promise<T> {
+  const invoke = await loadInvoke();
+  if (!invoke) throw new Error("Le service Torii n'est disponible que dans l'application.");
+  return await invoke<T>(cmd, args);
+}
+
+/**
+ * Demande un code de connexion. Renvoie le code lui-même quand le serveur tourne en
+ * mode développement — dans ce cas aucun e-mail ne part, et l'interface l'affiche.
+ */
+export async function toriiRequestCode(email: string): Promise<string | null> {
+  return (await social<string | null>("torii_request_code", { email })) ?? null;
+}
+
+/** Vérifie le code et ouvre la session (persistée chiffrée côté Rust). */
+export async function toriiVerify(email: string, code: string): Promise<ToriiAccount> {
+  return await social<ToriiAccount>("torii_verify", { email, code });
+}
+
+/** Compte connecté, ou `null` (session absente, révoquée, ou hors application). */
+export async function toriiMe(): Promise<ToriiAccount | null> {
+  return await call<ToriiAccount | null>("torii_me", undefined, null);
+}
+
+export async function toriiLogout(): Promise<void> {
+  await social<void>("torii_logout");
+}
+
+export async function toriiSetProfile(patch: {
+  displayName?: string;
+  steamId?: string | null;
+  steamDiscoverable?: boolean;
+}): Promise<ToriiAccount> {
+  return await social<ToriiAccount>("torii_set_profile", patch);
+}
+
+export async function toriiCircle(): Promise<ToriiCircle> {
+  return await social<ToriiCircle>("torii_circle");
+}
+
+export async function toriiInvite(friendCode: string): Promise<void> {
+  await social<void>("torii_invite", { friendCode });
+}
+
+export async function toriiRespond(accountId: string, accept: boolean): Promise<void> {
+  await social<void>("torii_respond", { accountId, accept });
+}
+
+export async function toriiRemoveFriend(accountId: string): Promise<void> {
+  await social<void>("torii_remove_friend", { accountId });
+}
+
+/** Régénère son code d'ami ; l'ancien cesse aussitôt de fonctionner. */
+export async function toriiRotateCode(): Promise<string> {
+  return await social<string>("torii_rotate_code");
+}
+
+/** Amis Steam déjà sur Torii (les deux comptes doivent être découvrables). */
+export async function toriiSuggestions(steamIds: string[]): Promise<ToriiPerson[]> {
+  return await social<ToriiPerson[]>("torii_suggestions", { steamIds });
+}
+
+export async function toriiPrefs(): Promise<SocialPrefs> {
+  return await call<SocialPrefs>("torii_prefs", undefined, {
+    sharePresence: false,
+    awayAfterMinutes: 10,
+  });
+}
+
+export async function toriiSetPrefs(prefs: SocialPrefs): Promise<SocialPrefs> {
+  return await social<SocialPrefs>("torii_set_prefs", { prefs });
+}
+
+/** Jeux qu'on ne diffuse jamais (applications permanentes, jeux qu'on garde pour soi). */
+export async function toriiMutedGames(): Promise<string[]> {
+  return await call<string[]>("torii_muted_games", undefined, []);
+}
+
+export async function toriiMuteGame(id: string, muted: boolean): Promise<string[]> {
+  return await social<string[]>("torii_mute_game", { id, muted });
+}
+
+/**
+ * Cercle poussé par le battement de cœur (toutes les 30 s) : publier sa présence
+ * renvoie celle des amis, donc l'interface se met à jour sans rien demander.
+ */
+export async function onToriiCircle(cb: (circle: ToriiCircle) => void): Promise<() => void> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<ToriiCircle>("torii-circle", (e) => cb(e.payload));
+  } catch {
+    return () => {};
+  }
 }
 
 // --- Bibliothèque ---------------------------------------------------------------
