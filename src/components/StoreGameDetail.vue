@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "../composables/useStore";
+import { useScrollLock } from "../composables/useScrollLock";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { openExternal } from "../lib/tauri";
 import { formatEur } from "../lib/format";
@@ -10,6 +11,7 @@ const { product, productLoading, selectedGameId, closeProduct, isStoreExcluded, 
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 
 const open = computed(() => selectedGameId.value != null);
+useScrollLock(open);
 
 const price = formatEur;
 

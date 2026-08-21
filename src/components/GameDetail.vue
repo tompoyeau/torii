@@ -4,26 +4,39 @@ import { useLibrary } from "../composables/useLibrary";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
+import { useScrollLock } from "../composables/useScrollLock";
 import { platformName } from "../data/platforms";
 import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
 import type { FriendLib, GameSource, SteamAchievements } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
 
-const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed, launchOrInstall } = useLibrary();
+const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
-const { selectedGameId, closeGame, showStore } = useUi();
+const { selectedGameId, closeGame, showStore, openEditGame } = useUi();
 
-/** Ouvre ce jeu dans la Boutique de Torii (comparatif de prix, plus bas historique). */
-function viewInStore() {
+/**
+ * Ouvre le comparatif de prix de ce jeu **par-dessus** sa fiche, sans quitter la
+ * bibliothèque : refermer la fiche prix ramène donc exactement là où on était.
+ * (Avant, on basculait sur la section Boutique et le retour laissait l'utilisateur
+ * sur la vitrine, loin de son jeu.)
+ * Repli : si le jeu n'est pas trouvé tel quel, `openForTitle` bascule en recherche —
+ * là il FAUT montrer la Boutique, puisque les résultats sont dans la vue de section.
+ */
+async function viewInStore() {
   const g = game.value;
   if (!g) return;
-  closeGame();
-  showStore();
-  void openForTitle(g.title);
+  const opened = await openForTitle(g.title);
+  if (!opened) {
+    closeGame();
+    showStore();
+  }
 }
 
 const game = computed(() => byId(selectedGameId.value));
+
+// Fiche ouverte = la bibliothèque en dessous ne doit plus défiler (ni montrer sa barre).
+useScrollLock(computed(() => !!game.value));
 
 const friendById = computed(() => new Map(friends.value.map((f) => [f.steamId, f])));
 
@@ -120,6 +133,29 @@ function onOpenFolder() {
   if (game.value?.installDir) openInstallDir(game.value.installDir);
   uninstallMenuOpen.value = false;
 }
+/** Un jeu manuel n'est référencé que par Torii : « désinstaller » = le retirer d'ici. */
+const isManual = computed(() => game.value?.platform === "manual");
+
+/** Édite les informations saisies à la main (titre, exécutable, dossier, jaquette). */
+function onEdit() {
+  if (game.value) openEditGame(game.value.id);
+  uninstallMenuOpen.value = false;
+}
+
+/** Retire un jeu manuel de la bibliothèque et referme sa fiche. */
+async function onRemoveManual() {
+  const g = game.value;
+  if (!g) return;
+  uninstalling.value = true;
+  try {
+    await removeManual(g.id);
+    uninstallMenuOpen.value = false;
+    closeGame();
+  } finally {
+    uninstalling.value = false;
+  }
+}
+
 async function onUninstall() {
   if (!game.value) return;
   uninstalling.value = true;
@@ -352,9 +388,21 @@ onBeforeUnmount(() => {
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
                   <span>Ouvrir l'emplacement du fichier</span>
                 </button>
-                <button class="settings-opt danger" :disabled="uninstalling" @click="onUninstall">
+                <button v-if="isManual" class="settings-opt" @click="onEdit">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z" /><path d="M14.5 7.5 16.5 9.5" /></svg>
+                  <span>Modifier les informations</span>
+                </button>
+                <button
+                  class="settings-opt danger"
+                  :disabled="uninstalling"
+                  @click="isManual ? onRemoveManual() : onUninstall()"
+                >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6M10 11v6M14 11v6" /></svg>
-                  <span>{{ uninstalling ? "Désinstallation…" : "Désinstaller" }}</span>
+                  <span>
+                    {{ uninstalling
+                      ? (isManual ? "Retrait…" : "Désinstallation…")
+                      : (isManual ? "Retirer de la bibliothèque" : "Désinstaller") }}
+                  </span>
                 </button>
               </div>
             </div>

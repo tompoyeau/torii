@@ -4,6 +4,20 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.10.0
+- **Ajout à la wishlist Steam réparé** : ajouter un jeu depuis la Boutique le pousse enfin sur ta vraie wishlist Steam. L'API que Torii utilisait a été retirée par Valve et refusait chaque ajout sans rien dire ; le message de confirmation précise désormais si Steam a bien suivi.
+- **Jaquettes manquantes dans la wishlist** : plus de la moitié des jeux (nouveautés, jeux pas encore sortis) n'ont pas de jaquette sur le CDN Steam et s'affichaient en dégradé. Torii bascule maintenant sur une jaquette de secours.
+- **Affichage uniformisé** : les jeux de la wishlist ont la même carte que la bibliothèque et la Boutique (même taille, même titre incrusté, même survol).
+- **Revendeurs masqués respectés partout** : un revendeur masqué n'était écarté que sur la fiche d'un jeu — il revenait comme meilleur prix dans la vitrine, la recherche et la wishlist. C'est corrigé.
+- **Démarrage instantané** : ta bibliothèque s'affiche immédiatement au lancement, sans attendre la synchronisation des comptes, puis se met à jour toute seule.
+- **Identifiants protégés** : les jetons de connexion de tes comptes (Steam, GOG, Epic) sont désormais chiffrés sur le disque par Windows. La conversion est automatique au premier démarrage, tes comptes restent connectés.
+- **Ajouter un jeu à la main, sans taper de chemin** : « Parcourir… » ouvre l'explorateur Windows pour choisir l'exécutable, le dossier et la jaquette (une image de ton disque fait l'affaire). Le titre et le dossier sont devinés à partir du fichier choisi.
+- **Modifier un jeu ajouté à la main** : titre, exécutable, dossier et jaquette se corrigent après coup, depuis sa fiche ou par clic droit. Favori et masquage sont conservés.
+- **Correctif** : sur la fiche d'un jeu ajouté à la main, le bouton « Désinstaller » ne faisait rien. Il devient « Retirer de la bibliothèque » et fonctionne.
+- **Retour depuis le comparatif de prix** : consulter les prix d'un jeu de ta bibliothèque puis revenir en arrière te ramène à la fiche du jeu, au lieu de te laisser sur la vitrine de la Boutique.
+- **Correctif d'affichage** : la barre de défilement de la bibliothèque restait visible — et utilisable — derrière la fiche d'un jeu ou les Paramètres.
+- **Alertes de prix** : correction d'un suivi qui pouvait confondre plusieurs jeux ajoutés depuis la Boutique.
+
 ## 0.9.9
 - **Wishlist universelle** : ajoute n'importe quel jeu à ta wishlist depuis la Boutique (bouton ♥ sur la fiche et sur les cartes). Si le jeu existe sur Steam, il est aussi ajouté à ta wishlist Steam. Un petit message confirme l'ajout.
 - **Alertes de prix** : elles suivent désormais toute ta wishlist (Steam + jeux ajoutés dans Torii).

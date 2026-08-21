@@ -28,6 +28,15 @@ async function refresh() {
   loading.value = false;
 }
 
+/**
+ * Marque la wishlist comme périmée : elle sera rechargée à sa prochaine ouverture.
+ * Utilisé quand un revendeur est masqué/réaffiché — les prix sont choisis côté Rust,
+ * donc ceux déjà en mémoire ne reflètent plus la liste d'exclusion.
+ */
+function invalidate() {
+  loaded.value = false;
+}
+
 /** Retire un jeu de la liste affichée sans appel réseau (maj optimiste par id ITAD). */
 function removeLocal(gameId: string) {
   if (!gameId) return;
@@ -47,6 +56,7 @@ function addLocal(item: { gameId: string; title: string; coverUrl?: string | nul
       gameId: item.gameId,
       title: item.title,
       coverUrl: item.coverUrl ?? "",
+      coverFallbackUrl: null,
       price: null,
       normalPrice: null,
       savings: 0,
@@ -60,7 +70,7 @@ function addLocal(item: { gameId: string; title: string; coverUrl?: string | nul
 
 export function useWishlist() {
   const onSaleCount = computed(() => items.value.filter((i) => i.savings > 0).length);
-  return { items, loading, loaded, steamConnected, onSaleCount, refresh, removeLocal, addLocal };
+  return { items, loading, loaded, steamConnected, onSaleCount, refresh, invalidate, removeLocal, addLocal };
 }
 
 // --- Données fictives (preview web hors Tauri) ---
@@ -72,5 +82,7 @@ const MOCK: WishlistItem[] = [
   { appId: 1086940, gameId: "w2", title: "Baldur's Gate 3", coverUrl: steamCover(1086940), price: 44.99, normalPrice: 59.99, savings: 25, storeName: "Steam", buyUrl: "#", historyLow: 44.99 },
   { appId: 1091500, gameId: "w3", title: "Cyberpunk 2077", coverUrl: steamCover(1091500), price: 17.99, normalPrice: 59.99, savings: 70, storeName: "GOG", buyUrl: "#", historyLow: 14.99 },
   { appId: 292030, gameId: "w4", title: "The Witcher 3: Wild Hunt", coverUrl: steamCover(292030), price: 7.99, normalPrice: 39.99, savings: 80, storeName: "GOG", buyUrl: "#", historyLow: 6.79 },
-  { appId: 3008130, gameId: "", title: "Star Wars Zero Company", coverUrl: steamCover(3008130), price: null, normalPrice: null, savings: 0, storeName: "", buyUrl: "", historyLow: null },
+  // Jeu à venir : pas de capsule `library_600x900` sur le CDN Steam (404) → la
+  // jaquette de repli ITAD prend le relais. Cas réel, gardé dans la maquette.
+  { appId: 2075800, gameId: "01964d1d-d815-72b0-b6fc-74f5633798cd", title: "STAR WARS Zero Company", coverUrl: steamCover(2075800), coverFallbackUrl: "https://assets.isthereanydeal.com/01964d1d-d815-72b0-b6fc-74f5633798cd/boxart.jpg", price: null, normalPrice: null, savings: 0, storeName: "", buyUrl: "", historyLow: null },
 ];

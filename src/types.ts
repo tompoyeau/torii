@@ -7,7 +7,7 @@ export interface Platform {
   color: string;
 }
 
-/** Données brutes renvoyées par les commandes Rust `scan_library` / `enrich_metadata` (camelCase). */
+/** Données brutes renvoyées par la commande Rust `scan_library` (camelCase). */
 export interface GameDto {
   id: string;
   title: string;
@@ -72,6 +72,12 @@ export interface Game {
   cover: string;
   /** Vraie jaquette portrait (Steam CDN, fichier local…) si disponible. */
   coverUrl?: string;
+  /**
+   * Jaquette telle qu'elle est stockée (URL web ou chemin sur le disque), avant
+   * conversion en URL affichable par la webview. Sert à ré-éditer un jeu manuel sans
+   * lui coller l'URL `asset://` de rendu dans le formulaire.
+   */
+  coverSource?: string;
   /** Visuel paysage (hero, tuiles Salon, bannière détail) si disponible. */
   heroUrl?: string;
   /** Captures d'écran (fournisseur en ligne). */
@@ -245,6 +251,11 @@ export interface WishlistItem {
   gameId: string;
   title: string;
   coverUrl: string;
+  /**
+   * Jaquette de repli (boxart ITAD) si la capsule Steam n'existe pas — c'est le cas
+   * de beaucoup de jeux récents ou pas encore sortis.
+   */
+  coverFallbackUrl?: string | null;
   /** Meilleur prix actuel (EUR) ; null si aucune offre / non résolu. */
   price?: number | null;
   normalPrice?: number | null;

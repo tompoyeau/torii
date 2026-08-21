@@ -8,6 +8,7 @@ import {
   storeSearch,
   storeSuggest,
 } from "../lib/tauri";
+import { useWishlist } from "./useWishlist";
 import type { StoreGame, StoreItem, StoreSuggestion } from "../types";
 
 /** Critère de tri de la vitrine (mappé côté Rust vers CheapShark). */
@@ -67,11 +68,31 @@ async function toggleStoreExcluded(name: string) {
     : excludedStores.value.filter((n) => n !== name);
   const res = await setStoreExcluded(name, excluded);
   if (res) excludedStores.value = res;
+  onExclusionChanged();
 }
 /** Vide la liste d'exclusion (réaffiche toutes les boutiques). */
 async function clearExcludedStores() {
   excludedStores.value = [];
   await clearExcludedStoresBackend();
+  onExclusionChanged();
+}
+
+/**
+ * La « meilleure offre » d'une carte de grille ou d'une ligne de wishlist est choisie
+ * côté Rust : les prix déjà affichés deviennent faux dès que la liste d'exclusion change.
+ * On rejoue donc la vue Boutique courante et on marque la wishlist à recharger.
+ * (La fiche produit, elle, reçoit TOUTES les offres et filtre en direct — rien à faire.)
+ */
+function onExclusionChanged() {
+  if (loadedOnce) {
+    if (activeQuery.value) {
+      query.value = activeQuery.value;
+      void runSearch();
+    } else {
+      void loadHome();
+    }
+  }
+  useWishlist().invalidate();
 }
 
 /** Charge la vitrine (mises en avant / promos) selon le tri courant. */
@@ -194,7 +215,12 @@ function closeProduct() {
  * on résout le meilleur résultat via l'autocomplétion (rapide), puis on ouvre sa fiche.
  * Sans correspondance exacte, on bascule sur une recherche classique (grille de résultats).
  */
-async function openForTitle(title: string) {
+/**
+ * Ouvre la fiche Boutique correspondant à un titre de la bibliothèque.
+ * Renvoie `true` si une fiche a pu être ouverte, `false` si on est retombé sur une
+ * recherche — l'appelant doit alors montrer la section Boutique pour voir les résultats.
+ */
+async function openForTitle(title: string): Promise<boolean> {
   clearSuggestions();
   // Affiche tout de suite l'overlay en chargement (évite un flash de la vitrine).
   selectedGameId.value = "__loading__";
@@ -207,9 +233,10 @@ async function openForTitle(title: string) {
     productLoading.value = false;
     query.value = title;
     void runSearch();
-    return;
+    return false;
   }
   await openProduct(first.gameId);
+  return true;
 }
 
 export function useStore() {

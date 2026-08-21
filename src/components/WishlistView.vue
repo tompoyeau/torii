@@ -17,11 +17,21 @@ onMounted(() => {
 });
 
 const failed = ref(new Set<string>());
-function onImgError(url: string) {
-  failed.value = new Set(failed.value).add(url);
+function onImgError(url: string | null) {
+  if (url) failed.value = new Set(failed.value).add(url);
 }
-function coverOk(it: WishlistItem): boolean {
-  return !!it.coverUrl && !failed.value.has(it.coverUrl);
+
+/**
+ * Jaquette à afficher : capsule Steam d'abord, puis la boxart ITAD de repli.
+ * 🔑 Plus de la moitié des jeux d'une wishlist (nouveautés, jeux pas encore sortis)
+ * n'ont pas de `library_600x900` sur le CDN Steam : sans ce repli, ils s'affichaient
+ * en dégradé alors que leur fiche produit, elle, avait bien un visuel.
+ */
+function coverSrc(it: WishlistItem): string | null {
+  const urls = [it.coverUrl, it.coverFallbackUrl].filter(
+    (u): u is string => !!u && !failed.value.has(u),
+  );
+  return urls[0] ?? null;
 }
 
 /** Clic sur un jeu : fiche Boutique de Torii si connue, sinon page Steam. */
@@ -68,22 +78,39 @@ function atLow(it: WishlistItem): boolean {
     </div>
 
     <div v-else class="grid">
-      <button v-for="it in items" :key="it.appId || it.gameId" class="card" @click="open(it)">
-        <div class="cover" :style="{ background: gradientFor(String(it.appId)) }">
-          <img v-if="coverOk(it)" :src="it.coverUrl" alt="" loading="lazy" @error="onImgError(it.coverUrl)" />
-          <span v-else class="cover-title">{{ it.title || "Jeu Steam" }}</span>
-          <span v-if="it.savings > 0" class="badge-sale">-{{ it.savings }}%</span>
-          <span v-if="atLow(it)" class="badge-low" title="Prix au plus bas historique">★ bas historique</span>
+      <button
+        v-for="it in items"
+        :key="it.gameId || it.appId"
+        class="card cover-card"
+        @click="open(it)"
+      >
+        <div class="cover" :style="{ background: gradientFor(it.gameId || String(it.appId)) }">
+          <img
+            v-if="coverSrc(it)"
+            :key="coverSrc(it)!"
+            class="cover-img"
+            :src="coverSrc(it)!"
+            alt=""
+            loading="lazy"
+            @error="onImgError(coverSrc(it))"
+          />
+          <span v-if="it.savings > 0" class="badge">-{{ it.savings }}%</span>
+          <span class="cover-scrim" />
+          <span class="cover-title">{{ it.title || "Jeu Steam" }}</span>
         </div>
         <div class="meta">
-          <span class="title">{{ it.title || "Jeu Steam" }}</span>
           <div v-if="it.price != null" class="price-row">
-            <span class="price">{{ formatEur(it.price) }}</span>
+            <span class="price" :class="{ low: atLow(it) }">{{ formatEur(it.price) }}</span>
             <span v-if="it.savings > 0 && it.normalPrice" class="was">{{ formatEur(it.normalPrice) }}</span>
-            <span class="store">{{ it.storeName }}</span>
+            <span v-if="it.storeName" class="store">{{ it.storeName }}</span>
           </div>
           <div v-else class="price-row"><span class="soon">Pas encore d'offre</span></div>
-          <div v-if="it.historyLow != null" class="low">Plus bas : {{ formatEur(it.historyLow) }}</div>
+          <div v-if="atLow(it)" class="hist at-low" title="Le prix actuel touche son plus bas historique">
+            ★ Plus bas historique
+          </div>
+          <div v-else-if="it.historyLow != null" class="hist">
+            Plus bas : {{ formatEur(it.historyLow) }}
+          </div>
         </div>
       </button>
     </div>
@@ -108,31 +135,18 @@ function atLow(it: WishlistItem): boolean {
 .spin.big { width: 26px; height: 26px; border-width: 3px; margin-bottom: 14px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 22px 16px; }
-.card { display: flex; flex-direction: column; gap: 9px; background: none; border: none; padding: 0; cursor: pointer; text-align: left; color: inherit; min-width: 0; }
-.cover {
-  position: relative; aspect-ratio: 3 / 4; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
-  display: grid; place-items: center; transition: transform 0.15s, box-shadow 0.15s;
-}
-.card:hover .cover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4); }
-.cover img { width: 100%; height: 100%; object-fit: cover; }
-.cover-title { padding: 10px; font-size: 14px; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
-.badge-sale {
-  position: absolute; top: 8px; left: 8px; font-family: var(--mono); font-size: 12px; font-weight: 700; color: #fff;
-  background: linear-gradient(135deg, #3ad07f, #1fa862); padding: 3px 8px; border-radius: 8px;
-}
-.badge-low {
-  position: absolute; bottom: 8px; left: 8px; right: 8px; text-align: center; font-size: 10.5px; font-weight: 700; color: #fff;
-  background: rgba(12, 10, 18, 0.72); backdrop-filter: blur(4px); padding: 3px 6px; border-radius: 7px;
-}
-.meta { display: flex; flex-direction: column; gap: 4px; }
-.title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.price-row { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
-.price { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--text); }
-.was { font-family: var(--mono); font-size: 11px; color: var(--text-faint); text-decoration: line-through; }
-.store { font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.soon { font-size: 12px; color: var(--text-faint); font-style: italic; }
-.low { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+/* Même grille que la Boutique ; le fond de carte vient de `.cover-card` (style.css). */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 22px 20px; }
+
+.meta { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+.price-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.price { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); }
+.price.low { color: #3ad07f; }
+.was { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); text-decoration: line-through; }
+.store { font-size: 12px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.soon { font-size: 12.5px; color: var(--text-faint); font-style: italic; }
+.hist { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+.hist.at-low { color: #3ad07f; }
 
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 70px 0; text-align: center; color: var(--text-faint); font-size: 14px; }
 .empty p { margin: 3px 0; }

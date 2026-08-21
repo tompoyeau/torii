@@ -5,6 +5,7 @@ import { usePreferences } from "../composables/usePreferences";
 import { useStore } from "../composables/useStore";
 import { useTheme } from "../composables/useTheme";
 import { useUi } from "../composables/useUi";
+import { useScrollLock } from "../composables/useScrollLock";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
 import { appVersion, clearCaches, getAutostart, getWindowPrefs, setAutostart, setWindowPrefs } from "../lib/tauri";
@@ -48,6 +49,8 @@ const DENSITIES = [
 ] as const;
 
 // --- À propos & maintenance -------------------------------------------------
+useScrollLock(settingsOpen);
+
 const version = ref<string | null>(null);
 const cacheMsg = ref("");
 const cacheBusy = ref(false);

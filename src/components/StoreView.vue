@@ -188,7 +188,7 @@ function onCoverError(url: string | null) {
       <button
         v-for="it in items"
         :key="it.gameId"
-        class="card"
+        class="card cover-card"
         @click="openProduct(it.gameId)"
       >
         <div class="cover" :style="{ background: gradientFor(it.gameId) }">
@@ -290,23 +290,7 @@ function onCoverError(url: string | null) {
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 22px 20px; transition: opacity 0.15s; }
 .grid.dim { opacity: 0.5; }
-.card { background: none; border: none; padding: 0; text-align: left; color: inherit; display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
-.cover {
-  position: relative; aspect-ratio: 3 / 4; border-radius: var(--radius); overflow: hidden;
-  box-shadow: var(--shadow-card); border: 1px solid var(--border); isolation: isolate;
-  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.22s;
-}
-.cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.cover-scrim { position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, transparent 45%); }
-.cover-title {
-  position: absolute; left: 12px; right: 12px; bottom: 11px; z-index: 2; font-weight: 800; font-size: 16px;
-  line-height: 1.08; letter-spacing: -0.02em; color: #fff; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); text-wrap: balance;
-}
-.badge {
-  position: absolute; top: 10px; right: 10px; z-index: 2; font-family: var(--mono); font-weight: 700; font-size: 12px;
-  padding: 3px 8px; border-radius: 8px; color: #fff;
-  background: linear-gradient(135deg, #3ad07f, #1fa862); box-shadow: 0 3px 10px -3px rgba(31, 168, 98, 0.7);
-}
+/* Fond de carte partagé : `.cover-card` dans style.css. */
 .wish-dot {
   position: absolute; top: 8px; left: 8px; z-index: 3; width: 30px; height: 30px; border-radius: 50%;
   display: grid; place-items: center; cursor: pointer;
@@ -317,7 +301,6 @@ function onCoverError(url: string | null) {
 .wish-dot:hover { background: rgba(28, 20, 38, 0.9); }
 .wish-dot.on { opacity: 1; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .wish-dot svg { width: 16px; height: 16px; }
-.card:hover .cover { transform: translateY(-6px); box-shadow: 0 26px 50px -20px rgba(0, 0, 0, 0.75); }
 .meta { display: flex; align-items: baseline; gap: 8px; padding: 0 2px; }
 .price { display: flex; align-items: baseline; gap: 7px; }
 .price .now { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }

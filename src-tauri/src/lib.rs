@@ -8,13 +8,13 @@ use platforms::manual::ManualInput;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
-/// Progression de l'enrichissement, émise vers le frontend.
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct EnrichProgress {
-    done: usize,
-    total: usize,
-}
+/// Dernier résultat de `scan_library`, partagé avec les commandes d'enrichissement.
+/// 🔑 Un scan n'est PAS une lecture locale : il rejoue toute la séquence réseau des
+/// comptes (page communautaire Steam, refresh + produits GOG — qui **fait tourner** le
+/// refresh token —, refresh + assets + catalogue Epic). Le refaire pour connaître la
+/// liste des jeux doublait le trafic au démarrage et ouvrait une course sur le token GOG.
+#[derive(Default)]
+struct LastScan(std::sync::Mutex<Vec<GameDto>>);
 
 /// Émis quand un jeu suivi se ferme (→ le front ouvre sa fiche).
 #[derive(Clone, Serialize)]
@@ -53,78 +53,220 @@ impl Settings {
 
 /// Enregistre (ou efface) la clé API Steam et auto-détecte le SteamID.
 #[tauri::command]
-fn set_steam_key(app: tauri::AppHandle, key: String) -> Result<Settings, String> {
+async fn set_steam_key(app: tauri::AppHandle, key: String) -> Result<Settings, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let mut creds = accounts::secrets::load(&dir);
-    let key = key.trim();
-    creds.steam_api_key = (!key.is_empty()).then(|| key.to_string());
-    if creds.steam_api_key.is_some() && creds.steam_id.is_none() {
-        creds.steam_id = accounts::steam::detect_steam_id();
-    }
-    accounts::secrets::save(&dir, &creds)?;
-    Ok(Settings::from_creds(&creds, &dir))
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut creds = accounts::secrets::load(&dir);
+        let key = key.trim();
+        creds.steam_api_key = (!key.is_empty()).then(|| key.to_string());
+        if creds.steam_api_key.is_some() && creds.steam_id.is_none() {
+            creds.steam_id = accounts::steam::detect_steam_id();
+        }
+        accounts::secrets::save(&dir, &creds)?;
+        Ok(Settings::from_creds(&creds, &dir))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-const STEAM_LOGIN_LABEL: &str = "steam-login";
+// ─────────────────────────────────────────────────────────────────────────────
+// Connexion aux comptes de launchers
+//
+// Les cinq flux (Steam, GOG, Epic, EA, Battle.net) partagent le même squelette :
+// ouvrir une fenêtre de login → attendre que l'utilisateur se connecte → en extraire
+// un secret (cookie, code OAuth, jeton) → fermer la fenêtre → persister. Seules
+// l'attente et l'extraction changent, d'où les briques communes ci-dessous.
+//
+// 🔑 Toutes les opérations sur une WebviewWindow doivent se faire sur le **thread
+// principal** (exigence WebView2) ; l'attente, elle, tourne sur un thread dédié pour
+// ne pas bloquer le rendu.
+// ─────────────────────────────────────────────────────────────────────────────
 
-enum CookieRead {
+/// Résultat d'une sonde sur la fenêtre de login.
+enum Probe<T> {
+    /// Fenêtre fermée (par l'utilisateur ou par nous) : on abandonne.
     Closed,
+    /// Rien à récupérer pour l'instant : on repassera.
     Pending,
-    Found(String, Option<String>),
+    Found(T),
 }
 
-/// Lit les cookies Steam d'un domaine **sur le thread principal** (requis par
-/// WebView2) et renvoie le résultat via un canal. Non bloquant pour le rendu.
-fn read_cookies_on_main(app: &tauri::AppHandle, domain: &str) -> CookieRead {
+/// Ouvre une fenêtre de connexion à un launcher.
+///
+/// `script` est injecté à chaque navigation (les captures de code/jeton passent par le
+/// titre du document, que `on_title` reçoit). Les popups sont autorisées : les logins
+/// sociaux (Google, Steam, Discord…) passent par `window.open` et une `WebviewWindow`
+/// Tauri les ignore par défaut — le clic ne ferait alors rien.
+fn open_login_window(
+    app: &tauri::AppHandle,
+    label: &'static str,
+    title: &'static str,
+    url: &str,
+    size: (f64, f64),
+    script: Option<&'static str>,
+    on_title: impl Fn(String) + Send + 'static,
+) -> Result<(), String> {
+    let app = app.clone();
+    let url = url.to_string();
+    let inner = app.clone();
+    inner
+        .run_on_main_thread(move || {
+            if let Some(win) = app.get_webview_window(label) {
+                let _ = win.close();
+            }
+            let Ok(parsed) = url.parse() else { return };
+            let mut builder =
+                tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(parsed))
+                    .title(title)
+                    .inner_size(size.0, size.1)
+                    .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Allow)
+                    .on_document_title_changed(move |_win, t| on_title(t));
+            if let Some(js) = script {
+                builder = builder.initialization_script(js);
+            }
+            let _ = builder.build();
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Ferme la fenêtre de login si elle est encore ouverte.
+fn close_login_window(app: &tauri::AppHandle, label: &'static str) {
+    let inner = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(win) = inner.get_webview_window(label) {
+            let _ = win.close();
+        }
+    });
+}
+
+/// Interroge la fenêtre de login **sur le thread principal** et renvoie ce que `probe`
+/// en tire. Un aller-retour trop lent est traité comme « rien encore » (on repassera),
+/// jamais comme une fermeture.
+fn probe_login_window<T: Send + 'static>(
+    app: &tauri::AppHandle,
+    label: &'static str,
+    probe: impl FnOnce(&tauri::WebviewWindow) -> Option<T> + Send + 'static,
+) -> Probe<T> {
     let (tx, rx) = std::sync::mpsc::channel();
     let inner = app.clone();
-    let domain = domain.to_string();
     let posted = app.run_on_main_thread(move || {
-        let result = match inner.get_webview_window(STEAM_LOGIN_LABEL) {
-            None => CookieRead::Closed,
-            Some(win) => {
-                let url: tauri::Url = domain.parse().unwrap();
-                let mut secure = None;
-                let mut sessionid = None;
-                if let Ok(cookies) = win.cookies_for_url(url) {
-                    for c in cookies {
-                        match c.name() {
-                            "steamLoginSecure" => secure = Some(c.value().to_string()),
-                            "sessionid" => sessionid = Some(c.value().to_string()),
-                            _ => {}
-                        }
-                    }
-                }
-                match secure {
-                    Some(s) => CookieRead::Found(s, sessionid),
-                    None => CookieRead::Pending,
-                }
-            }
+        let result = match inner.get_webview_window(label) {
+            None => Probe::Closed,
+            Some(win) => match probe(&win) {
+                Some(value) => Probe::Found(value),
+                None => Probe::Pending,
+            },
         };
         let _ = tx.send(result);
     });
     if posted.is_err() {
-        return CookieRead::Closed;
+        return Probe::Closed;
     }
     rx.recv_timeout(std::time::Duration::from_secs(3))
-        .unwrap_or(CookieRead::Pending)
+        .unwrap_or(Probe::Pending)
 }
 
-/// Sonde le cookie `steamLoginSecure` d'un domaine, jusqu'à `max_secs` secondes.
-fn poll_cookie(
+/// Sonde la fenêtre une fois par seconde jusqu'à obtenir une valeur, la fermeture de
+/// la fenêtre, ou l'expiration du délai.
+fn poll_login_window<T: Send + 'static>(
     app: &tauri::AppHandle,
-    domain: &str,
+    label: &'static str,
     max_secs: u32,
-) -> Option<(String, Option<String>)> {
+    probe: fn(&tauri::WebviewWindow) -> Option<T>,
+) -> Option<T> {
     for _ in 0..max_secs {
         std::thread::sleep(std::time::Duration::from_secs(1));
-        match read_cookies_on_main(app, domain) {
-            CookieRead::Closed => return None,
-            CookieRead::Found(secure, sessionid) => return Some((secure, sessionid)),
-            CookieRead::Pending => {}
+        match probe_login_window(app, label, probe) {
+            Probe::Closed => return None,
+            Probe::Found(value) => return Some(value),
+            Probe::Pending => {}
         }
     }
     None
+}
+
+/// Attend une valeur captée par le script injecté (remontée via le titre du document),
+/// tant que la fenêtre reste ouverte et dans la limite de `max_secs`.
+fn wait_for_capture(
+    app: &tauri::AppHandle,
+    label: &'static str,
+    rx: std::sync::mpsc::Receiver<String>,
+    max_secs: u32,
+) -> Option<String> {
+    for _ in 0..max_secs {
+        if let Ok(value) = rx.try_recv() {
+            return Some(value);
+        }
+        if matches!(
+            probe_login_window(app, label, |_win| Some(())),
+            Probe::Closed
+        ) {
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    None
+}
+
+/// Renvoie un canal et la fonction de titre à brancher sur la fenêtre : tout titre
+/// commençant par `prefix` est publié dans le canal (c'est ainsi que les scripts
+/// injectés font remonter un code ou un jeton).
+fn capture_channel(
+    prefix: &'static str,
+) -> (
+    std::sync::mpsc::Receiver<String>,
+    impl Fn(String) + Send + 'static,
+) {
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    (rx, move |title: String| {
+        if let Some(value) = title.strip_prefix(prefix) {
+            let _ = tx.send(value.to_string());
+        }
+    })
+}
+
+/// État des comptes tel que persisté sur disque.
+fn settings_from_disk(dir: &std::path::Path) -> Settings {
+    Settings::from_creds(&accounts::secrets::load(dir), dir)
+}
+
+/// Efface des identifiants (déconnexion) et renvoie l'état des comptes à jour.
+fn forget_credentials(
+    app: &tauri::AppHandle,
+    edit: impl FnOnce(&mut accounts::secrets::Credentials),
+) -> Result<Settings, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let mut creds = accounts::secrets::load(&dir);
+    edit(&mut creds);
+    accounts::secrets::save(&dir, &creds)?;
+    Ok(Settings::from_creds(&creds, &dir))
+}
+
+// --- Steam ---------------------------------------------------------------------
+
+const STEAM_LOGIN_LABEL: &str = "steam-login";
+
+/// Lit le couple de cookies de session Steam d'un domaine dans la fenêtre de login.
+fn steam_cookie(win: &tauri::WebviewWindow, domain: &str) -> Option<(String, Option<String>)> {
+    let url: tauri::Url = domain.parse().ok()?;
+    let mut secure = None;
+    let mut sessionid = None;
+    for c in win.cookies_for_url(url).ok()? {
+        match c.name() {
+            "steamLoginSecure" => secure = Some(c.value().to_string()),
+            "sessionid" => sessionid = Some(c.value().to_string()),
+            _ => {}
+        }
+    }
+    secure.map(|s| (s, sessionid))
+}
+
+fn steam_store_cookie(win: &tauri::WebviewWindow) -> Option<(String, Option<String>)> {
+    steam_cookie(win, "https://store.steampowered.com")
+}
+
+fn steam_community_cookie(win: &tauri::WebviewWindow) -> Option<(String, Option<String>)> {
+    steam_cookie(win, "https://steamcommunity.com")
 }
 
 fn to_cookie_header(secure: String, sessionid: Option<String>) -> String {
@@ -200,36 +342,24 @@ const STEAM_CAPTURE_JS: &str = r#"
 /// `async` pour ne pas bloquer le thread principal (rendu de la WebView).
 #[tauri::command]
 async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
-    // Canal pour remonter le refresh token capté par le script d'injection.
-    let (rt_tx, rt_rx) = std::sync::mpsc::channel::<String>();
+    let (rt_rx, on_title) = capture_channel("ludo-steam-rt:");
 
     // Tant qu'aucun refresh token n'est stocké, on force un login FRAIS : Steam n'émet
     // le refresh token (~200 j) que lors d'une vraie saisie identifiants + Steam Guard,
     // jamais sur une session « mémorisée ». Une fois le token capté, les connexions
     // suivantes redeviennent mémorisées (l'auto-refresh gère l'expiration ~24 h).
-    let dir0 = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let force_fresh = accounts::secrets::load(&dir0).steam_refresh_token.is_none();
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let force_fresh = accounts::secrets::load(&dir).steam_refresh_token.is_none();
 
-    // Ouverture de la fenêtre de login (sur le thread principal).
-    let builder_app = app.clone();
-    app.run_on_main_thread(move || {
-        if let Some(win) = builder_app.get_webview_window(STEAM_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-        let url =
-            tauri::WebviewUrl::External("https://store.steampowered.com/login/".parse().unwrap());
-        let _ = tauri::WebviewWindowBuilder::new(&builder_app, STEAM_LOGIN_LABEL, url)
-            .title("Connexion Steam")
-            .inner_size(500.0, 740.0)
-            .initialization_script(STEAM_CAPTURE_JS)
-            .on_document_title_changed(move |_win, title| {
-                if let Some(rt) = title.strip_prefix("ludo-steam-rt:") {
-                    let _ = rt_tx.send(rt.to_string());
-                }
-            })
-            .build();
-    })
-    .map_err(|e| e.to_string())?;
+    open_login_window(
+        &app,
+        STEAM_LOGIN_LABEL,
+        "Connexion Steam",
+        "https://store.steampowered.com/login/",
+        (500.0, 740.0),
+        Some(STEAM_CAPTURE_JS),
+        on_title,
+    )?;
 
     // Login frais : on vide les données de navigation (déconnexion Steam garantie) puis
     // on recharge la page de login → Steam redemande les identifiants → refresh token émis.
@@ -259,7 +389,8 @@ async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
     let poll_app = app.clone();
     let captured = tauri::async_runtime::spawn_blocking(move || {
         // Phase 1 : cookie côté store (= login réussi). Jusqu'à ~2 min.
-        let (store_secure, store_sid) = poll_cookie(&poll_app, "https://store.steampowered.com", 120)?;
+        let (store_secure, store_sid) =
+            poll_login_window(&poll_app, STEAM_LOGIN_LABEL, 120, steam_store_cookie)?;
         let steam_id = steam_id_from_cookie(&store_secure);
 
         // Phase 2 : on navigue la fenêtre vers la communauté (propage la session),
@@ -267,10 +398,11 @@ async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
         let nav_inner = poll_app.clone();
         let _ = poll_app.run_on_main_thread(move || {
             if let Some(win) = nav_inner.get_webview_window(STEAM_LOGIN_LABEL) {
-                let _ = win.eval("window.location.href='https://steamcommunity.com/my/games/?tab=all';");
+                let _ = win
+                    .eval("window.location.href='https://steamcommunity.com/my/games/?tab=all';");
             }
         });
-        let community = poll_cookie(&poll_app, "https://steamcommunity.com", 25);
+        let community = poll_login_window(&poll_app, STEAM_LOGIN_LABEL, 25, steam_community_cookie);
 
         // Le refresh token a été capté pendant le login (finalizelogin) ; on draine
         // le canal (le dernier reçu, au cas où plusieurs titres seraient passés).
@@ -281,20 +413,13 @@ async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
     .await
     .map_err(|e| e.to_string())?;
 
-    // Fermeture de la fenêtre de login.
-    let closing_app = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = closing_app.get_webview_window(STEAM_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-    });
+    close_login_window(&app, STEAM_LOGIN_LABEL);
 
     let Some((store_secure, store_sid, steam_id, community, refresh_token)) = captured else {
         return Err("Connexion Steam non détectée (délai dépassé ou fenêtre fermée).".into());
     };
     let steam_id = steam_id.or_else(accounts::steam::detect_steam_id);
 
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let mut creds = accounts::secrets::load(&dir);
     creds.steam_login_secure = Some(to_cookie_header(store_secure, store_sid));
     creds.steam_community = community.map(|(sec, sid)| to_cookie_header(sec, sid));
@@ -306,7 +431,8 @@ async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
     // install peut retourner un vieux `steamLoginSecure` communautaire (HttpOnly, non purgé
     // fiablement par clear_all_browsing_data) → cookie pourri, liste d'amis vide même après
     // reconnexion. On remplace donc le cookie capté par un cookie régénéré (repli : le capté).
-    if let (Some(rt), Some(id)) = (creds.steam_refresh_token.as_deref(), creds.steam_id.as_deref()) {
+    if let (Some(rt), Some(id)) = (creds.steam_refresh_token.as_deref(), creds.steam_id.as_deref())
+    {
         if let Some(fresh) = accounts::steam::refresh_web_cookie(rt, id) {
             creds.steam_community = Some(fresh.clone());
             creds.steam_login_secure = Some(fresh);
@@ -320,107 +446,62 @@ async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
 /// Déconnecte Steam (efface session, clé et SteamID).
 #[tauri::command]
 fn disconnect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let mut creds = accounts::secrets::load(&dir);
-    creds.steam_login_secure = None;
-    creds.steam_community = None;
-    creds.steam_api_key = None;
-    creds.steam_id = None;
-    creds.steam_refresh_token = None;
-    accounts::secrets::save(&dir, &creds)?;
-    Ok(Settings::from_creds(&creds, &dir))
+    forget_credentials(&app, |c| {
+        c.steam_login_secure = None;
+        c.steam_community = None;
+        c.steam_api_key = None;
+        c.steam_id = None;
+        c.steam_refresh_token = None;
+    })
 }
+
+// --- GOG -----------------------------------------------------------------------
 
 const GOG_LOGIN_LABEL: &str = "gog-login";
 const GOG_AUTH_URL: &str = "https://auth.gog.com/auth?client_id=46899977096215655\
     &redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient\
     &response_type=code&layout=client2";
 
-enum CodeRead {
-    Closed,
-    Pending,
-    Found(String),
-}
-
-/// Lit l'URL courante de la fenêtre de login GOG **sur le thread principal**
-/// (requis par WebView2) et en extrait le paramètre `code` une fois arrivé sur
-/// la page de redirection `on_login_success`.
-fn read_gog_code_on_main(app: &tauri::AppHandle) -> CodeRead {
-    let (tx, rx) = std::sync::mpsc::channel();
-    let inner = app.clone();
-    let posted = app.run_on_main_thread(move || {
-        let result = match inner.get_webview_window(GOG_LOGIN_LABEL) {
-            None => CodeRead::Closed,
-            Some(win) => match win.url() {
-                Ok(url) if url.path().contains("on_login_success") => url
-                    .query_pairs()
-                    .find(|(k, _)| k == "code")
-                    .map(|(_, v)| CodeRead::Found(v.into_owned()))
-                    .unwrap_or(CodeRead::Pending),
-                _ => CodeRead::Pending,
-            },
-        };
-        let _ = tx.send(result);
-    });
-    if posted.is_err() {
-        return CodeRead::Closed;
+/// GOG ne pousse rien dans le titre : on surveille l'URL de la fenêtre et on récupère
+/// le paramètre `code` une fois arrivé sur la page de redirection `on_login_success`.
+fn gog_code(win: &tauri::WebviewWindow) -> Option<String> {
+    let url = win.url().ok()?;
+    if !url.path().contains("on_login_success") {
+        return None;
     }
-    rx.recv_timeout(std::time::Duration::from_secs(3))
-        .unwrap_or(CodeRead::Pending)
-}
-
-/// Sonde l'URL de la fenêtre GOG jusqu'à obtenir le code, la fermeture, ou l'expiration.
-fn poll_gog_code(app: &tauri::AppHandle, max_secs: u32) -> Option<String> {
-    for _ in 0..max_secs {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        match read_gog_code_on_main(app) {
-            CodeRead::Closed => return None,
-            CodeRead::Found(code) => return Some(code),
-            CodeRead::Pending => {}
-        }
-    }
-    None
+    url.query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())
 }
 
 /// Ouvre la fenêtre de connexion GOG officielle (OAuth) et échange le code
 /// obtenu contre un refresh token stocké localement. Pas de clé, pas de mot de
-/// passe transmis à Ludo. `async` pour ne pas bloquer le rendu de la WebView.
+/// passe transmis à Torii. `async` pour ne pas bloquer le rendu de la WebView.
 #[tauri::command]
 async fn connect_gog(app: tauri::AppHandle) -> Result<Settings, String> {
-    let builder_app = app.clone();
-    app.run_on_main_thread(move || {
-        if let Some(win) = builder_app.get_webview_window(GOG_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-        let url = tauri::WebviewUrl::External(GOG_AUTH_URL.parse().unwrap());
-        let _ = tauri::WebviewWindowBuilder::new(&builder_app, GOG_LOGIN_LABEL, url)
-            .title("Connexion GOG")
-            .inner_size(500.0, 740.0)
-            // Les logins sociaux GOG (Google, Steam, Discord…) s'ouvrent via
-            // `window.open` : sans ce handler, la popup est ignorée et le clic ne
-            // fait rien. On autorise WebView2 à créer la fenêtre (session partagée).
-            .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Allow)
-            .build();
-    })
-    .map_err(|e| e.to_string())?;
+    open_login_window(
+        &app,
+        GOG_LOGIN_LABEL,
+        "Connexion GOG",
+        GOG_AUTH_URL,
+        (500.0, 740.0),
+        None,
+        |_title| {},
+    )?;
 
     let poll_app = app.clone();
-    let code = tauri::async_runtime::spawn_blocking(move || poll_gog_code(&poll_app, 180))
-        .await
-        .map_err(|e| e.to_string())?;
+    let code = tauri::async_runtime::spawn_blocking(move || {
+        poll_login_window(&poll_app, GOG_LOGIN_LABEL, 180, gog_code)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
 
-    let closing_app = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = closing_app.get_webview_window(GOG_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-    });
+    close_login_window(&app, GOG_LOGIN_LABEL);
 
     let Some(code) = code else {
         return Err("Connexion GOG non détectée (délai dépassé ou fenêtre fermée).".into());
     };
-    let tokens =
-        accounts::gog::exchange_code(&code).ok_or("Échec de l'échange du code GOG.")?;
+    let tokens = accounts::gog::exchange_code(&code).ok_or("Échec de l'échange du code GOG.")?;
 
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let mut creds = accounts::secrets::load(&dir);
@@ -432,12 +513,10 @@ async fn connect_gog(app: tauri::AppHandle) -> Result<Settings, String> {
 /// Déconnecte GOG (efface le refresh token).
 #[tauri::command]
 fn disconnect_gog(app: tauri::AppHandle) -> Result<Settings, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let mut creds = accounts::secrets::load(&dir);
-    creds.gog_refresh_token = None;
-    accounts::secrets::save(&dir, &creds)?;
-    Ok(Settings::from_creds(&creds, &dir))
+    forget_credentials(&app, |c| c.gog_refresh_token = None)
 }
+
+// --- Epic ----------------------------------------------------------------------
 
 const EPIC_LOGIN_LABEL: &str = "epic-login";
 
@@ -467,65 +546,32 @@ const EPIC_CAPTURE_JS: &str = r#"
 /// d'autorisation via le titre de la page, puis l'échange contre un refresh token.
 #[tauri::command]
 async fn connect_epic(app: tauri::AppHandle) -> Result<Settings, String> {
-    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    let (rx, on_title) = capture_channel("ludo-epic:");
 
-    let builder_app = app.clone();
-    app.run_on_main_thread(move || {
-        if let Some(win) = builder_app.get_webview_window(EPIC_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-        let url = tauri::WebviewUrl::External(accounts::epic::login_url().parse().unwrap());
-        let _ = tauri::WebviewWindowBuilder::new(&builder_app, EPIC_LOGIN_LABEL, url)
-            .title("Connexion Epic Games")
-            .inner_size(500.0, 740.0)
-            .initialization_script(EPIC_CAPTURE_JS)
-            .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Allow)
-            .on_document_title_changed(move |_win, title| {
-                if let Some(code) = title.strip_prefix("ludo-epic:") {
-                    let _ = tx.send(code.to_string());
-                }
-            })
-            .build();
-    })
-    .map_err(|e| e.to_string())?;
+    open_login_window(
+        &app,
+        EPIC_LOGIN_LABEL,
+        "Connexion Epic Games",
+        &accounts::epic::login_url(),
+        (500.0, 740.0),
+        Some(EPIC_CAPTURE_JS),
+        on_title,
+    )?;
 
     // Attend le code (via le canal) ou la fermeture de la fenêtre, jusqu'à ~3 min.
     let poll_app = app.clone();
     let code = tauri::async_runtime::spawn_blocking(move || {
-        for _ in 0..180 {
-            if let Ok(code) = rx.try_recv() {
-                return Some(code);
-            }
-            let (tx2, rx2) = std::sync::mpsc::channel();
-            let inner = poll_app.clone();
-            let _ = poll_app.run_on_main_thread(move || {
-                let _ = tx2.send(inner.get_webview_window(EPIC_LOGIN_LABEL).is_some());
-            });
-            let open = rx2
-                .recv_timeout(std::time::Duration::from_secs(2))
-                .unwrap_or(true);
-            if !open {
-                return None;
-            }
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
-        None
+        wait_for_capture(&poll_app, EPIC_LOGIN_LABEL, rx, 180)
     })
     .await
     .map_err(|e| e.to_string())?;
 
-    let closing_app = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = closing_app.get_webview_window(EPIC_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-    });
+    close_login_window(&app, EPIC_LOGIN_LABEL);
 
     let Some(code) = code else {
         return Err("Connexion Epic non détectée (délai dépassé ou fenêtre fermée).".into());
     };
-    let tokens =
-        accounts::epic::exchange_code(&code).ok_or("Échec de l'échange du code Epic.")?;
+    let tokens = accounts::epic::exchange_code(&code).ok_or("Échec de l'échange du code Epic.")?;
 
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let mut creds = accounts::secrets::load(&dir);
@@ -537,12 +583,10 @@ async fn connect_epic(app: tauri::AppHandle) -> Result<Settings, String> {
 /// Déconnecte Epic (efface le refresh token).
 #[tauri::command]
 fn disconnect_epic(app: tauri::AppHandle) -> Result<Settings, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let mut creds = accounts::secrets::load(&dir);
-    creds.epic_refresh_token = None;
-    accounts::secrets::save(&dir, &creds)?;
-    Ok(Settings::from_creds(&creds, &dir))
+    forget_credentials(&app, |c| c.epic_refresh_token = None)
 }
+
+// --- EA ------------------------------------------------------------------------
 
 const EA_LOGIN_LABEL: &str = "ea-login";
 
@@ -587,61 +631,29 @@ const EA_CAPTURE_JS: &str = r#"
 /// récupère la bibliothèque possédée (API Juno) et la met en cache sur disque.
 #[tauri::command]
 async fn connect_ea(app: tauri::AppHandle) -> Result<Settings, String> {
-    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    let (rx, on_title) = capture_channel("ludo-ea:");
 
-    let builder_app = app.clone();
-    app.run_on_main_thread(move || {
-        if let Some(win) = builder_app.get_webview_window(EA_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-        // On démarre sur l'endpoint token (prompt=none) : si la session existe déjà
-        // (reconnexion) → token direct, sinon le JS redirige vers le login.
-        let url = tauri::WebviewUrl::External(accounts::ea::TOKEN_ENDPOINT.parse().unwrap());
-        let _ = tauri::WebviewWindowBuilder::new(&builder_app, EA_LOGIN_LABEL, url)
-            .title("Connexion EA")
-            .inner_size(500.0, 760.0)
-            .initialization_script(EA_CAPTURE_JS)
-            .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Allow)
-            .on_document_title_changed(move |_win, title| {
-                if let Some(tok) = title.strip_prefix("ludo-ea:") {
-                    let _ = tx.send(tok.to_string());
-                }
-            })
-            .build();
-    })
-    .map_err(|e| e.to_string())?;
+    // On démarre sur l'endpoint token (prompt=none) : si la session existe déjà
+    // (reconnexion) → token direct, sinon le JS redirige vers le login.
+    open_login_window(
+        &app,
+        EA_LOGIN_LABEL,
+        "Connexion EA",
+        accounts::ea::TOKEN_ENDPOINT,
+        (500.0, 760.0),
+        Some(EA_CAPTURE_JS),
+        on_title,
+    )?;
 
     // Attend le token (via le canal) ou la fermeture de la fenêtre, jusqu'à ~3 min.
     let poll_app = app.clone();
     let token = tauri::async_runtime::spawn_blocking(move || {
-        for _ in 0..180 {
-            if let Ok(tok) = rx.try_recv() {
-                return Some(tok);
-            }
-            let (tx2, rx2) = std::sync::mpsc::channel();
-            let inner = poll_app.clone();
-            let _ = poll_app.run_on_main_thread(move || {
-                let _ = tx2.send(inner.get_webview_window(EA_LOGIN_LABEL).is_some());
-            });
-            let open = rx2
-                .recv_timeout(std::time::Duration::from_secs(2))
-                .unwrap_or(true);
-            if !open {
-                return None;
-            }
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
-        None
+        wait_for_capture(&poll_app, EA_LOGIN_LABEL, rx, 180)
     })
     .await
     .map_err(|e| e.to_string())?;
 
-    let closing_app = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = closing_app.get_webview_window(EA_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-    });
+    close_login_window(&app, EA_LOGIN_LABEL);
 
     let Some(token) = token else {
         return Err("Connexion EA non détectée (délai dépassé ou fenêtre fermée).".into());
@@ -657,8 +669,7 @@ async fn connect_ea(app: tauri::AppHandle) -> Result<Settings, String> {
     }
     accounts::ea::save_library(&dir, &games);
 
-    let creds = accounts::secrets::load(&dir);
-    Ok(Settings::from_creds(&creds, &dir))
+    Ok(settings_from_disk(&dir))
 }
 
 /// Déconnecte EA : supprime le snapshot en cache ET efface la session web EA (ouvre
@@ -668,105 +679,79 @@ async fn disconnect_ea(app: tauri::AppHandle) -> Result<Settings, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     accounts::ea::disconnect(&dir);
 
-    // Ouvre la page de logout EA (efface le cookie de session côté webview).
-    let open_app = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = open_app.get_webview_window(EA_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-        // Page de déconnexion utilisateur EA (efface la session sans paramètre OAuth ;
-        // `connect/logout` exigeait un redirect_uri enregistré → erreur 102111).
-        let logout = "https://www.ea.com/logout";
-        if let Ok(url) = logout.parse() {
-            let _ = tauri::WebviewWindowBuilder::new(
-                &open_app,
-                EA_LOGIN_LABEL,
-                tauri::WebviewUrl::External(url),
-            )
-            .title("Déconnexion EA")
-            .inner_size(440.0, 320.0)
-            .build();
-        }
-    });
+    // Page de déconnexion utilisateur EA (efface la session sans paramètre OAuth ;
+    // `connect/logout` exigeait un redirect_uri enregistré → erreur 102111).
+    let _ = open_login_window(
+        &app,
+        EA_LOGIN_LABEL,
+        "Déconnexion EA",
+        "https://www.ea.com/logout",
+        (440.0, 320.0),
+        None,
+        |_title| {},
+    );
 
     // Laisse le logout s'exécuter, puis referme la fenêtre.
     let close_app = app.clone();
     let _ = tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(std::time::Duration::from_secs(4));
-        let inner = close_app.clone();
-        let _ = close_app.run_on_main_thread(move || {
-            if let Some(win) = inner.get_webview_window(EA_LOGIN_LABEL) {
-                let _ = win.close();
-            }
-        });
+        close_login_window(&close_app, EA_LOGIN_LABEL);
     })
     .await;
 
-    let creds = accounts::secrets::load(&dir);
-    Ok(Settings::from_creds(&creds, &dir))
+    Ok(settings_from_disk(&dir))
 }
+
+// --- Battle.net ----------------------------------------------------------------
 
 const BNET_LOGIN_LABEL: &str = "battlenet-login";
 
-/// Lit **tous** les cookies de `account.battle.net` dans la fenêtre de login (thread
-/// principal, requis par WebView2) et les assemble en header `Cookie`. `None` si la
-/// fenêtre est fermée ; `Some("")` tant qu'aucun cookie n'est encore posé.
-fn read_bnet_cookies(app: &tauri::AppHandle) -> Option<String> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    let inner = app.clone();
-    let posted = app.run_on_main_thread(move || {
-        let header = inner.get_webview_window(BNET_LOGIN_LABEL).map(|win| {
-            let url: tauri::Url = "https://account.battle.net".parse().unwrap();
-            win.cookies_for_url(url)
-                .map(|cookies| {
-                    cookies
-                        .iter()
-                        .map(|c| format!("{}={}", c.name(), c.value()))
-                        .collect::<Vec<_>>()
-                        .join("; ")
-                })
-                .unwrap_or_default()
-        });
-        let _ = tx.send(header);
-    });
-    if posted.is_err() {
-        return None;
-    }
-    rx.recv_timeout(std::time::Duration::from_secs(3))
-        .unwrap_or(Some(String::new()))
+/// Assemble **tous** les cookies de `account.battle.net` en header `Cookie`.
+/// Chaîne vide tant qu'aucun cookie n'est encore posé.
+fn bnet_cookie_header(win: &tauri::WebviewWindow) -> Option<String> {
+    let url: tauri::Url = "https://account.battle.net".parse().ok()?;
+    let header = win
+        .cookies_for_url(url)
+        .map(|cookies| {
+            cookies
+                .iter()
+                .map(|c| format!("{}={}", c.name(), c.value()))
+                .collect::<Vec<_>>()
+                .join("; ")
+        })
+        .unwrap_or_default();
+    Some(header)
 }
 
 /// Ouvre la fenêtre de connexion Battle.net ; une fois connecté, lit les cookies de
 /// session et récupère la bibliothèque possédée (`games-and-subs`), mise en cache disque.
 #[tauri::command]
 async fn connect_battlenet(app: tauri::AppHandle) -> Result<Settings, String> {
-    let builder_app = app.clone();
-    app.run_on_main_thread(move || {
-        if let Some(win) = builder_app.get_webview_window(BNET_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-        let url = tauri::WebviewUrl::External("https://account.battle.net/".parse().unwrap());
-        let _ = tauri::WebviewWindowBuilder::new(&builder_app, BNET_LOGIN_LABEL, url)
-            .title("Connexion Battle.net")
-            .inner_size(520.0, 760.0)
-            .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Allow)
-            .build();
-    })
-    .map_err(|e| e.to_string())?;
+    open_login_window(
+        &app,
+        BNET_LOGIN_LABEL,
+        "Connexion Battle.net",
+        "https://account.battle.net/",
+        (520.0, 760.0),
+        None,
+        |_title| {},
+    )?;
 
     // Sonde les cookies puis tente l'API jusqu'à obtenir des jeux (= connecté), ~3 min.
+    // L'appel réseau reste sur ce thread : seule la lecture des cookies passe par le
+    // thread principal.
     let poll_app = app.clone();
     let games = tauri::async_runtime::spawn_blocking(move || {
         for _ in 0..90 {
-            match read_bnet_cookies(&poll_app) {
-                None => return None, // fenêtre fermée
-                Some(header) if !header.is_empty() => {
+            match probe_login_window(&poll_app, BNET_LOGIN_LABEL, bnet_cookie_header) {
+                Probe::Closed => return None, // fenêtre fermée
+                Probe::Found(header) if !header.is_empty() => {
                     let games = accounts::battlenet::fetch_library(&header);
                     if !games.is_empty() {
                         return Some(games);
                     }
                 }
-                Some(_) => {}
+                _ => {}
             }
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
@@ -775,12 +760,7 @@ async fn connect_battlenet(app: tauri::AppHandle) -> Result<Settings, String> {
     .await
     .map_err(|e| e.to_string())?;
 
-    let closing_app = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = closing_app.get_webview_window(BNET_LOGIN_LABEL) {
-            let _ = win.close();
-        }
-    });
+    close_login_window(&app, BNET_LOGIN_LABEL);
 
     let Some(games) = games else {
         return Err("Connexion Battle.net non détectée (délai dépassé ou fenêtre fermée).".into());
@@ -788,8 +768,7 @@ async fn connect_battlenet(app: tauri::AppHandle) -> Result<Settings, String> {
 
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     accounts::battlenet::save_library(&dir, &games);
-    let creds = accounts::secrets::load(&dir);
-    Ok(Settings::from_creds(&creds, &dir))
+    Ok(settings_from_disk(&dir))
 }
 
 /// Déconnecte Battle.net (supprime le snapshot en cache).
@@ -797,34 +776,7 @@ async fn connect_battlenet(app: tauri::AppHandle) -> Result<Settings, String> {
 fn disconnect_battlenet(app: tauri::AppHandle) -> Result<Settings, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     accounts::battlenet::disconnect(&dir);
-    let creds = accounts::secrets::load(&dir);
-    Ok(Settings::from_creds(&creds, &dir))
-}
-
-/// Une jaquette résolue pour un jeu (renvoyée au front pour fusion réactive).
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CoverUpdate {
-    id: String,
-    cover_url: String,
-}
-
-/// Remplit les jaquettes manquantes de TOUTE la bibliothèque (n'importe quel launcher)
-/// via une recherche Steam Store par titre (publique, sans clé), mise en cache disque.
-/// Renvoie les jaquettes résolues ; le front les applique de façon réactive à la grille.
-#[tauri::command]
-async fn enrich_covers(app: tauri::AppHandle) -> Result<Vec<CoverUpdate>, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let updates = tauri::async_runtime::spawn_blocking(move || {
-        let games = platforms::scan_all(Some(&dir));
-        metadata::fill_covers(&games, &dir)
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-    Ok(updates
-        .into_iter()
-        .map(|(id, cover_url)| CoverUpdate { id, cover_url })
-        .collect())
+    Ok(settings_from_disk(&dir))
 }
 
 /// Métadonnée IGDB résolue pour un jeu (renvoyée au front pour fusion réactive).
@@ -864,9 +816,22 @@ impl MetaUpdate {
 #[tauri::command]
 async fn enrich_igdb(app: tauri::AppHandle) -> Result<Vec<MetaUpdate>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    // Réutilise le scan que `scan_library` vient de faire : re-scanner ici rejouerait
+    // toute la séquence réseau des comptes (cf. LastScan). Repli sur un scan si l'état
+    // est vide (commande appelée sans scan préalable).
+    let scanned = app
+        .state::<LastScan>()
+        .0
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default();
     let emitter = app.clone();
     let updates = tauri::async_runtime::spawn_blocking(move || {
-        let games = platforms::scan_all(Some(&dir));
+        let games = if scanned.is_empty() {
+            platforms::scan_all(Some(&dir))
+        } else {
+            scanned
+        };
         metadata::igdb::fill_metadata(&games, &dir, |batch| {
             let ups: Vec<MetaUpdate> = batch
                 .iter()
@@ -883,23 +848,39 @@ async fn enrich_igdb(app: tauri::AppHandle) -> Result<Vec<MetaUpdate>, String> {
         .collect())
 }
 
-/// Boutique — vitrine : une page de jeux mis en avant / en promo (CheapShark),
-/// selon le tri (`featured`, `savings`, `price`, `recent`, `rating`). Découverte
-/// pure : indépendant de la bibliothèque de l'utilisateur.
+/// Revendeurs masqués par l'utilisateur (vide si le dossier de config est illisible).
+fn excluded_stores(app: &tauri::AppHandle) -> std::collections::HashSet<String> {
+    app.path()
+        .app_config_dir()
+        .map(|dir| platforms::id_set::EXCLUDED_STORES.load(&dir))
+        .unwrap_or_default()
+}
+
+/// Boutique — vitrine : une page de jeux mis en avant / en promo (ITAD), selon le tri
+/// (`featured`, `savings`, `price`, `recent`, `rating`). Découverte pure : indépendant
+/// de la bibliothèque de l'utilisateur. Les revendeurs masqués sont écartés du choix
+/// de la meilleure offre.
 #[tauri::command]
 async fn store_deals(
+    app: tauri::AppHandle,
     page: u32,
     sort: String,
 ) -> Result<Vec<metadata::store::StoreItem>, String> {
-    tauri::async_runtime::spawn_blocking(move || metadata::store::deals(page, &sort))
+    let excluded = excluded_stores(&app);
+    tauri::async_runtime::spawn_blocking(move || metadata::store::deals(page, &sort, &excluded))
         .await
         .map_err(|e| e.to_string())
 }
 
-/// Boutique — recherche de jeux par titre (renvoie le prix le plus bas de chacun).
+/// Boutique — recherche de jeux par titre (renvoie le prix le plus bas de chacun,
+/// hors revendeurs masqués).
 #[tauri::command]
-async fn store_search(query: String) -> Result<Vec<metadata::store::StoreItem>, String> {
-    tauri::async_runtime::spawn_blocking(move || metadata::store::search(&query))
+async fn store_search(
+    app: tauri::AppHandle,
+    query: String,
+) -> Result<Vec<metadata::store::StoreItem>, String> {
+    let excluded = excluded_stores(&app);
+    tauri::async_runtime::spawn_blocking(move || metadata::store::search(&query, &excluded))
         .await
         .map_err(|e| e.to_string())
 }
@@ -968,37 +949,23 @@ async fn steam_current_players(appid: u64) -> Result<Option<u32>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Wishlist Steam enrichie de prix (ITAD) : meilleur prix actuel + plus bas historique
-/// par jeu. Vide si Steam n'est pas connecté.
-#[tauri::command]
-async fn steam_wishlist(
-    app: tauri::AppHandle,
-) -> Result<Vec<metadata::store::WishlistItem>, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let appids = accounts::steam_wishlist_appids(&dir);
-        metadata::store::wishlist(&appids)
-    })
-    .await
-    .map_err(|e| e.to_string())
-}
-
 /// Wishlist **unifiée** : wishlist Steam native ∪ wishlist Torii (universelle, tout jeu),
 /// dédupliquée et enrichie de prix (ITAD). Les entrées Torius déjà présentes sur Steam
 /// (même appid) ne sont pas doublées.
 #[tauri::command]
 async fn wishlist_all(app: tauri::AppHandle) -> Result<Vec<metadata::store::WishlistItem>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let excluded = excluded_stores(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let steam_appids = accounts::steam_wishlist_appids(&dir);
         let steam_set: std::collections::HashSet<u64> = steam_appids.iter().copied().collect();
-        let mut items = metadata::store::wishlist(&steam_appids);
+        let mut items = metadata::store::wishlist(&steam_appids, &excluded);
         let extra: Vec<(String, u64, String, Option<String>)> = platforms::wishlist::load(&dir)
             .into_iter()
             .filter(|e| e.steam_appid.map_or(true, |a| !steam_set.contains(&a)))
             .map(|e| (e.id, e.steam_appid.unwrap_or(0), e.title, e.cover_url))
             .collect();
-        items.extend(metadata::store::wishlist_custom(&extra));
+        items.extend(metadata::store::wishlist_custom(&extra, &excluded));
         items
     })
     .await
@@ -1136,34 +1103,48 @@ fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
 }
 
 /// Agrège toutes les bibliothèques détectées (Steam, Epic, GOG, manuel).
+/// ⚠️ `async` + `spawn_blocking` obligatoires : une commande synchrone s'exécute sur le
+/// **thread principal** (cf. `body_blocking` de `tauri-macros`), donc tout le scan
+/// (registre + réseau des comptes) y bloquerait la boucle d'événements — fenêtre figée,
+/// tray inerte. Même piège que `connect_steam`.
 #[tauri::command]
-fn scan_library(app: tauri::AppHandle) -> Vec<GameDto> {
+async fn scan_library(app: tauri::AppHandle) -> Vec<GameDto> {
     let config_dir = app.path().app_config_dir().ok();
-    platforms::scan_all(config_dir.as_deref())
+    let games = tauri::async_runtime::spawn_blocking(move || {
+        let games = platforms::scan_all(config_dir.as_deref());
+        // Mémorisé sur disque : le prochain démarrage affiche cette liste tout de
+        // suite, sans attendre le réseau des comptes (cf. `cached_library`).
+        if let Some(dir) = config_dir.as_deref() {
+            platforms::library_cache::save(dir, &games);
+        }
+        games
+    })
+    .await
+    .unwrap_or_default();
+    // Mémorisé pour `enrich_igdb` (évite un second scan complet, cf. LastScan).
+    if let Ok(mut slot) = app.state::<LastScan>().0.lock() {
+        *slot = games.clone();
+    }
+    games
 }
 
-/// Scanne puis enrichit chaque jeu avec des métadonnées en ligne (cache disque).
-/// Plus lent que `scan_library` : à appeler en arrière-plan après l'affichage.
+/// Bibliothèque du dernier scan, relue du disque : instantanée, sans aucun accès
+/// réseau. Sert à peupler l'écran dès le lancement pendant que `scan_library`
+/// travaille en arrière-plan. Vide au tout premier lancement.
 #[tauri::command]
-fn enrich_metadata(app: tauri::AppHandle) -> Result<Vec<GameDto>, String> {
-    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let mut games = platforms::scan_all(Some(&config_dir));
-    let emitter = app.clone();
-    metadata::enrich(&mut games, &config_dir, move |done, total| {
-        let _ = emitter.emit("enrich-progress", EnrichProgress { done, total });
-    });
-    // On écarte les non-jeux (DLC, bandes-son, vidéos…) une fois leur type connu,
-    // sauf s'ils sont installés (ex: une démo installée reste visible).
-    games.retain(|g| {
-        g.installed || g.app_type.as_deref().map_or(true, |t| t == "game")
-    });
-    Ok(games)
+async fn cached_library(app: tauri::AppHandle) -> Vec<GameDto> {
+    let Ok(dir) = app.path().app_config_dir() else {
+        return Vec::new();
+    };
+    tauri::async_runtime::spawn_blocking(move || platforms::library_cache::load(&dir))
+        .await
+        .unwrap_or_default()
 }
 
 /// Enrichit **un seul** jeu à la demande (à l'ouverture de sa vue détail) :
 /// description, captures, développeur, année, genre. Résultat mis en cache disque.
 #[tauri::command]
-fn enrich_game(
+async fn enrich_game(
     app: tauri::AppHandle,
     id: String,
     platform: String,
@@ -1180,7 +1161,10 @@ fn enrich_game(
         installed,
         ..Default::default()
     };
-    Ok(metadata::enrich_one(&game, &dir))
+    // Jusqu'à deux appels réseau (fiche + taille steamcmd) : hors thread principal.
+    tauri::async_runtime::spawn_blocking(move || metadata::enrich_one(&game, &dir))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Masque ou réaffiche un jeu (liste d'exclusion) ; renvoie la liste des ids masqués.
@@ -1191,7 +1175,7 @@ fn set_game_hidden(
     hidden: bool,
 ) -> Result<Vec<String>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    platforms::hidden::set(&dir, &id, hidden)
+    platforms::id_set::HIDDEN.set(&dir, &id, hidden)
 }
 
 /// Épingle ou retire un jeu des favoris ; renvoie la liste des ids favoris à jour.
@@ -1202,14 +1186,14 @@ fn set_game_favorite(
     favorite: bool,
 ) -> Result<Vec<String>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    platforms::favorites::set(&dir, &id, favorite)
+    platforms::id_set::FAVORITES.set(&dir, &id, favorite)
 }
 
 /// Renvoie la liste des boutiques masquées par l'utilisateur (revendeurs exclus).
 #[tauri::command]
 fn get_excluded_stores(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let mut list: Vec<String> = platforms::excluded_stores::load(&dir).into_iter().collect();
+    let mut list: Vec<String> = platforms::id_set::EXCLUDED_STORES.load(&dir).into_iter().collect();
     list.sort();
     Ok(list)
 }
@@ -1222,14 +1206,14 @@ fn set_store_excluded(
     excluded: bool,
 ) -> Result<Vec<String>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    platforms::excluded_stores::set(&dir, &name, excluded)
+    platforms::id_set::EXCLUDED_STORES.set(&dir, &name, excluded)
 }
 
 /// Réaffiche toutes les boutiques (vide la liste d'exclusion) ; renvoie la liste vide.
 #[tauri::command]
 fn clear_excluded_stores(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    platforms::excluded_stores::clear(&dir)
+    platforms::id_set::EXCLUDED_STORES.clear(&dir)
 }
 
 /// Lance un jeu selon sa plateforme et sa cible.
@@ -1286,6 +1270,17 @@ fn uninstall_game(
 fn add_manual_game(app: tauri::AppHandle, input: ManualInput) -> Result<Vec<GameDto>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     platforms::manual::add(&dir, input)
+}
+
+/// Met à jour un jeu manuel existant (édition depuis sa fiche).
+#[tauri::command]
+fn update_manual_game(
+    app: tauri::AppHandle,
+    id: String,
+    input: ManualInput,
+) -> Result<Vec<GameDto>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::manual::update(&dir, &id, input)
 }
 
 /// Retire un jeu manuel par son id.
@@ -1455,6 +1450,7 @@ fn reveal_window(app: &tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(LastScan::default())
         // ⚠️ DOIT être enregistré en premier. Empêche une 2e instance : quand l'app
         // tourne déjà (ex. réduite dans le tray via « fermer dans la zone de notification »)
         // et qu'on la relance, la nouvelle instance se ferme et la fenêtre existante est
@@ -1468,6 +1464,8 @@ pub fn run() {
             let _ = handle.run_on_main_thread(move || reveal_window(&inner));
         }))
         .plugin(tauri_plugin_opener::init())
+        // Sélecteurs de fichiers natifs (exécutable + jaquette d'un jeu manuel).
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
@@ -1507,7 +1505,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             scan_library,
-            enrich_metadata,
+            cached_library,
             enrich_game,
             set_game_hidden,
             set_game_favorite,
@@ -1520,6 +1518,7 @@ pub fn run() {
             uninstall_game,
             open_install_dir,
             add_manual_game,
+            update_manual_game,
             remove_manual_game,
             connect_steam,
             disconnect_steam,
@@ -1531,7 +1530,6 @@ pub fn run() {
             disconnect_ea,
             connect_battlenet,
             disconnect_battlenet,
-            enrich_covers,
             enrich_igdb,
             store_deals,
             store_search,
@@ -1541,7 +1539,6 @@ pub fn run() {
             steam_me,
             steam_achievements,
             steam_current_players,
-            steam_wishlist,
             wishlist_all,
             wishlist_ids,
             wishlist_add,

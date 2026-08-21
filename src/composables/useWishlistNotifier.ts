@@ -14,20 +14,24 @@ const { prefs } = usePreferences();
  * Le contrôle tourne tant que Torii est ouvert (y compris réduit dans le tray), au
  * démarrage puis toutes les 6 h. Nécessite une session Steam connectée.
  */
-const MAP_KEY = "ludo-wishlist-notif";
-const SEEDED_KEY = "ludo-wishlist-notif-seeded";
+// v2 : les prix suivis sont désormais indexés par identifiant ITAD (`gameId`) et non
+// plus par `appId` — les jeux de la wishlist Torii absents de Steam ont tous `appId = 0`
+// et partageaient donc la même entrée de suivi. Clés bumpées pour repartir propre (et
+// pour que l'amorçage silencieux soit rejoué, sinon la 1re passe notifierait tout).
+const MAP_KEY = "ludo-wishlist-notif-v2";
+const SEEDED_KEY = "ludo-wishlist-notif-seeded-v2";
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 h
 const FIRST_DELAY_MS = 30 * 1000; // laisse l'app/session s'initialiser
 
-function loadMap(): Record<number, number> {
+function loadMap(): Record<string, number> {
   try {
     const raw = localStorage.getItem(MAP_KEY);
-    return raw ? (JSON.parse(raw) as Record<number, number>) : {};
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
   } catch {
     return {};
   }
 }
-function saveMap(m: Record<number, number>) {
+function saveMap(m: Record<string, number>) {
   try {
     localStorage.setItem(MAP_KEY, JSON.stringify(m));
   } catch {
@@ -49,13 +53,16 @@ async function check() {
 
     for (const it of items) {
       if (it.price == null) continue;
+      // Identifiant de suivi : l'id ITAD quand il existe, sinon l'appid Steam.
+      const key = it.gameId || (it.appId ? `steam:${it.appId}` : "");
+      if (!key) continue;
       const isDeal =
         it.savings > 0 || (it.historyLow != null && it.price <= it.historyLow * 1.01);
-      const last = map[it.appId];
+      const last = map[key];
       if (!isDeal) {
         // La promo est terminée : on réinitialise pour re-notifier à la prochaine.
         if (last != null) {
-          delete map[it.appId];
+          delete map[key];
           changed = true;
         }
         continue;
@@ -63,7 +70,7 @@ async function check() {
       // Nouveau deal, ou prix plus bas que le dernier notifié.
       if (last == null || it.price < last - 0.01) {
         if (seeded) toNotify.push({ title: it.title, price: it.price, savings: it.savings });
-        map[it.appId] = it.price;
+        map[key] = it.price;
         changed = true;
       }
     }

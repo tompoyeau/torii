@@ -26,6 +26,8 @@ interface UiState {
   settingsCategory: SettingsCategory;
   /** Modale « Ajouter un jeu manuellement » ouverte. */
   addGameOpen: boolean;
+  /** id du jeu manuel édité dans cette modale, ou null = création. */
+  editGameId: string | null;
   /** id du jeu ouvert dans la vue détail, ou null. */
   selectedGameId: string | null;
 }
@@ -43,6 +45,7 @@ const state = reactive<UiState>({
   settingsOpen: false,
   settingsCategory: "general",
   addGameOpen: false,
+  editGameId: null,
   selectedGameId: null,
 });
 
@@ -135,7 +138,15 @@ export function useUi() {
     },
     setSettingsCategory: (category: SettingsCategory) => (state.settingsCategory = category),
     closeSettings: () => (state.settingsOpen = false),
-    openAddGame: () => (state.addGameOpen = true),
+    openAddGame: () => {
+      state.editGameId = null;
+      state.addGameOpen = true;
+    },
+    /** Ouvre la même modale, pré-remplie, pour corriger un jeu manuel existant. */
+    openEditGame: (id: string) => {
+      state.editGameId = id;
+      state.addGameOpen = true;
+    },
     closeAddGame: () => (state.addGameOpen = false),
     openGame: (id: string) => (state.selectedGameId = id),
     closeGame: () => (state.selectedGameId = null),

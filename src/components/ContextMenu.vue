@@ -7,7 +7,7 @@ import { openInstallDir, uninstallGame } from "../lib/tauri";
 
 const { ctx, closeContext } = useContextMenu();
 const { setFavorite, setHidden, removeManual, launchOrInstall } = useLibrary();
-const { openGame } = useUi();
+const { openGame, openEditGame } = useUi();
 
 const menuEl = ref<HTMLElement | null>(null);
 // Position réellement appliquée (le clic sert d'ancrage, puis on rabat le menu
@@ -57,6 +57,11 @@ async function onUninstall() {
 }
 function onDetail() {
   if (game.value) openGame(game.value.id);
+  closeContext();
+}
+/** Jeu ajouté à la main : ouvre la modale pré-remplie pour corriger ses informations. */
+function onEdit() {
+  if (game.value) openEditGame(game.value.id);
   closeContext();
 }
 function onOpenFolder() {
@@ -115,6 +120,10 @@ onBeforeUnmount(() => {
       </button>
       <template v-if="isManual || game.installed">
         <div class="ctx-sep" />
+        <button v-if="isManual" class="ctx-item" @click="onEdit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z" /><path d="M14.5 7.5 16.5 9.5" /></svg>
+          <span>Modifier les informations</span>
+        </button>
         <button class="ctx-item danger" @click="onUninstall">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6M10 11v6M14 11v6" /></svg>
           <span>{{ isManual ? "Retirer de la bibliothèque" : "Désinstaller" }}</span>

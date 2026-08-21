@@ -6,7 +6,7 @@ fn main() {
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
     println!("=== Vitrine (mises en avant, page 0) ===");
-    let items = ludo_lib::metadata::store::deals(0, "featured");
+    let items = ludo_lib::metadata::store::deals(0, "featured", &Default::default());
     println!("{} jeux\n", items.len());
     for it in items.iter().take(6) {
         println!(
@@ -16,7 +16,7 @@ fn main() {
     }
 
     println!("\n=== Recherche « witcher » ===");
-    let res = ludo_lib::metadata::store::search("witcher");
+    let res = ludo_lib::metadata::store::search("witcher", &Default::default());
     println!("{} résultats\n", res.len());
     for it in res.iter().take(6) {
         println!("  {:<40} {:>6.2}€  id={}", trunc(&it.title, 40), it.price, it.game_id);
