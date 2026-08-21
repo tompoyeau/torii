@@ -47,7 +47,8 @@ jobs:
             echo "__NOTES_EOF__"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build, signature et publication de la Release
+      - name: Build, signature et dépôt des fichiers (en brouillon)
+        id: publier
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,5 +59,49 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Torii ${{ github.ref_name }}"
           releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: false
+          # 🔑 Brouillon d'abord. Une Release en brouillon n'est jamais « latest » :
+          # tant que l'envoi des fichiers n'est pas terminé, l'updater de tout le monde
+          # continue de pointer vers la version précédente, qui elle est complète.
+          releaseDraft: true
           prerelease: false
+
+      # 🔑 Le garde-fou. En 0.12.0, l'envoi des fichiers a été coupé en plein vol
+      # (« other side closed ») : la Release est restée vide, elle est quand même
+      # devenue « latest », et l'updater de tous les joueurs s'est mis à pointer vers
+      # rien. On ne rend donc publique qu'après avoir vérifié que CHAQUE fichier
+      # construit est bien arrivé — le manifeste `latest.json` compris, puisque c'est
+      # lui que l'application interroge.
+      - name: Vérifier que tout est arrivé, puis publier
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          id="${{ steps.publier.outputs.releaseId }}"
+          if [ -z "$id" ]; then
+            echo "::error::tauri-action n'a pas renvoyé d'identifiant de Release."
+            exit 1
+          fi
+
+          # Ce qui a été construit ici, sur ce runner : c'est la seule référence honnête.
+          find src-tauri/target/release/bundle -type f \( -name '*-setup.exe' -o -name '*.msi' -o -name '*.sig' \) -exec basename {} \; | LC_ALL=C sort -u > attendus.txt
+          echo "latest.json" >> attendus.txt
+          LC_ALL=C sort -u -o attendus.txt attendus.txt
+
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${id}" --jq '.assets[].name' | LC_ALL=C sort -u > presents.txt
+
+          echo "Attendus :"; sed 's/^/  /' attendus.txt
+          echo "Présents :"; sed 's/^/  /' presents.txt
+
+          manquants=$(LC_ALL=C comm -23 attendus.txt presents.txt)
+          if [ -n "$manquants" ]; then
+            echo "::error::Fichiers manquants sur la Release :"
+            echo "$manquants"
+            echo "La Release reste EN BROUILLON : l'updater continue de servir la version"
+            echo "précédente, qui est complète. Relance ce job — tauri-action réutilise"
+            echo "le brouillon existant et renvoie les fichiers manquants."
+            exit 1
+          fi
+
+          url=$(gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" -F draft=false --jq '.html_url')
+          echo "Release complète et publiée : $url"
