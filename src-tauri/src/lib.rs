@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod metadata;
 pub mod models;
+pub mod procwatch;
 pub mod platforms;
 
 use models::{GameDto, GameMeta};
@@ -15,12 +16,6 @@ use tauri::{Emitter, Manager};
 /// liste des jeux doublait le trafic au démarrage et ouvrait une course sur le token GOG.
 #[derive(Default)]
 struct LastScan(std::sync::Mutex<Vec<GameDto>>);
-
-/// Émis quand un jeu suivi se ferme (→ le front ouvre sa fiche).
-#[derive(Clone, Serialize)]
-struct GameExited {
-    id: String,
-}
 
 /// État des connexions de comptes, exposé au frontend (sans secrets).
 #[derive(Serialize)]
@@ -1125,6 +1120,8 @@ async fn scan_library(app: tauri::AppHandle) -> Vec<GameDto> {
     if let Ok(mut slot) = app.state::<LastScan>().0.lock() {
         *slot = games.clone();
     }
+    // Un jeu installé depuis le dernier scan devient détectable immédiatement.
+    procwatch::set_targets(&app, &games);
     games
 }
 
@@ -1290,78 +1287,22 @@ fn remove_manual_game(app: tauri::AppHandle, id: String) -> Result<Vec<GameDto>,
     platforms::manual::remove(&dir, &id)
 }
 
-/// Arme le suivi d'une session de jeu : minimise Torii, attend l'apparition puis la
-/// disparition d'un process situé sous `install_dir` (le jeu), et à sa fermeture
-/// restaure la fenêtre au premier plan et émet `game-exited` (le front ouvre la fiche).
-/// Ne concerne que les jeux **installés lancés depuis Torii** (dossier connu).
+/// Option « revenir à la fermeture du jeu » : Torii se réduit, et la fiche du jeu sera
+/// rouverte quand la partie se termine.
+///
+/// La détection du process n'est plus faite ici : `procwatch` surveille déjà TOUS les
+/// jeux en continu, et bien moins cher. Cette commande ne fait donc que désigner le jeu
+/// dont la fermeture doit ramener la fenêtre au premier plan.
 #[tauri::command]
 fn start_game_watch(app: tauri::AppHandle, game_id: String, install_dir: String) {
-    let dir = std::path::PathBuf::from(&install_dir);
-    if !dir.is_dir() {
+    if !std::path::Path::new(&install_dir).is_dir() {
         return;
     }
+    procwatch::arm(&app, game_id);
     // Torii se réduit pendant la partie.
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.minimize();
     }
-    std::thread::spawn(move || game_watch_loop(app, game_id, dir));
-}
-
-/// `true` si un process en cours a son exécutable sous `dir` (le jeu tourne).
-fn process_running_in(sys: &sysinfo::System, dir: &std::path::Path) -> bool {
-    sys.processes()
-        .values()
-        .any(|p| p.exe().map(|e| e.starts_with(dir)).unwrap_or(false))
-}
-
-/// Boucle de surveillance d'une session (thread dédié).
-fn game_watch_loop(app: tauri::AppHandle, game_id: String, dir: std::path::PathBuf) {
-    use std::time::{Duration, Instant};
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
-
-    let mut sys = System::new();
-    let poll = Duration::from_secs(3);
-    let refresh = |sys: &mut System| {
-        sys.refresh_processes_specifics(
-            ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::new().with_exe(sysinfo::UpdateKind::Always),
-        );
-    };
-
-    // 1) Attendre que le jeu démarre (le launcher met quelques secondes) — max 2 min.
-    let start = Instant::now();
-    let mut seen = false;
-    while start.elapsed() < Duration::from_secs(120) {
-        std::thread::sleep(poll);
-        refresh(&mut sys);
-        if process_running_in(&sys, &dir) {
-            seen = true;
-            break;
-        }
-    }
-    // Lancement non détecté (exe hors dossier, échec…) : on ne force rien.
-    if !seen {
-        return;
-    }
-
-    // 2) Attendre la fermeture du jeu.
-    loop {
-        std::thread::sleep(poll);
-        refresh(&mut sys);
-        if !process_running_in(&sys, &dir) {
-            break;
-        }
-    }
-
-    // 3) Retour : restaurer, premier plan, agrandir, puis le front ouvre la fiche.
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.unminimize();
-        let _ = win.show();
-        let _ = win.set_focus();
-        let _ = win.maximize();
-    }
-    let _ = app.emit("game-exited", GameExited { id: game_id });
 }
 
 /// Préférences liées à la fenêtre, lues côté Rust (au démarrage et à la fermeture)
@@ -1451,6 +1392,7 @@ fn reveal_window(app: &tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(LastScan::default())
+        .manage(procwatch::Watch::default())
         // ⚠️ DOIT être enregistré en premier. Empêche une 2e instance : quand l'app
         // tourne déjà (ex. réduite dans le tray via « fermer dans la zone de notification »)
         // et qu'on la relance, la nouvelle instance se ferme et la fenêtre existante est
@@ -1478,6 +1420,9 @@ pub fn run() {
         .setup(|app| {
             // Icône dans la zone de notification (tray).
             build_tray(app)?;
+            // Détection des parties (y compris lancées hors de Torii) : un seul fil,
+            // qui dort la plupart du temps. Voir `procwatch` pour le coût mesuré.
+            procwatch::spawn(app.handle().clone());
             // La fenêtre est créée cachée (`visible:false`) pour éviter tout flash au
             // démarrage : on l'affiche seulement si « Démarrer minimisé » n'est PAS actif.
             // (Sinon elle reste dans le tray, sans clignotement.)

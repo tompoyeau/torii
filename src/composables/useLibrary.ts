@@ -253,17 +253,26 @@ export function useLibrary() {
     }
   }
 
-  async function markPlayed(id: string) {
-    const now = Math.floor(Date.now() / 1000);
+  /**
+   * Date la dernière session d'un jeu dans le store, sans rien persister : le backend
+   * l'a déjà fait. Sert au signal `game-launched` du surveillant de process, qui détecte
+   * aussi les parties lancées HORS de Torii.
+   */
+  function notePlayed(id: string, at: number) {
+    const when = at > 0 ? at : Math.floor(Date.now() / 1000);
     const idx = games.value.findIndex((g) => g.id === id);
-    if (idx !== -1) {
-      games.value[idx] = {
-        ...games.value[idx],
-        lastPlayedAt: now,
-        lastPlayed: relativeTime(now),
-        recent: true,
-      };
-    }
+    if (idx === -1 || (games.value[idx].lastPlayedAt ?? 0) >= when) return;
+    games.value[idx] = {
+      ...games.value[idx],
+      lastPlayedAt: when,
+      lastPlayed: relativeTime(when),
+      recent: true,
+    };
+  }
+
+  /** Clic sur « Jouer » : date la session tout de suite (le surveillant confirmera). */
+  async function markPlayed(id: string) {
+    notePlayed(id, Math.floor(Date.now() / 1000));
     await recordLaunch(id);
   }
 
@@ -291,6 +300,7 @@ export function useLibrary() {
     updateManual,
     removeManual,
     markPlayed,
+    notePlayed,
     launchOrInstall,
   };
 }

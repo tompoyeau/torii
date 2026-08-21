@@ -4,6 +4,11 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.11.0
+- **« Récemment joué » enfin juste** : Torii repère les parties lancées **depuis n'importe où** — Steam, le bureau, un raccourci — et plus seulement celles démarrées depuis Torii. Un jeu apparaît en tête de liste dans les secondes qui suivent, daté de l'heure réelle à laquelle il a démarré (et non de l'instant où Torii s'en aperçoit).
+- **Plus léger pendant que tu joues** : la surveillance des parties consomme désormais environ 140 fois moins qu'avant. Concrètement, elle est invisible pour les performances en jeu.
+- Un jeu déjà en cours au démarrage de Torii est daté correctement, au lieu de remonter en tête à chaque ouverture de l'application.
+
 ## 0.10.0
 - **Ajout à la wishlist Steam réparé** : ajouter un jeu depuis la Boutique le pousse enfin sur ta vraie wishlist Steam. L'API que Torii utilisait a été retirée par Valve et refusait chaque ajout sans rien dire ; le message de confirmation précise désormais si Steam a bien suivi.
 - **Jaquettes manquantes dans la wishlist** : plus de la moitié des jeux (nouveautés, jeux pas encore sortis) n'ont pas de jaquette sur le CDN Steam et s'affichaient en dégradé. Torii bascule maintenant sur une jaquette de secours.

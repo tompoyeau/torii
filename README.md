@@ -105,6 +105,7 @@ src-tauri/src/
 
 ```bash
 cargo run --example scan        # jeux installés détectés
+cargo run --example watch       # jeux détectés en cours d'exécution
 cargo run --example community   # jeux possédés + famille (via session stockée)
 cargo run --example owned <CLE> # jeux possédés via clé API
 ```
