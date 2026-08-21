@@ -107,8 +107,11 @@ fn open_login_window(
     let inner = app.clone();
     inner
         .run_on_main_thread(move || {
+            // Même raison que dans `close_login_window` : `destroy()` détruit vraiment,
+            // là où `close()` passerait par la règle du tray — soit en tuant l'application,
+            // soit en laissant une fenêtre cachée qui bloquerait la réutilisation du label.
             if let Some(win) = app.get_webview_window(label) {
-                let _ = win.close();
+                let _ = win.destroy();
             }
             let Ok(parsed) = url.parse() else { return };
             let mut builder =
@@ -126,11 +129,17 @@ fn open_login_window(
 }
 
 /// Ferme la fenêtre de login si elle est encore ouverte.
+/// Ferme une fenêtre de connexion.
+///
+/// 🔑 `destroy()` et non `close()` : `close()` **demande** la fermeture, ce qui passe par
+/// `CloseRequested` et donc par la règle « fermer = réduire dans le tray » de la fenêtre
+/// principale. On ne demande rien ici — on a fini avec cette fenêtre. Deuxième garde-fou,
+/// indépendant du filtre sur le label dans `on_window_event`.
 fn close_login_window(app: &tauri::AppHandle, label: &'static str) {
     let inner = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(win) = inner.get_webview_window(label) {
-            let _ = win.close();
+            let _ = win.destroy();
         }
     });
 }
@@ -1599,6 +1608,18 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // 🔑 Ne concerne QUE la fenêtre principale.
+            //
+            // Sans ce garde-fou, la règle ci-dessous s'appliquait aussi aux fenêtres de
+            // connexion (`steam-login`, `gog-login`, `epic-login`) : à la fin d'un login,
+            // `connect_steam` ferme sa fenêtre, ce qui déclenchait `CloseRequested` et
+            // donc `exit(0)` — TOUTE l'application se fermait juste après la connexion.
+            // Invisible pour qui a activé « fermer dans la zone de notification » (la
+            // fenêtre était alors seulement cachée), fatal pour tous les autres, c'est-à-dire
+            // pour chaque nouvelle installation. Signalé en production.
+            if window.label() != "main" {
+                return;
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if load_window_prefs(&window.app_handle().clone()).close_to_tray {
                     // « Fermer = réduire dans le tray » : on cache au lieu de quitter.

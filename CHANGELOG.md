@@ -4,6 +4,12 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.12.1
+- **Correctif majeur** : Torii se fermait tout seul juste après une connexion à Steam (ou à GOG / Epic). La fenêtre de connexion, en se refermant, était prise pour la fenêtre principale et faisait quitter l'application. Ça touchait toutes les nouvelles installations.
+- **Retrouver ses amis Steam** fonctionne enfin : la recherche existait côté serveur mais aucun écran ne l'appelait. Elle est maintenant dans Réglages → Réseau Torii, et on peut ajouter directement les personnes trouvées.
+- L'option « visible par mes amis Steam » est désactivée, avec explication, tant qu'aucun compte Steam n'est connecté — elle n'avait aucun effet dans ce cas.
+- **Torii reste maintenant en tâche de fond** quand on ferme la fenêtre, pour continuer à détecter tes parties. Ça se désactive dans les Paramètres, et « Quitter » reste disponible par clic droit sur l'icône près de l'horloge.
+
 ## 0.12.0
 - **Réseau Torii** : crée un compte et vois à quoi jouent tes amis **quel que soit leur launcher** — Steam, Epic, GOG, Riot, un jeu ajouté à la main… Ce que ni Steam ni Discord ne savent faire.
 - **Connexion sans mot de passe** : tu saisis ton adresse, tu reçois un code à 6 chiffres, et c'est tout. Rien à retenir, rien à perdre.
