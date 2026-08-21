@@ -67,12 +67,31 @@ expédier depuis `*.workers.dev` (ni SPF ni DKIM n'y sont possibles).
 
 Le domaine du projet est **`topo-host.com`**, avec un sous-domaine par application.
 
+> ℹ️ **Pourquoi pas l'envoi natif de Cloudflare ?** Email Sending exige le plan **Workers
+> payant** ; sur le plan gratuit, `wrangler email sending enable` répond
+> `Unauthorized [code: 2036]`. Le code sait malgré tout s'en servir (binding `EMAIL`) : le
+> jour où le plan change, il suffit de décommenter `[[send_email]]` dans `wrangler.toml`,
+> l'ordre de priorité dans `deliver()` fait le reste.
+>
+> Email **Routing** (gratuit) ne remplace pas l'envoi : il reçoit et transfère, mais un
+> Worker ne peut qu'y *répondre* à un message entrant, jamais en initier un.
+
+### Voie retenue : Resend (offre gratuite)
+
+1. Créer un compte sur [resend.com](https://resend.com) — 3 000 e-mails/mois, 100/jour.
+2. **Domains → Add Domain** → `topo-host.com`, puis ajouter les enregistrements DNS
+   proposés (SPF, DKIM, DMARC) dans Cloudflare. Quelques minutes de propagation.
+3. **API Keys → Create**, portée *Sending access* : le strict nécessaire.
+4. Poser la clé et l'expéditeur, puis redéployer :
+
 ```bash
-npx wrangler email sending enable topo-host.com
-npx wrangler secret put EMAIL_FROM      # torii@topo-host.com
+npx wrangler secret put RESEND_API_KEY   # colle la clé quand c'est demandé
+npx wrangler secret put EMAIL_FROM       # torii@topo-host.com
+npx wrangler deploy
 ```
 
-puis décommente le bloc `[[send_email]]` dans `wrangler.toml` et redéploie.
+> 🔑 Pose la clé **toi-même** : `wrangler secret put` la lit sur l'entrée standard, elle
+> ne transite ni par un fichier du dépôt, ni par l'historique du terminal.
 
 ### En attendant : le mode développement
 
