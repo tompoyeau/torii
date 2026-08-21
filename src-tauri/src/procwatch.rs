@@ -34,15 +34,25 @@ const ARM_TIMEOUT: Duration = Duration::from_secs(120);
 /// Un jeu détectable : les chemins dont l'apparition d'un process signe une partie.
 struct Target {
     id: String,
+    /// Titre affichable, repris tel quel dans la présence publiée aux amis.
+    title: String,
     /// Dossier d'installation et/ou exécutable, normalisés (comparaison façon Windows).
     roots: Vec<String>,
+}
+
+/// Une partie en cours : les process qui la composent et l'instant où elle a commencé.
+#[derive(Default)]
+struct Running {
+    pids: HashSet<u32>,
+    /// Démarrage réel du premier process (`GetProcessTimes`), pas l'instant de détection.
+    since: i64,
 }
 
 #[derive(Default)]
 pub struct WatchState {
     targets: Vec<Target>,
-    /// Jeux en cours : id → PID qui les composent (un jeu ouvre souvent plusieurs process).
-    running: HashMap<String, HashSet<u32>>,
+    /// Jeux en cours, par id.
+    running: HashMap<String, Running>,
     /// Jeu lancé DEPUIS Torii avec l'option « revenir à la fermeture » : à sa fermeture,
     /// on restaure la fenêtre et le front rouvre sa fiche.
     armed: Option<(String, Instant)>,
@@ -90,6 +100,7 @@ fn targets_from(games: &[GameDto]) -> Vec<Target> {
             }
             (!roots.is_empty()).then(|| Target {
                 id: g.id.clone(),
+                title: g.title.clone(),
                 roots,
             })
         })
@@ -103,6 +114,28 @@ fn match_id(targets: &[Target], exe: &str) -> Option<String> {
         .iter()
         .find(|t| t.roots.iter().any(|r| under(&path, r)))
         .map(|t| t.id.clone())
+}
+
+/// Partie en cours : `(id, titre, depuis)`. Utilisé par le battement de cœur de la
+/// présence. `None` si aucun jeu ne tourne — ou si plusieurs tournent, auquel cas on
+/// prend celui commencé en dernier (c'est celui devant lequel la personne est).
+pub fn current_game(app: &tauri::AppHandle) -> Option<(String, String, i64)> {
+    let state = app.state::<Watch>();
+    let state = state.0.lock().ok()?;
+    let (id, running) = state.running.iter().max_by_key(|(_, r)| r.since)?;
+    let title = state
+        .targets
+        .iter()
+        .find(|t| &t.id == id)
+        .map(|t| t.title.clone())
+        .unwrap_or_default();
+    Some((id.clone(), title, running.since))
+}
+
+/// Secondes écoulées depuis la dernière action clavier/souris de l'utilisateur.
+/// Sert à passer en « absent » plutôt que d'afficher « en ligne » devant un PC désert.
+pub fn idle_seconds() -> u64 {
+    sys::idle_seconds()
 }
 
 /// Diagnostic : quels jeux de `games` tournent en ce moment. Même rapprochement que la
@@ -159,21 +192,24 @@ fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
         let Some(exe) = exe_path(*pid) else { continue };
         let Some(id) = match_id(&state.targets, &exe) else { continue };
         let first = !state.running.contains_key(&id);
-        state.running.entry(id.clone()).or_default().insert(*pid);
+        let started = started_at(*pid).unwrap_or_else(|| now_unix());
+        let entry = state.running.entry(id.clone()).or_default();
+        entry.pids.insert(*pid);
         if first {
+            entry.since = started;
             // Date = démarrage RÉEL du process, pas l'instant où on le remarque. Ça
             // couvre les 5 s de latence du sondage, et surtout le cas d'un jeu (ou d'une
             // application permanente type Wallpaper Engine) déjà lancé quand Torii
             // s'ouvre : il est daté de son vrai démarrage, pas de « maintenant ».
-            launched.push((id, started_at(*pid)));
+            launched.push((id, Some(started)));
         }
     }
 
     // 2) Process disparus → un jeu dont plus aucun process ne tourne s'est fermé.
     let mut exited: Vec<String> = Vec::new();
-    state.running.retain(|id, pids| {
-        pids.retain(|p| alive.contains(p));
-        if pids.is_empty() {
+    state.running.retain(|id, running| {
+        running.pids.retain(|p| alive.contains(p));
+        if running.pids.is_empty() {
             exited.push(id.clone());
             false
         } else {
@@ -228,6 +264,14 @@ fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
     } else {
         POLL_IDLE
     }
+}
+
+/// Instant Unix courant, repli quand `GetProcessTimes` ne répond pas.
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 /// Chemin comparable : minuscules, séparateurs Windows, sans `\` final.
@@ -288,6 +332,41 @@ mod sys {
         buf
     }
 
+    /// `LASTINPUTINFO` : taille de la structure + tick du dernier événement d'entrée.
+    #[repr(C)]
+    struct LastInputInfo {
+        cb_size: u32,
+        time: u32,
+    }
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetLastInputInfo(info: *mut LastInputInfo) -> i32;
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetTickCount() -> u32;
+    }
+
+    /// Secondes depuis la dernière frappe ou le dernier mouvement de souris.
+    /// Un seul appel système, aucun hook clavier : rien qui ressemble à un enregistreur
+    /// de frappe, et rien qui coûte quoi que ce soit.
+    pub fn idle_seconds() -> u64 {
+        unsafe {
+            let mut info = LastInputInfo {
+                cb_size: std::mem::size_of::<LastInputInfo>() as u32,
+                time: 0,
+            };
+            if GetLastInputInfo(&mut info) == 0 {
+                return 0;
+            }
+            // Les deux compteurs bouclent tous les 49 jours : la soustraction en `u32`
+            // reste juste au passage du tour, contrairement à un calcul en `u64`.
+            u64::from(GetTickCount().wrapping_sub(info.time)) / 1000
+        }
+    }
+
     /// Instant Unix (secondes) auquel le process a démarré. Rend « Récemment joué »
     /// exact à la seconde plutôt qu'au rythme du sondage.
     pub fn started_at(pid: u32) -> Option<i64> {
@@ -338,6 +417,9 @@ mod sys {
     }
     pub fn started_at(_pid: u32) -> Option<i64> {
         None
+    }
+    pub fn idle_seconds() -> u64 {
+        0
     }
 }
 

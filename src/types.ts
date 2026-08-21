@@ -244,6 +244,56 @@ export interface FriendsCommon {
   fetchedAt: number;
 }
 
+/* ── Service social Torii (comptes, amis, présence) ─────────────────────────── */
+
+/** Le compte Torii de l'utilisateur. */
+export interface ToriiAccount {
+  id: string;
+  email: string;
+  displayName: string;
+  /** Code à donner de la main à la main pour se faire ajouter. */
+  friendCode: string;
+  steamId?: string | null;
+  /** Autorise les amis Steam à nous retrouver (les deux côtés doivent l'activer). */
+  steamDiscoverable: boolean;
+}
+
+/**
+ * État d'un ami. `offline` signifie « aucune nouvelle depuis 90 s », donc Torii fermé —
+ * et non « ne joue pas » : une partie lancée sans Torii reste invisible.
+ */
+export type ToriiStatus = "in-game" | "online" | "away" | "offline";
+
+export interface ToriiFriend {
+  id: string;
+  displayName: string;
+  status: ToriiStatus;
+  /** Clé de jeu cross-launcher, pour reconnaître le même jeu d'un launcher à l'autre. */
+  gameKey?: string | null;
+  gameTitle?: string | null;
+  /** Début de la partie (Unix), pour afficher « depuis 1 h 20 ». */
+  since?: number | null;
+}
+
+/** Une personne sans présence : demande d'ami en attente, ou suggestion. */
+export interface ToriiPerson {
+  id: string;
+  displayName: string;
+  steamId?: string | null;
+}
+
+export interface ToriiCircle {
+  friends: ToriiFriend[];
+  incoming: ToriiPerson[];
+  outgoing: ToriiPerson[];
+}
+
+/** Réglages de partage. `sharePresence` est faux tant qu'on ne l'active pas. */
+export interface SocialPrefs {
+  sharePresence: boolean;
+  awayAfterMinutes: number;
+}
+
 /** Un jeu de la wishlist Steam enrichi de prix (commande Rust `steam_wishlist`). */
 export interface WishlistItem {
   appId: number;

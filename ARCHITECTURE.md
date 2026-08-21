@@ -380,6 +380,52 @@ cargo run --example community        # jeux possédés + famille (via session st
   dans « Récemment joué ». ⚠️ Limite assumée : lancement HORS Torii = non capté (le user était OK). Piste future :
   surveiller le process du jeu pour le vrai temps de jeu (plus fragile).
 
+## Service social — `server/` (côté serveur fait, client à brancher)
+
+- **Worker distinct du `proxy/`** : celui-ci détient comptes, amis et présence (base D1),
+  l'autre relaie IGDB/ITAD sans rien retenir. Secrets et risques différents → deux
+  déploiements. Toutes les routes sont préfixées `/v1` (l'auto-updater fait cohabiter des
+  versions, et le mobile viendra s'y brancher). Détail complet dans `server/README.md`.
+- **Connexion par code à 6 chiffres reçu par e-mail**, jamais de mot de passe : rien de
+  réutilisable à voler côté serveur, et la récupération de compte EST la connexion. Codes
+  et jetons ne sont stockés que hachés (SHA-256 + poivre `PEPPER`).
+- 🔑 **On ajoute un ami par code d'ami, jamais par e-mail** : chercher par adresse
+  transformerait le service en annuaire de « qui utilise Torii ». Même raison pour les
+  suggestions par SteamID, qui exigent que **les deux** comptes soient découvrables.
+- 🔑 **`PUT /v1/presence` renvoie le cercle complet** : le battement de cœur (30 s) sert
+  aussi de lecture, ce qui divise le trafic par deux. ~2 880 requêtes/jour et par personne,
+  pour 100 000 offertes → une trentaine de testeurs avant de devoir passer au push.
+- **Aucun historique** : la présence porte sa date de péremption et n'est jamais archivée.
+  Un compte sans battement depuis 90 s repasse `offline`, ce qui veut dire « Torii fermé »
+  et non « ne joue pas » — vocabulaire à respecter dans l'interface.
+- ⚠️ **`DEV_CODES=1` rend le code dans la réponse HTTP** (pour tester sans domaine
+  d'expédition). Actif en production, il laisse entrer n'importe qui.
+- Le vrai envoi d'e-mails exige **un domaine à soi** (impossible depuis `*.workers.dev`)
+  et wrangler 4 (`wrangler email sending enable <domaine>`).
+
+### Côté client — `social.rs`
+
+- Client de l'API + **battement de cœur** (30 s) qui publie la présence et reçoit le cercle
+  en retour, réémis au front par l'événement `torii-circle`. `TORII_API` surcharge l'URL
+  pour développer contre `npx wrangler dev` sans recompiler.
+- 🔑 Le jeton de session vit dans `credentials.dat` (donc chiffré DPAPI), comme les jetons
+  des launchers — jamais dans le `localStorage` de la WebView.
+- 🔑 **`share_presence` est faux par défaut** (`social_prefs.json`) : le fil tourne mais
+  n'envoie RIEN tant que l'utilisateur n'a pas activé le partage. Le couper efface la
+  présence immédiatement au lieu d'attendre la péremption serveur.
+- Jeux jamais diffusés : `id_set::PRESENCE_MUTED` (`presence_muted.json`), même mécanique
+  que masqués/favoris. Indispensable pour les applications permanentes type Wallpaper
+  Engine, qui annonceraient une partie 24 h sur 24.
+- La décision de publication est isolée dans `presence_for()` — fonction pure, testée :
+  c'est là que se joue la promesse faite à l'utilisateur, elle doit être vérifiable.
+- « Absent » = `GetLastInputInfo` (un appel système, aucun hook clavier). Une partie en
+  cours prime toujours sur l'inactivité.
+- Clé de jeu cross-launcher : `game_key()` normalise le titre (minuscules, alphanumérique)
+  → « THE WITCHER 3: WILD HUNT™ » et « The Witcher 3: Wild Hunt » se rejoignent. À
+  remplacer par l'id IGDB quand il sera persisté.
+- ⚠️ Les ponts `torii*` de `lib/tauri.ts` **laissent remonter les erreurs**, contrairement
+  au reste du fichier : les messages du serveur sont écrits pour être affichés tels quels.
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.
