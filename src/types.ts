@@ -310,6 +310,10 @@ export interface SocialPrefs {
   /** Ancien réglage booléen, encore lu pour ne pas réinitialiser les comptes existants. */
   sharePresence: boolean;
   awayAfterMinutes: number;
+  /** Afficher un bandeau quand un ami commence à jouer. */
+  notifyFriendLaunch: boolean;
+  /** Le rapprochement Steam ↔ Torii a déjà été proposé : on ne repasse jamais derrière. */
+  steamAutoLinked: boolean;
 }
 
 /** Un jeu de la wishlist Steam enrichi de prix (commande Rust `steam_wishlist`). */

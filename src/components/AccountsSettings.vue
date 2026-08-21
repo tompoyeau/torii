@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { useUi } from "../composables/useUi";
 import { useLibrary } from "../composables/useLibrary";
+import { useTorii } from "../composables/useTorii";
 import {
   connectBattlenet,
   connectEa,
@@ -21,6 +22,7 @@ import LauncherAccount from "./LauncherAccount.vue";
 
 const { closeSettings } = useUi();
 const { reload } = useLibrary();
+const { reconcilierSteam } = useTorii();
 
 /** Un launcher connectable : tout ce qui change d'une carte de compte à l'autre. */
 interface AccountDef {
@@ -158,6 +160,9 @@ async function onConnect(a: AccountDef) {
   try {
     const s = await a.connect();
     applySettings(s);
+    // Steam vient d'être connecté : si un compte Torii est déjà ouvert, le SteamID doit
+    // y remonter maintenant, pas au prochain démarrage.
+    if (a.key === "steam") void reconcilierSteam();
     st.message = `Compte ${a.short} connecté — actualisation de la bibliothèque…`;
     reload();
     // On ferme pour laisser voir la progression (barre du haut).

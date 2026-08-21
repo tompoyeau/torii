@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import {
+  getSettings,
   onToriiCircle, toriiCircle, toriiInvite, toriiInviteAccount, toriiLogout, toriiMe,
   toriiMutedGames, toriiMuteGame, toriiPrefs, toriiRemoveFriend, toriiRequestCode,
   toriiRespond, toriiRotateCode, toriiSetPrefs, toriiSetProfile, toriiSuggestions,
@@ -19,7 +20,13 @@ import type { PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle } from "../ty
 
 const account = ref<ToriiAccount | null>(null);
 const circle = ref<ToriiCircle>({ friends: [], incoming: [], outgoing: [] });
-const prefs = ref<SocialPrefs>({ presenceMode: "offline", sharePresence: false, awayAfterMinutes: 10 });
+const prefs = ref<SocialPrefs>({
+  presenceMode: "offline",
+  sharePresence: false,
+  awayAfterMinutes: 10,
+  notifyFriendLaunch: true,
+  steamAutoLinked: false,
+});
 const mutedGames = ref<string[]>([]);
 /** Amis Steam qui se trouvent avoir un compte Torii découvrable. */
 const suggestions = ref<ToriiPerson[]>([]);
@@ -40,7 +47,10 @@ async function start() {
   prefs.value = await toriiPrefs();
   mutedGames.value = await toriiMutedGames();
   booted.value = true;
-  if (account.value) void refresh();
+  if (account.value) {
+    void reconcilierSteam();
+    void refresh();
+  }
   unlisten = await onToriiCircle((next) => {
     circle.value = next;
   });
@@ -73,8 +83,47 @@ async function requestCode(email: string): Promise<string | null> {
 async function verify(email: string, code: string): Promise<boolean> {
   const signIn = await toriiVerify(email.trim(), code.trim());
   account.value = signIn.account;
+  await reconcilierSteam();
   await refresh();
   return signIn.created;
+}
+
+/**
+ * Fait remonter le SteamID dans le compte Torii dès que les deux connexions existent.
+ *
+ * Les deux se font dans n'importe quel ordre — Steam puis Torii, ou l'inverse, parfois à
+ * des jours d'intervalle. On appelle donc ce rapprochement aux trois moments où l'état
+ * peut changer : au démarrage, à la connexion Torii, et juste après une connexion Steam.
+ * Tant qu'il manque une des deux moitiés, la fonction ne fait rien et retentera plus tard.
+ *
+ * 🔑 Une seule fois dans la vie du compte, mémorisé dans les réglages. Sans ce drapeau,
+ * « jamais lié » et « visibilité éteinte à la main » sont indiscernables — le SteamID est
+ * effacé dans les deux cas — et on rallumerait à chaque démarrage ce que la personne
+ * vient d'éteindre.
+ *
+ * 🔑 Le SteamID et la visibilité partent ENSEMBLE. Se déclarer visible sans identifiant
+ * lié afficherait un interrupteur allumé qui ne rapproche rien.
+ */
+async function reconcilierSteam() {
+  if (!account.value || prefs.value.steamAutoLinked) return;
+  try {
+    // Déjà lié (par la personne elle-même, ou sur une autre machine) : rien à faire,
+    // mais on note que c'est réglé.
+    if (account.value.steamId) return await marquerSteamRapproche();
+
+    const steamId = (await getSettings())?.steamId;
+    if (!steamId) return; // Steam pas encore connecté : on réessaiera.
+
+    account.value = await toriiSetProfile({ steamId, steamDiscoverable: true });
+    await marquerSteamRapproche();
+  } catch {
+    // Panne réseau ou compte Steam illisible : ce n'est qu'un réglage de confort, il ne
+    // doit jamais faire échouer une connexion. On retentera au prochain démarrage.
+  }
+}
+
+async function marquerSteamRapproche() {
+  if (!prefs.value.steamAutoLinked) await setPrefs({ steamAutoLinked: true });
 }
 
 async function logout() {
@@ -196,6 +245,7 @@ export function useTorii() {
     logout,
     setDisplayName,
     setSteamLink,
+    reconcilierSteam,
     setPrefs,
     setPresenceMode,
     setMuted,

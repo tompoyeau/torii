@@ -63,17 +63,6 @@ async function copyCode() {
 
 /* ── Affichage d'un ami ────────────────────────────────────────────────────── */
 
-/** « depuis 1 h 20 » — connu seulement pour les amis Torii. */
-function playingFor(since: number | null): string | null {
-  if (!since) return null;
-  const minutes = Math.floor((Date.now() / 1000 - since) / 60);
-  if (minutes < 2) return "vient de commencer";
-  if (minutes < 60) return `depuis ${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `depuis ${h} h ${String(m).padStart(2, "0")}` : `depuis ${h} h`;
-}
-
 function stateLabel(f: UnifiedFriend): string {
   switch (f.state) {
     case "online": return "En ligne";
@@ -92,6 +81,31 @@ function offlineHint(f: UnifiedFriend): string {
   return f.source === "torii"
     ? "Cette personne n'a pas Torii ouvert : elle joue peut-être sans qu'on le voie."
     : "Hors ligne sur Steam.";
+}
+
+/**
+ * D'où vient cette ligne. Ce n'est pas de la décoration : les deux sources ne savent pas
+ * la même chose, et ça change ce qu'on peut attendre de la ligne. Un ami Steam ne montre
+ * que ses jeux Steam ; un ami Torii montre tous ses launchers, mais seulement quand il a
+ * l'application ouverte. J'avais réduit ça à un ⛩ sans explication — illisible.
+ */
+const SOURCES = {
+  torii: {
+    court: "Torii",
+    aide: "Ami Torii : tu vois ses jeux quel que soit son launcher, tant qu'il a Torii ouvert.",
+  },
+  steam: {
+    court: "Steam",
+    aide: "Ami Steam : tu vois ses jeux Steam, même s'il n'a pas Torii.",
+  },
+  both: {
+    court: "Torii + Steam",
+    aide: "Ami des deux côtés : Torii pour tous ses launchers, Steam quand Torii est fermé.",
+  },
+} as const;
+
+function source(f: UnifiedFriend) {
+  return SOURCES[f.source];
 }
 
 const failed = ref(new Set<string>());
@@ -287,7 +301,14 @@ onBeforeUnmount(() => {
               </span>
               <span class="who-text">
                 <span class="who-name">{{ f.name }}</span>
-                <span class="who-when">{{ playingFor(f.since) ?? "en ce moment" }}</span>
+                <!-- Toujours « en ce moment », quelle que soit la source. La durée
+                     n'était connue que des amis Torii : deux cartes côte à côte ne
+                     disaient pas la même chose, ce qui se lisait comme une information
+                     manquante plutôt que comme une différence de source. -->
+                <span class="who-when">
+                  en ce moment
+                  <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
+                </span>
               </span>
             </button>
             <div class="card-game">
@@ -313,6 +334,7 @@ onBeforeUnmount(() => {
               <span class="dot" :class="f.state" />
             </span>
             <span class="row-name">{{ f.name }}</span>
+            <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
             <span class="row-state" :class="f.state">{{ stateLabel(f) }}</span>
           </button>
         </div>
@@ -332,6 +354,7 @@ onBeforeUnmount(() => {
               <span class="dot offline" />
             </span>
             <span class="row-name">{{ f.name }}</span>
+            <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
             <span class="row-state">{{ f.source === "torii" ? "Torii fermé" : "Hors ligne" }}</span>
           </button>
         </div>
@@ -512,7 +535,11 @@ onBeforeUnmount(() => {
   font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 6px;
 }
+/* 🔑 `margin-top: auto` colle le bouton au bas de la carte. Les cartes d'une même
+   ligne ont déjà la hauteur de la plus haute (grille étirée) ; sans ça, un titre de jeu
+   sur deux lignes décalait le bouton d'une carte à l'autre. */
 .btn-play {
+  margin-top: auto;
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;
   padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 600;
   background: var(--accent); color: var(--accent-ink); border: 1px solid transparent;
@@ -532,6 +559,21 @@ onBeforeUnmount(() => {
 .row-name { flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-state { font-size: 12.5px; color: var(--text-faint); }
 .row-state.online { color: #3ad07f; }
+
+/* Provenance : discrète mais lisible, et survolable pour comprendre la nuance. */
+.src {
+  flex: none; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: 5px; cursor: help; white-space: nowrap;
+  background: var(--surface-2); color: var(--text-faint); border: 1px solid transparent;
+}
+.src.torii { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, transparent); }
+.src.steam { color: var(--steam); border-color: color-mix(in srgb, var(--steam) 32%, transparent); }
+.src.both {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--steam) 12%, var(--surface-2));
+}
+.who-when { display: flex; align-items: center; gap: 7px; }
 
 /* ── Avatars ─────────────────────────────────────────── */
 .avatar {

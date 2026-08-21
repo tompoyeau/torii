@@ -334,8 +334,11 @@ export async function toriiSuggestions(steamIds: string[]): Promise<ToriiPerson[
 
 export async function toriiPrefs(): Promise<SocialPrefs> {
   return await call<SocialPrefs>("torii_prefs", undefined, {
+    presenceMode: "offline",
     sharePresence: false,
     awayAfterMinutes: 10,
+    notifyFriendLaunch: true,
+    steamAutoLinked: false,
   });
 }
 
@@ -363,6 +366,21 @@ export async function onToriiCircle(cb: (circle: ToriiCircle) => void): Promise<
   } catch {
     return () => {};
   }
+}
+
+// --- Journal --------------------------------------------------------------------
+
+/**
+ * Note une erreur d'interface dans le journal de l'application. Silencieux hors Tauri,
+ * et surtout : ne doit JAMAIS lever à son tour — on est déjà sur un chemin d'erreur.
+ */
+export async function logFrontError(message: string): Promise<void> {
+  await call<void>("log_front_error", { message: message.slice(0, 4000) }, undefined);
+}
+
+/** Ouvre le journal dans l'éditeur par défaut, pour pouvoir l'envoyer. */
+export async function openLog(): Promise<void> {
+  await call<void>("open_log", undefined, undefined);
 }
 
 // --- Bibliothèque ---------------------------------------------------------------

@@ -8,7 +8,7 @@ import { useUi } from "../composables/useUi";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
-import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, setAutostart, setWindowPrefs } from "../lib/tauri";
+import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openLog, setAutostart, setWindowPrefs } from "../lib/tauri";
 import PlatformIcon from "./PlatformIcon.vue";
 import AccountsSettings from "./AccountsSettings.vue";
 import ToriiPanel from "./ToriiPanel.vue";
@@ -459,6 +459,19 @@ function unhide(id: string) {
               </button>
             </div>
             <p v-if="cacheMsg" class="cache-msg">{{ cacheMsg }}</p>
+
+            <div class="divider" />
+
+            <div class="pref">
+              <div class="row-text">
+                <span class="row-title">Journal de l'application</span>
+                <span class="row-sub">
+                  Démarrages, erreurs et incidents. À joindre si tu signales un problème :
+                  c'est ce qui permet de comprendre ce qui s'est passé sur ta machine.
+                </span>
+              </div>
+              <button class="ghost-btn" @click="openLog()">Ouvrir le journal</button>
+            </div>
           </template>
 
           <!-- Jeux masqués -->
@@ -639,6 +652,24 @@ function unhide(id: string) {
                   Aucun de tes amis Steam n'a de compte Torii visible pour l'instant.
                 </p>
               </template>
+
+              <div class="divider" />
+
+              <button
+                class="pref toggle-row"
+                role="switch"
+                :aria-checked="toriiPrefs.notifyFriendLaunch"
+                @click="setToriiPrefs({ notifyFriendLaunch: !toriiPrefs.notifyFriendLaunch })"
+              >
+                <div class="row-text">
+                  <span class="row-title">Me prévenir quand un ami lance un jeu</span>
+                  <span class="row-sub">
+                    Un bandeau s'affiche quelques secondes en haut à droite de l'écran, sans
+                    prendre le focus. Un jeu en plein écran exclusif peut le masquer.
+                  </span>
+                </div>
+                <span class="switch" :class="{ on: toriiPrefs.notifyFriendLaunch }"><span class="knob" /></span>
+              </button>
 
               <div class="divider" />
 

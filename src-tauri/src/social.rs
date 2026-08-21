@@ -7,8 +7,11 @@
 //! à faire dans un fichier en clair ni dans le `localStorage` de la WebView.
 
 use crate::accounts::secrets;
+use crate::journal;
 use crate::platforms::id_set;
 use crate::procwatch;
+use crate::toast;
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -371,6 +374,13 @@ pub struct SocialPrefs {
     pub share_presence: bool,
     /// Minutes d'inactivité avant de passer en « absent ».
     pub away_after_minutes: u32,
+    /// Afficher un bandeau quand un ami commence à jouer.
+    pub notify_friend_launch: bool,
+    /// 🔑 Le rapprochement Steam ↔ Torii n'a lieu qu'UNE fois, et ce drapeau s'en
+    /// souvient. Sans lui, « lier par défaut » et « j'ai éteint la visibilité » sont
+    /// indiscernables — on rallumerait à chaque démarrage ce que la personne vient
+    /// d'éteindre. Un défaut se propose ; il ne se réimpose pas.
+    pub steam_auto_linked: bool,
 }
 
 impl Default for SocialPrefs {
@@ -379,6 +389,8 @@ impl Default for SocialPrefs {
             presence_mode: None,
             share_presence: false,
             away_after_minutes: 10,
+            notify_friend_launch: true,
+            steam_auto_linked: false,
         }
     }
 }
@@ -433,16 +445,72 @@ pub fn game_key(title: &str) -> String {
 pub fn spawn_heartbeat(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut publishing = false;
+        // Qui jouait à quoi au dernier battement : id d'ami → jeu. Sert à distinguer
+        // « vient de lancer » de « jouait déjà », la seule chose qui mérite un bandeau.
+        let mut parties: HashMap<String, String> = HashMap::new();
+        // 🔑 Le premier cercle reçu ne notifie RIEN : au démarrage, tous ceux qui jouent
+        // paraîtraient venir de commencer, et Torii cracherait une volée de bandeaux.
+        let mut amorce = true;
         loop {
             std::thread::sleep(HEARTBEAT);
-            publishing = beat(&app, publishing);
+            publishing = beat(&app, publishing, &mut parties, &mut amorce);
         }
     });
 }
 
+/// Repère les amis qui **viennent** de lancer une partie et affiche un bandeau.
+///
+/// La comparaison porte sur le couple (ami, jeu) : changer de jeu compte comme un
+/// nouveau lancement, rester sur le même n'en est pas un.
+fn signaler_lancements(
+    app: &tauri::AppHandle,
+    config_dir: &Path,
+    circle: &Circle,
+    parties: &mut HashMap<String, String>,
+    amorce: &mut bool,
+) {
+    let mut courant: HashMap<String, String> = HashMap::new();
+    for ami in &circle.friends {
+        if ami.status != "in-game" {
+            continue;
+        }
+        let jeu = ami.game_title.clone().unwrap_or_default();
+        if jeu.is_empty() {
+            continue;
+        }
+        let nouveau = parties.get(&ami.id) != Some(&jeu);
+        if nouveau {
+            // Journalisé dans les deux cas : « pourquoi je n'ai pas eu de bandeau ? » est
+            // une question qu'on ne peut pas trancher sans trace écrite.
+            if *amorce {
+                journal::write(
+                    config_dir,
+                    "INFO",
+                    &format!("{} joue déjà à {jeu} au démarrage — pas de bandeau", ami.display_name),
+                );
+            } else {
+                journal::write(
+                    config_dir,
+                    "INFO",
+                    &format!("bandeau : {} lance {jeu}", ami.display_name),
+                );
+                toast::show(app, &format!("{} joue", ami.display_name), &jeu);
+            }
+        }
+        courant.insert(ami.id.clone(), jeu);
+    }
+    *parties = courant;
+    *amorce = false;
+}
+
 /// Un battement. Renvoie `true` si une présence est actuellement publiée — ce qui
 /// permet de l'effacer proprement si le partage vient d'être coupé.
-fn beat(app: &tauri::AppHandle, publishing: bool) -> bool {
+fn beat(
+    app: &tauri::AppHandle,
+    publishing: bool,
+    parties: &mut HashMap<String, String>,
+    amorce: &mut bool,
+) -> bool {
     let Ok(dir) = app.path().app_config_dir() else {
         return publishing;
     };
@@ -457,6 +525,15 @@ fn beat(app: &tauri::AppHandle, publishing: bool) -> bool {
         // d'attendre les 90 s de péremption.
         if publishing {
             let _ = clear_presence(&dir);
+        }
+        // 🔑 Invisible ≠ aveugle. On continue de LIRE le cercle : sans ça, quelqu'un en
+        // mode invisible ne verrait plus ses amis ni leurs lancements — il serait puni
+        // d'avoir voulu se cacher, ce que personne n'attend d'un mode « invisible ».
+        if let Ok(circle) = circle(&dir) {
+            if prefs.notify_friend_launch {
+                signaler_lancements(app, &dir, &circle, parties, amorce);
+            }
+            let _ = app.emit("torii-circle", circle);
         }
         return false;
     }
@@ -474,6 +551,9 @@ fn beat(app: &tauri::AppHandle, publishing: bool) -> bool {
 
     match publish(&dir, &presence) {
         Ok(circle) => {
+            if prefs.notify_friend_launch {
+                signaler_lancements(app, &dir, &circle, parties, amorce);
+            }
             let _ = app.emit("torii-circle", circle);
             true
         }
@@ -575,7 +655,7 @@ mod tests {
         let herite = SocialPrefs {
             presence_mode: None,
             share_presence: true,
-            away_after_minutes: 10,
+            ..Default::default()
         };
         assert_eq!(herite.mode(), PRESENCE_DETAILED);
         assert_eq!(presence_for(&herite, jeu(), 0).unwrap().status, "in-game");
@@ -608,6 +688,98 @@ mod tests {
         );
         assert_eq!(game_key("Portal 2"), "title:portal2");
         assert_ne!(game_key("Portal"), game_key("Portal 2"));
+    }
+
+    /// Le repérage des lancements ne doit signaler qu'un vrai changement — c'est la
+    /// différence entre une notification utile et une notification par minute.
+    #[test]
+    fn lancements_reperes() {
+        fn ami(id: &str, statut: &str, jeu: Option<&str>) -> Friend {
+            Friend {
+                id: id.into(),
+                display_name: id.into(),
+                steam_id: None,
+                status: statut.into(),
+                game_key: None,
+                game_title: jeu.map(str::to_string),
+                since: None,
+            }
+        }
+        /// Rejoue un tour et rend les couples (ami, jeu) qui auraient été annoncés.
+        fn tour(
+            amis: Vec<Friend>,
+            parties: &mut HashMap<String, String>,
+            amorce: &mut bool,
+        ) -> Vec<(String, String)> {
+            let mut annonces = Vec::new();
+            let mut courant = HashMap::new();
+            for a in &amis {
+                if a.status != "in-game" {
+                    continue;
+                }
+                let jeu = a.game_title.clone().unwrap_or_default();
+                if jeu.is_empty() {
+                    continue;
+                }
+                if !*amorce && parties.get(&a.id) != Some(&jeu) {
+                    annonces.push((a.id.clone(), jeu.clone()));
+                }
+                courant.insert(a.id.clone(), jeu);
+            }
+            *parties = courant;
+            *amorce = false;
+            annonces
+        }
+
+        let mut parties = HashMap::new();
+        let mut amorce = true;
+
+        // Premier tour : quelqu'un joue déjà — on n'annonce rien.
+        let t1 = tour(vec![ami("bob", "in-game", Some("Hadès"))], &mut parties, &mut amorce);
+        assert!(t1.is_empty(), "le premier cercle ne doit rien annoncer");
+
+        // Il joue toujours au même jeu : toujours rien.
+        let t2 = tour(vec![ami("bob", "in-game", Some("Hadès"))], &mut parties, &mut amorce);
+        assert!(t2.is_empty(), "une partie qui continue n'est pas un lancement");
+
+        // Un second ami démarre : une seule annonce.
+        let t3 = tour(
+            vec![
+                ami("bob", "in-game", Some("Hadès")),
+                ami("alice", "in-game", Some("Portal 2")),
+            ],
+            &mut parties,
+            &mut amorce,
+        );
+        assert_eq!(t3, vec![("alice".to_string(), "Portal 2".to_string())]);
+
+        // Bob change de jeu : ça compte comme un nouveau lancement.
+        let t4 = tour(
+            vec![
+                ami("bob", "in-game", Some("Celeste")),
+                ami("alice", "in-game", Some("Portal 2")),
+            ],
+            &mut parties,
+            &mut amorce,
+        );
+        assert_eq!(t4, vec![("bob".to_string(), "Celeste".to_string())]);
+
+        // Bob s'arrête puis reprend le même jeu : deux tours, une annonce au retour.
+        tour(vec![ami("bob", "online", None)], &mut parties, &mut amorce);
+        let t6 = tour(vec![ami("bob", "in-game", Some("Celeste"))], &mut parties, &mut amorce);
+        assert_eq!(t6, vec![("bob".to_string(), "Celeste".to_string())]);
+    }
+
+    #[test]
+    /// Un fichier écrit avant l'arrivée du bandeau n'a pas le champ. Sans `#[serde(default)]`
+    /// + un `Default` à `true`, tous les comptes existants se retrouveraient sans
+    /// notifications sans l'avoir demandé — silencieusement.
+    #[test]
+    fn notification_activee_pour_les_anciens_reglages() {
+        let ancien = r#"{"sharePresence": true, "awayAfterMinutes": 10}"#;
+        let prefs: SocialPrefs = serde_json::from_str(ancien).expect("lecture");
+        assert!(prefs.notify_friend_launch);
+        assert_eq!(prefs.mode(), PRESENCE_DETAILED);
     }
 
     #[test]
