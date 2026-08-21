@@ -43,7 +43,7 @@ function toggleFavorite() {
 </script>
 
 <template>
-  <button class="card" @click="$emit('open')" @contextmenu="openContext($event, game)">
+  <button class="card cover-card" @click="$emit('open')" @contextmenu="openContext($event, game)">
     <div class="cover" :class="{ uninstalled: !game.installed }" :style="{ background: game.cover }">
       <img
         v-if="coverSrc"
@@ -105,31 +105,13 @@ function toggleFavorite() {
 </template>
 
 <style scoped>
-.card {
-  background: none; border: none; padding: 0; text-align: left; color: inherit;
-  display: flex; flex-direction: column; gap: 11px;
-}
-.cover {
-  position: relative; aspect-ratio: 3 / 4; border-radius: var(--radius); overflow: hidden;
-  box-shadow: var(--shadow-card); border: 1px solid var(--border);
-  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1), box-shadow 0.22s; isolation: isolate;
-}
+/* Le fond de carte (rayon, ombre, survol, jaquette, voile, titre) vient de
+   `.cover-card` dans style.css — partagé avec la Boutique et la Wishlist. Ici,
+   uniquement ce qui est propre à la bibliothèque. */
 .cover::before {
   content: ""; position: absolute; inset: 0; z-index: 1;
   background: repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 7px);
   mix-blend-mode: overlay; opacity: 0.6;
-}
-.cover-img {
-  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; display: block;
-}
-.cover-title {
-  position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 2;
-  font-weight: 800; font-size: 19px; line-height: 1.05; letter-spacing: -0.02em; color: #fff;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); text-wrap: balance;
-}
-.cover-scrim {
-  position: absolute; inset: 0; z-index: 1;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55) 0%, transparent 46%);
 }
 .cover-plat {
   position: absolute; top: 11px; left: 11px; z-index: 2; width: 26px; height: 26px;
@@ -162,7 +144,6 @@ function toggleFavorite() {
   box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.6);
 }
 .cover-play svg { width: 22px; height: 22px; margin-left: 2px; }
-.card:hover .cover { transform: translateY(-6px); box-shadow: 0 26px 50px -20px rgba(0, 0, 0, 0.75); }
 .card:hover .cover-hover { opacity: 1; }
 .card:hover .cover-play { transform: scale(1); }
 .card-meta { display: flex; flex-direction: column; gap: 3px; padding: 0 2px; }

@@ -12,7 +12,7 @@ fn main() {
         return;
     }
 
-    let items = ludo_lib::metadata::store::wishlist(&appids);
+    let items = ludo_lib::metadata::store::wishlist(&appids, &Default::default());
     let priced = items.iter().filter(|i| i.price.is_some()).count();
     let on_sale = items.iter().filter(|i| i.savings > 0).count();
     println!("{} items · {priced} avec prix · {on_sale} en promo\n", items.len());

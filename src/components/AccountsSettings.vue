@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { useUi } from "../composables/useUi";
 import { useLibrary } from "../composables/useLibrary";
 import {
@@ -16,210 +16,194 @@ import {
   getSettings,
   setSteamKey,
 } from "../lib/tauri";
+import type { Settings } from "../types";
+import LauncherAccount from "./LauncherAccount.vue";
 
 const { closeSettings } = useUi();
 const { reload } = useLibrary();
 
-const steamConnected = ref(false);
-const steamId = ref<string | null>(null);
-const busy = ref(false);
-const message = ref("");
+/** Un launcher connectable : tout ce qui change d'une carte de compte à l'autre. */
+interface AccountDef {
+  key: string;
+  /** Nom affiché sur la carte. */
+  name: string;
+  /** Nom court utilisé dans les messages d'état. */
+  short: string;
+  /** Couleur de la pastille (variable CSS de la plateforme). */
+  color: string;
+  hint: string;
+  syncedHint: string;
+  connectLabel: string;
+  /**
+   * EA et Battle.net n'ont pas de rafraîchissement silencieux : leur bibliothèque est
+   * un instantané pris à la connexion, donc « Resynchroniser » repasse par le flux de
+   * connexion (qui ne redemande le login que si la session web a expiré).
+   */
+  resyncReconnects?: boolean;
+  connect: () => Promise<Settings>;
+  disconnect: () => Promise<Settings>;
+  /** Lit l'état de ce launcher dans la réponse du backend. */
+  isConnected: (s: Settings) => boolean;
+}
+
+const ACCOUNTS: AccountDef[] = [
+  {
+    key: "steam",
+    name: "Steam",
+    short: "Steam",
+    color: "var(--steam)",
+    hint:
+      "Connecte-toi à ton compte Steam pour importer toute ta bibliothèque " +
+      "(installés ou non) et ta wishlist. Aucune clé, aucun mot de passe transmis à Torii — " +
+      "tu te connectes dans la fenêtre officielle de Steam.",
+    syncedHint: "Bibliothèque synchronisée.",
+    connectLabel: "Se connecter avec Steam",
+    connect: connectSteam,
+    disconnect: disconnectSteam,
+    isConnected: (s) => s.steamConnected,
+  },
+  {
+    key: "epic",
+    name: "Epic Games",
+    short: "Epic",
+    color: "var(--epic)",
+    hint:
+      "Connecte-toi à ton compte Epic pour importer toute ta bibliothèque " +
+      "(installés ou non). Aucun mot de passe transmis à Torii — tu te " +
+      "connectes dans la fenêtre officielle d'Epic Games.",
+    syncedHint: "Bibliothèque Epic synchronisée.",
+    connectLabel: "Se connecter avec Epic",
+    connect: connectEpic,
+    disconnect: disconnectEpic,
+    isConnected: (s) => s.epicConnected,
+  },
+  {
+    key: "ea",
+    name: "EA",
+    short: "EA",
+    color: "var(--ea)",
+    hint:
+      "Connecte-toi à ton compte EA pour importer toute ta bibliothèque " +
+      "(installés ou non). Aucun mot de passe transmis à Torii — tu te " +
+      "connectes dans la fenêtre officielle d'EA.",
+    syncedHint: "Bibliothèque EA synchronisée.",
+    connectLabel: "Se connecter avec EA",
+    resyncReconnects: true,
+    connect: connectEa,
+    disconnect: disconnectEa,
+    isConnected: (s) => s.eaConnected,
+  },
+  {
+    key: "battlenet",
+    name: "Battle.net",
+    short: "Battle.net",
+    color: "var(--battlenet)",
+    hint:
+      "Connecte-toi à ton compte Battle.net pour importer ta bibliothèque " +
+      "Blizzard. Aucun mot de passe transmis à Torii — tu te connectes dans la " +
+      "fenêtre officielle de Battle.net.",
+    syncedHint: "Bibliothèque Battle.net synchronisée.",
+    connectLabel: "Se connecter avec Battle.net",
+    resyncReconnects: true,
+    connect: connectBattlenet,
+    disconnect: disconnectBattlenet,
+    isConnected: (s) => s.battlenetConnected,
+  },
+  {
+    key: "gog",
+    name: "GOG",
+    short: "GOG",
+    color: "var(--gog)",
+    hint:
+      "Connecte-toi à ton compte GOG pour importer toute ta bibliothèque " +
+      "(installés ou non). Aucun mot de passe transmis à Torii — tu te " +
+      "connectes dans la fenêtre officielle de GOG.",
+    syncedHint: "Bibliothèque GOG synchronisée.",
+    connectLabel: "Se connecter avec GOG",
+    connect: connectGog,
+    disconnect: disconnectGog,
+    isConnected: (s) => s.gogConnected,
+  },
+];
+
+/** État d'affichage d'une carte. */
+interface AccountState {
+  connected: boolean;
+  busy: boolean;
+  message: string;
+}
+
+const state = reactive<Record<string, AccountState>>(
+  Object.fromEntries(
+    ACCOUNTS.map((a) => [a.key, { connected: false, busy: false, message: "" }]),
+  ),
+);
 
 const showAdvanced = ref(false);
 const steamKey = ref("");
 
-const gogConnected = ref(false);
-const gogBusy = ref(false);
-const gogMessage = ref("");
-
-const epicConnected = ref(false);
-const epicBusy = ref(false);
-const epicMessage = ref("");
-
-const eaConnected = ref(false);
-const eaBusy = ref(false);
-const eaMessage = ref("");
-
-const bnetConnected = ref(false);
-const bnetBusy = ref(false);
-const bnetMessage = ref("");
+function applySettings(s: Settings) {
+  for (const a of ACCOUNTS) state[a.key].connected = a.isConnected(s);
+}
 
 onMounted(async () => {
   const s = await getSettings();
-  if (s) {
-    steamConnected.value = s.steamConnected;
-    steamId.value = s.steamId ?? null;
-    gogConnected.value = s.gogConnected;
-    epicConnected.value = s.epicConnected;
-    eaConnected.value = s.eaConnected;
-    bnetConnected.value = s.battlenetConnected;
-  }
+  if (s) applySettings(s);
 });
 
-async function onConnect() {
-  busy.value = true;
-  message.value = "Connexion… une fenêtre Steam s'est ouverte, connecte-toi.";
+async function onConnect(a: AccountDef) {
+  const st = state[a.key];
+  st.busy = true;
+  st.message = `Connexion… une fenêtre ${a.short} s'est ouverte, connecte-toi.`;
   try {
-    const s = await connectSteam();
-    steamConnected.value = s.steamConnected;
-    steamId.value = s.steamId ?? null;
-    message.value = "Compte Steam connecté — actualisation de la bibliothèque…";
+    const s = await a.connect();
+    applySettings(s);
+    st.message = `Compte ${a.short} connecté — actualisation de la bibliothèque…`;
     reload();
     // On ferme pour laisser voir la progression (barre du haut).
     closeSettings();
   } catch (err) {
-    message.value = String(err);
+    st.message = String(err);
   } finally {
-    busy.value = false;
+    st.busy = false;
   }
 }
 
-function onResync() {
-  message.value = "Resynchronisation…";
+function onResync(a: AccountDef) {
+  if (a.resyncReconnects) {
+    void onConnect(a);
+    return;
+  }
+  state[a.key].message = "Resynchronisation…";
   reload();
   closeSettings();
 }
 
-async function onDisconnect() {
-  busy.value = true;
-  const s = await disconnectSteam();
-  steamConnected.value = s.steamConnected;
-  steamId.value = s.steamId ?? null;
-  steamKey.value = "";
-  message.value = "Compte Steam déconnecté.";
-  busy.value = false;
+async function onDisconnect(a: AccountDef) {
+  const st = state[a.key];
+  st.busy = true;
+  const s = await a.disconnect();
+  applySettings(s);
+  if (a.key === "steam") steamKey.value = "";
+  st.message = `Compte ${a.short} déconnecté.`;
+  st.busy = false;
   reload();
 }
 
+/** Chemin avancé Steam : enregistre (ou efface) la clé API. */
 async function onSaveKey() {
-  busy.value = true;
+  const st = state.steam;
+  st.busy = true;
   const s = await setSteamKey(steamKey.value);
-  busy.value = false;
+  st.busy = false;
   if (s) {
-    steamConnected.value = s.steamConnected;
-    steamId.value = s.steamId ?? null;
+    applySettings(s);
     steamKey.value = "";
-    message.value = "Clé enregistrée — actualisation…";
+    st.message = "Clé enregistrée — actualisation…";
     reload();
   } else {
-    message.value = "Indisponible hors de l'application Tauri.";
+    st.message = "Indisponible hors de l'application Torii.";
   }
-}
-
-async function onConnectGog() {
-  gogBusy.value = true;
-  gogMessage.value = "Connexion… une fenêtre GOG s'est ouverte, connecte-toi.";
-  try {
-    const s = await connectGog();
-    gogConnected.value = s.gogConnected;
-    gogMessage.value = "Compte GOG connecté — actualisation de la bibliothèque…";
-    reload();
-    closeSettings();
-  } catch (err) {
-    gogMessage.value = String(err);
-  } finally {
-    gogBusy.value = false;
-  }
-}
-
-function onResyncGog() {
-  gogMessage.value = "Resynchronisation…";
-  reload();
-  closeSettings();
-}
-
-async function onDisconnectGog() {
-  gogBusy.value = true;
-  const s = await disconnectGog();
-  gogConnected.value = s.gogConnected;
-  gogMessage.value = "Compte GOG déconnecté.";
-  gogBusy.value = false;
-  reload();
-}
-
-async function onConnectEpic() {
-  epicBusy.value = true;
-  epicMessage.value = "Connexion… une fenêtre Epic s'est ouverte, connecte-toi.";
-  try {
-    const s = await connectEpic();
-    epicConnected.value = s.epicConnected;
-    epicMessage.value = "Compte Epic connecté — actualisation de la bibliothèque…";
-    reload();
-    closeSettings();
-  } catch (err) {
-    epicMessage.value = String(err);
-  } finally {
-    epicBusy.value = false;
-  }
-}
-
-function onResyncEpic() {
-  epicMessage.value = "Resynchronisation…";
-  reload();
-  closeSettings();
-}
-
-async function onDisconnectEpic() {
-  epicBusy.value = true;
-  const s = await disconnectEpic();
-  epicConnected.value = s.epicConnected;
-  epicMessage.value = "Compte Epic déconnecté.";
-  epicBusy.value = false;
-  reload();
-}
-
-// EA — la connexion récupère toute la bibliothèque et la met en cache. La
-// « resynchronisation » relance le même flux (re-fetch ; login seulement si la
-// session web a expiré) car le token EA ne se rafraîchit pas silencieusement.
-async function onConnectEa() {
-  eaBusy.value = true;
-  eaMessage.value = "Connexion… une fenêtre EA s'est ouverte, connecte-toi.";
-  try {
-    const s = await connectEa();
-    eaConnected.value = s.eaConnected;
-    eaMessage.value = "Compte EA connecté — actualisation de la bibliothèque…";
-    reload();
-    closeSettings();
-  } catch (err) {
-    eaMessage.value = String(err);
-  } finally {
-    eaBusy.value = false;
-  }
-}
-
-async function onDisconnectEa() {
-  eaBusy.value = true;
-  const s = await disconnectEa();
-  eaConnected.value = s.eaConnected;
-  eaMessage.value = "Compte EA déconnecté.";
-  eaBusy.value = false;
-  reload();
-}
-
-// Battle.net — connexion via cookies de session, récupère la bibliothèque (games-and-subs).
-async function onConnectBnet() {
-  bnetBusy.value = true;
-  bnetMessage.value = "Connexion… une fenêtre Battle.net s'est ouverte, connecte-toi.";
-  try {
-    const s = await connectBattlenet();
-    bnetConnected.value = s.battlenetConnected;
-    bnetMessage.value = "Compte Battle.net connecté — actualisation de la bibliothèque…";
-    reload();
-    closeSettings();
-  } catch (err) {
-    bnetMessage.value = String(err);
-  } finally {
-    bnetBusy.value = false;
-  }
-}
-
-async function onDisconnectBnet() {
-  bnetBusy.value = true;
-  const s = await disconnectBattlenet();
-  bnetConnected.value = s.battlenetConnected;
-  bnetMessage.value = "Compte Battle.net déconnecté.";
-  bnetBusy.value = false;
-  reload();
 }
 </script>
 
@@ -228,35 +212,24 @@ async function onDisconnectBnet() {
     <section class="group">
       <div class="group-label">Comptes — jeux possédés (installés ou non)</div>
 
-      <div class="account">
-        <div class="account-top">
-          <span class="dot" style="background: var(--steam)" />
-          <span class="account-name">Steam</span>
-          <span class="badge" :class="steamConnected ? 'on' : ''">
-            {{ steamConnected ? "Connecté" : "Non connecté" }}
-          </span>
-        </div>
-
-        <template v-if="steamConnected">
-          <p class="hint">Bibliothèque synchronisée.</p>
-          <div class="row">
-            <button class="btn-primary" :disabled="busy" @click="onResync">Resynchroniser</button>
-            <button class="btn-secondary" :disabled="busy" @click="onDisconnect">Déconnecter</button>
-          </div>
-        </template>
-
-        <template v-else>
-          <p class="hint">
-            Connecte-toi à ton compte Steam pour importer toute ta bibliothèque
-            (installés ou non) et ta wishlist. Aucune clé, aucun mot de passe transmis à Torii —
-            tu te connectes dans la fenêtre officielle de Steam.
-          </p>
-          <div class="row">
-            <button class="btn-primary" :disabled="busy" @click="onConnect">
-              {{ busy ? "En attente de connexion…" : "Se connecter avec Steam" }}
-            </button>
-          </div>
-
+      <LauncherAccount
+        v-for="a in ACCOUNTS"
+        :key="a.key"
+        :name="a.name"
+        :color="a.color"
+        :connected="state[a.key].connected"
+        :busy="state[a.key].busy"
+        :hint="a.hint"
+        :synced-hint="a.syncedHint"
+        :connect-label="a.connectLabel"
+        :resync-busy-label="a.resyncReconnects ? 'Actualisation…' : undefined"
+        :message="state[a.key].message"
+        @connect="onConnect(a)"
+        @resync="onResync(a)"
+        @disconnect="onDisconnect(a)"
+      >
+        <!-- Steam : connexion par clé API, chemin avancé replié. -->
+        <template v-if="a.key === 'steam'" #extra>
           <button class="advanced-toggle" @click="showAdvanced = !showAdvanced">
             {{ showAdvanced ? "▾" : "▸" }} Utiliser une clé API (avancé)
           </button>
@@ -268,150 +241,16 @@ async function onDisconnectBnet() {
               autocomplete="off"
               @keyup.enter="onSaveKey"
             />
-            <button class="btn-secondary" :disabled="busy || !steamKey.trim()" @click="onSaveKey">
+            <button
+              class="btn-secondary"
+              :disabled="state.steam.busy || !steamKey.trim()"
+              @click="onSaveKey"
+            >
               Enregistrer
             </button>
           </div>
         </template>
-
-        <p v-if="message" class="message">{{ message }}</p>
-      </div>
-
-      <div class="account">
-        <div class="account-top">
-          <span class="dot" style="background: var(--epic)" />
-          <span class="account-name">Epic Games</span>
-          <span class="badge" :class="epicConnected ? 'on' : ''">
-            {{ epicConnected ? "Connecté" : "Non connecté" }}
-          </span>
-        </div>
-
-        <template v-if="epicConnected">
-          <p class="hint">Bibliothèque Epic synchronisée.</p>
-          <div class="row">
-            <button class="btn-primary" :disabled="epicBusy" @click="onResyncEpic">Resynchroniser</button>
-            <button class="btn-secondary" :disabled="epicBusy" @click="onDisconnectEpic">Déconnecter</button>
-          </div>
-        </template>
-
-        <template v-else>
-          <p class="hint">
-            Connecte-toi à ton compte Epic pour importer toute ta bibliothèque
-            (installés ou non). Aucun mot de passe transmis à Torii — tu te
-            connectes dans la fenêtre officielle d'Epic Games.
-          </p>
-          <div class="row">
-            <button class="btn-primary" :disabled="epicBusy" @click="onConnectEpic">
-              {{ epicBusy ? "En attente de connexion…" : "Se connecter avec Epic" }}
-            </button>
-          </div>
-        </template>
-
-        <p v-if="epicMessage" class="message">{{ epicMessage }}</p>
-      </div>
-
-      <div class="account">
-        <div class="account-top">
-          <span class="dot" style="background: var(--ea)" />
-          <span class="account-name">EA</span>
-          <span class="badge" :class="eaConnected ? 'on' : ''">
-            {{ eaConnected ? "Connecté" : "Non connecté" }}
-          </span>
-        </div>
-
-        <template v-if="eaConnected">
-          <p class="hint">Bibliothèque EA synchronisée.</p>
-          <div class="row">
-            <button class="btn-primary" :disabled="eaBusy" @click="onConnectEa">
-              {{ eaBusy ? "Actualisation…" : "Resynchroniser" }}
-            </button>
-            <button class="btn-secondary" :disabled="eaBusy" @click="onDisconnectEa">Déconnecter</button>
-          </div>
-        </template>
-
-        <template v-else>
-          <p class="hint">
-            Connecte-toi à ton compte EA pour importer toute ta bibliothèque
-            (installés ou non). Aucun mot de passe transmis à Torii — tu te
-            connectes dans la fenêtre officielle d'EA.
-          </p>
-          <div class="row">
-            <button class="btn-primary" :disabled="eaBusy" @click="onConnectEa">
-              {{ eaBusy ? "En attente de connexion…" : "Se connecter avec EA" }}
-            </button>
-          </div>
-        </template>
-
-        <p v-if="eaMessage" class="message">{{ eaMessage }}</p>
-      </div>
-
-      <div class="account">
-        <div class="account-top">
-          <span class="dot" style="background: var(--battlenet)" />
-          <span class="account-name">Battle.net</span>
-          <span class="badge" :class="bnetConnected ? 'on' : ''">
-            {{ bnetConnected ? "Connecté" : "Non connecté" }}
-          </span>
-        </div>
-
-        <template v-if="bnetConnected">
-          <p class="hint">Bibliothèque Battle.net synchronisée.</p>
-          <div class="row">
-            <button class="btn-primary" :disabled="bnetBusy" @click="onConnectBnet">
-              {{ bnetBusy ? "Actualisation…" : "Resynchroniser" }}
-            </button>
-            <button class="btn-secondary" :disabled="bnetBusy" @click="onDisconnectBnet">Déconnecter</button>
-          </div>
-        </template>
-
-        <template v-else>
-          <p class="hint">
-            Connecte-toi à ton compte Battle.net pour importer ta bibliothèque
-            Blizzard. Aucun mot de passe transmis à Torii — tu te connectes dans la
-            fenêtre officielle de Battle.net.
-          </p>
-          <div class="row">
-            <button class="btn-primary" :disabled="bnetBusy" @click="onConnectBnet">
-              {{ bnetBusy ? "En attente de connexion…" : "Se connecter avec Battle.net" }}
-            </button>
-          </div>
-        </template>
-
-        <p v-if="bnetMessage" class="message">{{ bnetMessage }}</p>
-      </div>
-
-      <div class="account">
-        <div class="account-top">
-          <span class="dot" style="background: var(--gog)" />
-          <span class="account-name">GOG</span>
-          <span class="badge" :class="gogConnected ? 'on' : ''">
-            {{ gogConnected ? "Connecté" : "Non connecté" }}
-          </span>
-        </div>
-
-        <template v-if="gogConnected">
-          <p class="hint">Bibliothèque GOG synchronisée.</p>
-          <div class="row">
-            <button class="btn-primary" :disabled="gogBusy" @click="onResyncGog">Resynchroniser</button>
-            <button class="btn-secondary" :disabled="gogBusy" @click="onDisconnectGog">Déconnecter</button>
-          </div>
-        </template>
-
-        <template v-else>
-          <p class="hint">
-            Connecte-toi à ton compte GOG pour importer toute ta bibliothèque
-            (installés ou non). Aucun mot de passe transmis à Torii — tu te
-            connectes dans la fenêtre officielle de GOG.
-          </p>
-          <div class="row">
-            <button class="btn-primary" :disabled="gogBusy" @click="onConnectGog">
-              {{ gogBusy ? "En attente de connexion…" : "Se connecter avec GOG" }}
-            </button>
-          </div>
-        </template>
-
-        <p v-if="gogMessage" class="message">{{ gogMessage }}</p>
-      </div>
+      </LauncherAccount>
     </section>
 
     <p class="footnote">Les identifiants sont stockés localement, sur cette machine uniquement.</p>
@@ -423,20 +262,8 @@ async function onDisconnectBnet() {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint);
   font-weight: 700; margin-bottom: 14px;
 }
-.account {
-  border: 1px solid var(--border); border-radius: 12px; padding: 11px 13px; margin-bottom: 7px;
-  background: var(--surface-2);
-}
-.account-top { display: flex; align-items: center; gap: 9px; }
-.account-top .dot { width: 8px; height: 8px; border-radius: 50%; }
-.account-name { font-weight: 600; font-size: 13.5px; }
-.badge {
-  margin-left: auto; font-size: 10.5px; font-family: var(--mono); padding: 2px 8px; border-radius: 99px;
-  background: var(--surface-3); color: var(--text-faint);
-}
-.badge.on { background: color-mix(in srgb, var(--manual) 20%, transparent); color: var(--manual); }
-.hint { font-size: 12px; line-height: 1.45; color: var(--text-dim); margin: 7px 0; }
-.hint code { font-family: var(--mono); color: var(--text); }
+/* Styles du chemin avancé Steam : le contenu de slot est compilé dans la portée du
+   parent, il est donc habillé ici et non dans LauncherAccount. */
 .row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
 .row.advanced { margin-top: 7px; }
 .row input {
@@ -444,11 +271,6 @@ async function onDisconnectBnet() {
   background: var(--surface); color: var(--text); font-size: 13px; font-family: var(--mono);
 }
 .row input:focus { outline: none; border-color: var(--border-strong); }
-.btn-primary {
-  padding: 8px 15px; border-radius: 9px; border: none; background: var(--accent);
-  color: var(--accent-ink); font-weight: 700; font-size: 12.5px;
-}
-.btn-primary:disabled { opacity: 0.6; cursor: default; }
 .btn-secondary {
   padding: 8px 13px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface);
   color: var(--text-dim); font-weight: 600; font-size: 12.5px;
@@ -459,6 +281,5 @@ async function onDisconnectBnet() {
   font-size: 11.5px; font-family: var(--mono); padding: 2px 0;
 }
 .advanced-toggle:hover { color: var(--text-dim); }
-.message { font-size: 12px; color: var(--accent); margin: 9px 0 0; line-height: 1.4; }
 .footnote { font-size: 11.5px; color: var(--text-faint); text-align: center; margin: 16px 0 4px; }
 </style>

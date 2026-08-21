@@ -678,12 +678,6 @@ pub fn refresh_web_cookie(refresh_token: &str, steam_id: &str) -> Option<String>
     refresh_domain_cookie(refresh_token, steam_id, "steamcommunity.com")
 }
 
-/// Comme [`refresh_web_cookie`] mais pour le domaine **store** (`store.steampowered.com`),
-/// requis par l'API wishlist du store (`addtowishlist`).
-pub fn refresh_store_cookie(refresh_token: &str, steam_id: &str) -> Option<String> {
-    refresh_domain_cookie(refresh_token, steam_id, "store.steampowered.com")
-}
-
 /// Régénère un cookie `steamLoginSecure` frais pour un **domaine** donné (communautaire ou
 /// store) à partir du refresh token, en rejouant le flux de login (finalizelogin → settoken).
 fn refresh_domain_cookie(refresh_token: &str, steam_id: &str, domain: &str) -> Option<String> {
@@ -733,25 +727,27 @@ fn refresh_domain_cookie(refresh_token: &str, steam_id: &str, domain: &str) -> O
     None
 }
 
-/// Ajoute (`add=true`) ou retire un jeu de la **vraie wishlist Steam**, via l'endpoint
-/// AJAX du store (`store.steampowered.com/api/addtowishlist` / `removefromwishlist`) —
-/// le même que le bouton « Ajouter à la liste de souhaits » du site. Utilise le cookie
-/// de session **store** (`steamLoginSecure`) + un `sessionid` (double-submit CSRF).
-/// Renvoie `true` si Steam confirme. ⚠️ API interne non documentée → à valider en réel.
-pub fn set_wishlist(appid: u64, add: bool, store_cookie: &str) -> Result<bool, String> {
-    let sessionid = random_sessionid();
-    let endpoint = if add { "addtowishlist" } else { "removefromwishlist" };
-    let resp = ureq::post(&format!("https://store.steampowered.com/api/{endpoint}"))
-        .timeout(Duration::from_secs(15))
-        .set("User-Agent", BROWSER_UA)
-        .set("Cookie", &format!("{store_cookie}; sessionid={sessionid}"))
-        .set("Origin", "https://store.steampowered.com")
-        .set("Referer", &format!("https://store.steampowered.com/app/{appid}/"))
-        .set("X-Requested-With", "XMLHttpRequest")
-        .send_form(&[("appid", &appid.to_string()), ("sessionid", &sessionid)])
-        .map_err(|e| e.to_string())?;
+/// Ajoute ou retire un jeu de la **wishlist Steam** via `IWishlistService`, la même
+/// famille d'API que la lecture (`GetWishlist`), authentifiée par le WebAPIToken.
+///
+/// 🔑 L'ancien endpoint `store.steampowered.com/api/addtowishlist` est **MORT** : il
+/// répond `200 {"success":false,"wishlistCount":0}` même avec un cookie store frais et
+/// correctement typé (`aud: web:store`) — mesuré. Ne pas y revenir. La réponse utile ici
+/// est `{"response":{"wishlist_count":N}}` ; l'absence de compteur = refus.
+pub fn set_wishlist(appid: u64, add: bool, access_token: &str) -> Result<bool, String> {
+    let method = if add { "AddToWishlist" } else { "RemoveFromWishlist" };
+    let resp = ureq::post(&format!(
+        "https://api.steampowered.com/IWishlistService/{method}/v1/"
+    ))
+    .timeout(Duration::from_secs(15))
+    .set("User-Agent", BROWSER_UA)
+    .send_form(&[
+        ("access_token", access_token),
+        ("appid", &appid.to_string()),
+    ])
+    .map_err(|e| e.to_string())?;
     let v: Value = resp.into_json().unwrap_or(Value::Null);
-    Ok(v["success"].as_bool().unwrap_or(false))
+    Ok(v["response"]["wishlist_count"].is_number())
 }
 
 /// `sessionid` aléatoire (24 hex) requis par `finalizelogin` (appariement CSRF ; il

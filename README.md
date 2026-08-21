@@ -67,7 +67,7 @@ npm run dev            # frontend seul dans un navigateur (données fictives de 
 ```
 src/
 ├── types.ts                 # Game, GameDto, Platform, LibraryFilter…
-├── data/                    # games.ts (fetchGames/enrichGames + mock), platforms.ts
+├── data/                    # games.ts (fetchGames + fusion des doublons + mock), platforms.ts
 ├── lib/                     # tauri.ts (pont commandes), covers.ts (dégradés, dates)
 ├── composables/             # useLibrary (scan/filtre), useUi (mode/détail/réglages), useTheme
 └── components/              # Bureau*, Salon*, GameCard, GameDetail, Sidebar, TopBar, SettingsPanel
@@ -91,13 +91,15 @@ src-tauri/src/
 
 | Commande | Rôle |
 |---|---|
-| `scan_library` | agrège installés + possédés + manuels |
+| `scan_library` | agrège installés + possédés + manuels (et mémorise le résultat) |
+| `cached_library` | dernier scan relu du disque : affichage immédiat au démarrage |
 | `launch_game` | lance un jeu (steam:// / URI Epic / exe) |
 | `connect_steam` / `disconnect_steam` | login intégré / déconnexion |
 | `get_settings` | état des comptes connectés |
 | `set_steam_key` | clé API Steam (option avancée) |
 | `add_manual_game` / `remove_manual_game` | jeux manuels |
-| `enrich_metadata` | métadonnées en ligne (désactivé par défaut, voir limites) |
+| `enrich_game` | métadonnées d'un jeu, à l'ouverture de sa fiche |
+| `enrich_igdb` | métadonnées descriptives de toute la bibliothèque (IGDB) |
 
 ### Exemples de test (dossier `src-tauri`)
 

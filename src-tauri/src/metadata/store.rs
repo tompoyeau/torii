@@ -16,6 +16,7 @@
 use crate::models::GameDto;
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -114,6 +115,47 @@ fn num(v: &Value) -> Option<f64> {
     v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
 }
 
+/// Nom de la boutique d'une offre ITAD.
+fn shop_of(deal: &Value) -> &str {
+    deal["shop"]["name"].as_str().unwrap_or_default()
+}
+
+/// Une offre est retenue si sa boutique n'est pas masquée par l'utilisateur.
+/// 🔑 Le choix de la « meilleure offre » se fait ICI, côté Rust : la vitrine, la
+/// recherche et la wishlist ne renvoient qu'UN prix par jeu, donc le front n'a aucun
+/// moyen de re-choisir. Sans ce filtre, un revendeur masqué continuait d'apparaître
+/// comme meilleur prix partout sauf sur la fiche produit.
+fn allowed(deal: &Value, excluded: &HashSet<String>) -> bool {
+    excluded.is_empty() || !excluded.contains(shop_of(deal))
+}
+
+/// Meilleure offre (prix mini) d'une entrée `games/prices/v3`, hors revendeurs masqués.
+fn cheapest<'a>(entry: &'a Value, excluded: &HashSet<String>) -> Option<&'a Value> {
+    entry["deals"]
+        .as_array()?
+        .iter()
+        .filter(|d| allowed(d, excluded))
+        .min_by(|a, b| {
+            num(&a["price"]["amount"])
+                .unwrap_or(f64::MAX)
+                .partial_cmp(&num(&b["price"]["amount"]).unwrap_or(f64::MAX))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+}
+
+/// Applique une offre à un item de grille (vitrine / recherche).
+fn apply_deal(item: &mut StoreItem, deal: &Value) -> bool {
+    let Some(price) = num(&deal["price"]["amount"]) else {
+        return false;
+    };
+    item.price = price;
+    item.normal_price = num(&deal["regular"]["amount"]).unwrap_or(price);
+    item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
+    item.store_name = shop_of(deal).to_string();
+    item.buy_url = deal["url"].as_str().unwrap_or_default().to_string();
+    true
+}
+
 /// Traduit un critère de tri de la vitrine en `sort` ITAD.
 fn sort_param(sort: &str) -> &'static str {
     match sort {
@@ -144,7 +186,9 @@ fn item_from_deal(it: &Value) -> Option<StoreItem> {
 }
 
 /// Vitrine : une page de jeux mis en avant / en promo, selon le tri choisi. Prix EUR.
-pub fn deals(page: u32, sort: &str) -> Vec<StoreItem> {
+/// Les offres des revendeurs masqués sont remplacées par la meilleure offre autorisée
+/// du même jeu (cf. `reprice_excluded`).
+pub fn deals(page: u32, sort: &str, excluded: &HashSet<String>) -> Vec<StoreItem> {
     let offset = page * PAGE_SIZE;
     let path = format!(
         "deals/v2?country={COUNTRY}&offset={offset}&limit={PAGE_SIZE}&sort={}",
@@ -160,10 +204,47 @@ pub fn deals(page: u32, sort: &str) -> Vec<StoreItem> {
         .or_else(|| root.as_array())
         .cloned()
         .unwrap_or_default();
-    list.iter()
+    let mut items: Vec<StoreItem> = list
+        .iter()
         .filter(|it| it["type"].as_str() != Some("dlc")) // jeux/éditions, pas les DLC
         .filter_map(item_from_deal)
-        .collect()
+        .collect();
+    reprice_excluded(&mut items, excluded);
+    items
+}
+
+/// La vitrine ITAD impose UNE offre par jeu : si elle vient d'un revendeur masqué, on
+/// redemande toutes les offres de ces jeux (un seul appel groupé) et on retient la
+/// meilleure offre autorisée. Un jeu qui n'a plus aucune offre visible sort de la liste.
+fn reprice_excluded(items: &mut Vec<StoreItem>, excluded: &HashSet<String>) {
+    if excluded.is_empty() {
+        return;
+    }
+    let ids: Vec<String> = items
+        .iter()
+        .filter(|i| excluded.contains(&i.store_name))
+        .map(|i| i.game_id.clone())
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let entries: std::collections::HashMap<String, Value> =
+        post_json(&format!("games/prices/v3?country={COUNTRY}"), &json!(ids))
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|e| Some((e["id"].as_str()?.to_string(), e)))
+            .collect();
+
+    items.retain_mut(|item| {
+        if !excluded.contains(&item.store_name) {
+            return true;
+        }
+        match entries.get(&item.game_id).and_then(|e| cheapest(e, excluded)) {
+            Some(deal) => apply_deal(item, deal),
+            None => false, // plus que des revendeurs masqués : on retire le jeu
+        }
+    });
 }
 
 /// Autocomplétion : suggestions de jeux au fil de la frappe (titre + jaquette),
@@ -193,8 +274,9 @@ pub fn suggest(query: &str) -> Vec<Suggestion> {
         .collect()
 }
 
-/// Recherche de jeux par titre : ids via `search`, puis meilleur prix via `prices`.
-pub fn search(query: &str) -> Vec<StoreItem> {
+/// Recherche de jeux par titre : ids via `search`, puis meilleur prix via `prices`
+/// (hors revendeurs masqués par l'utilisateur).
+pub fn search(query: &str, excluded: &HashSet<String>) -> Vec<StoreItem> {
     let q = query.trim();
     if q.is_empty() {
         return Vec::new();
@@ -242,12 +324,7 @@ pub fn search(query: &str) -> Vec<StoreItem> {
         .iter()
         .filter_map(|entry| {
             let id = entry["id"].as_str()?.to_string();
-            let best = entry["deals"].as_array()?.iter().min_by(|a, b| {
-                num(&a["price"]["amount"])
-                    .unwrap_or(f64::MAX)
-                    .partial_cmp(&num(&b["price"]["amount"]).unwrap_or(f64::MAX))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })?;
+            let best = cheapest(entry, excluded)?;
             let price = num(&best["price"]["amount"])?;
             let (title, cover_url) = meta.get(&id).cloned().unwrap_or_default();
             Some(StoreItem {
@@ -388,8 +465,14 @@ pub struct WishlistItem {
     /// Identifiant ITAD (pour ouvrir la fiche produit) ; vide si non trouvé sur ITAD.
     pub game_id: String,
     pub title: String,
-    /// Jaquette portrait Steam CDN (l'appid est toujours connu).
+    /// Jaquette portrait Steam CDN (capsule officielle) quand l'appid est connu.
+    /// ⚠️ Toutes les fiches Steam n'ont PAS de `library_600x900` : l'URL peut donner
+    /// un 404, d'où la jaquette de repli ci-dessous.
     pub cover_url: String,
+    /// Jaquette de repli (boxart ITAD), utilisée par le front si `cover_url` échoue.
+    /// C'est ce qui manquait : sans elle, un jeu sans capsule Steam n'affichait qu'un
+    /// dégradé dans la wishlist alors que sa fiche produit, elle, avait un visuel.
+    pub cover_fallback_url: Option<String>,
     /// Meilleur prix actuel (EUR), `None` si aucune offre / non résolu.
     pub price: Option<f64>,
     pub normal_price: Option<f64>,
@@ -400,35 +483,30 @@ pub struct WishlistItem {
     pub history_low: Option<f64>,
 }
 
-/// Résout un appid Steam en identifiant ITAD + titre via `games/lookup/v1`
-/// (réponse `{found, game:{id, title, …}}`).
-fn lookup_appid(appid: u64) -> Option<(String, String)> {
+/// Résout un appid Steam en identifiant ITAD + titre + jaquette via `games/lookup/v1`
+/// (réponse `{found, game:{id, title, assets:{boxart, …}}}`). La boxart est déjà dans
+/// cette réponse : la récupérer ne coûte aucun appel supplémentaire.
+fn lookup_appid(appid: u64) -> Option<(String, String, Option<String>)> {
     let root = get_json(&format!("games/lookup/v1?appid={appid}"))?;
     let g = root.get("game")?;
-    Some((g["id"].as_str()?.to_string(), g["title"].as_str()?.to_string()))
-}
-
-/// Meilleure offre (prix mini) d'une entrée `games/prices/v3`.
-fn best_deal(entry: &Value) -> Option<&Value> {
-    entry["deals"].as_array()?.iter().min_by(|a, b| {
-        num(&a["price"]["amount"])
-            .unwrap_or(f64::MAX)
-            .partial_cmp(&num(&b["price"]["amount"]).unwrap_or(f64::MAX))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })
+    Some((
+        g["id"].as_str()?.to_string(),
+        g["title"].as_str()?.to_string(),
+        g["assets"]["boxart"].as_str().map(String::from),
+    ))
 }
 
 /// Wishlist enrichie : pour chaque appid, résout l'id ITAD + le titre (en parallèle),
 /// puis récupère prix courant (meilleure offre) + plus bas historique **en un seul appel
 /// groupé**. Ordre d'entrée préservé (priorité de la wishlist). Jaquette = CDN Steam.
-pub fn wishlist(appids: &[u64]) -> Vec<WishlistItem> {
+pub fn wishlist(appids: &[u64], excluded: &HashSet<String>) -> Vec<WishlistItem> {
     if appids.is_empty() {
         return Vec::new();
     }
 
     // 1) appid → (id ITAD, titre), réparti sur plusieurs threads.
     let next = AtomicUsize::new(0);
-    let resolved: Vec<(u64, Option<(String, String)>)> = std::thread::scope(|scope| {
+    let resolved: Vec<(u64, Option<(String, String, Option<String>)>)> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..WISHLIST_WORKERS.min(appids.len().max(1)))
             .map(|_| {
                 scope.spawn(|| {
@@ -446,7 +524,7 @@ pub fn wishlist(appids: &[u64]) -> Vec<WishlistItem> {
             .collect();
         handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
     });
-    let mut by_appid: std::collections::HashMap<u64, (String, String)> = resolved
+    let mut by_appid: std::collections::HashMap<u64, (String, String, Option<String>)> = resolved
         .into_iter()
         .filter_map(|(a, r)| r.map(|v| (a, v)))
         .collect();
@@ -454,7 +532,7 @@ pub fn wishlist(appids: &[u64]) -> Vec<WishlistItem> {
     // 2) Prix groupés pour tous les ids ITAD résolus (un seul POST).
     let ids: Vec<String> = appids
         .iter()
-        .filter_map(|a| by_appid.get(a).map(|(id, _)| id.clone()))
+        .filter_map(|a| by_appid.get(a).map(|(id, ..)| id.clone()))
         .collect();
     let price_entries = if ids.is_empty() {
         Vec::new()
@@ -476,17 +554,20 @@ pub fn wishlist(appids: &[u64]) -> Vec<WishlistItem> {
     appids
         .iter()
         .map(|&appid| {
-            let (game_id, title) = by_appid.remove(&appid).unwrap_or_default();
+            let (game_id, title, boxart) = by_appid.remove(&appid).unwrap_or_default();
             let mut item = WishlistItem {
                 app_id: appid,
+                // Capsule officielle Steam d'abord (plus belle), boxart ITAD en repli
+                // si elle n'existe pas — le front bascule à la première erreur de chargement.
                 cover_url: format!("{cdn}/{appid}/library_600x900.jpg"),
+                cover_fallback_url: boxart,
                 title,
                 game_id: game_id.clone(),
                 ..Default::default()
             };
             if let Some(entry) = prices.get(&game_id) {
                 item.history_low = num(&entry["historyLow"]["all"]["amount"]);
-                if let Some(deal) = best_deal(entry) {
+                if let Some(deal) = cheapest(entry, excluded) {
                     if let Some(p) = num(&deal["price"]["amount"]) {
                         item.price = Some(p);
                         item.normal_price = Some(num(&deal["regular"]["amount"]).unwrap_or(p));
@@ -511,7 +592,10 @@ pub fn steam_appid_for(itad_id: &str) -> Option<u64> {
 
 /// Enrichit des entrées de wishlist **Torii** (id ITAD + appid éventuel + titre + jaquette)
 /// avec les prix ITAD (un seul POST). Utilisé pour les jeux ajoutés dans Torii (Steam ou non).
-pub fn wishlist_custom(entries: &[(String, u64, String, Option<String>)]) -> Vec<WishlistItem> {
+pub fn wishlist_custom(
+    entries: &[(String, u64, String, Option<String>)],
+    excluded: &HashSet<String>,
+) -> Vec<WishlistItem> {
     if entries.is_empty() {
         return Vec::new();
     }
@@ -532,23 +616,25 @@ pub fn wishlist_custom(entries: &[(String, u64, String, Option<String>)]) -> Vec
     entries
         .iter()
         .map(|(id, appid, title, cover)| {
-            let cover_url = cover.clone().unwrap_or_else(|| {
-                if *appid > 0 {
-                    format!("{cdn}/{appid}/library_600x900.jpg")
-                } else {
-                    String::new()
-                }
-            });
+            // Jeu aussi présent sur Steam : capsule officielle d'abord, jaquette mémorisée
+            // (boxart ITAD) en repli. Sinon la jaquette mémorisée suffit.
+            let steam_capsule =
+                (*appid > 0).then(|| format!("{cdn}/{appid}/library_600x900.jpg"));
+            let (cover_url, cover_fallback_url) = match (steam_capsule, cover.clone()) {
+                (Some(capsule), fallback) => (capsule, fallback),
+                (None, stored) => (stored.unwrap_or_default(), None),
+            };
             let mut item = WishlistItem {
                 app_id: *appid,
                 game_id: id.clone(),
                 title: title.clone(),
                 cover_url,
+                cover_fallback_url,
                 ..Default::default()
             };
             if let Some(entry) = prices.get(id) {
                 item.history_low = num(&entry["historyLow"]["all"]["amount"]);
-                if let Some(deal) = best_deal(entry) {
+                if let Some(deal) = cheapest(entry, excluded) {
                     if let Some(p) = num(&deal["price"]["amount"]) {
                         item.price = Some(p);
                         item.normal_price = Some(num(&deal["regular"]["amount"]).unwrap_or(p));
@@ -607,6 +693,65 @@ mod tests {
         assert_eq!(num(&json!(9.99)), Some(9.99));
         assert_eq!(num(&json!("9.99")), Some(9.99));
         assert_eq!(num(&json!(null)), None);
+    }
+
+    /// Entrée `games/prices/v3` à trois offres, de la moins chère à la plus chère.
+    fn prices_entry() -> Value {
+        serde_json::from_str(
+            r#"{"id":"g1","deals":[
+                {"shop":{"name":"JoyBuggy"},"price":{"amount":9.99},"regular":{"amount":39.99},"cut":75,"url":"https://joy/1"},
+                {"shop":{"name":"Fanatical"},"price":{"amount":12.49},"regular":{"amount":39.99},"cut":69,"url":"https://fana/1"},
+                {"shop":{"name":"Steam"},"price":{"amount":19.99},"regular":{"amount":39.99},"cut":50,"url":"https://steam/1"}]}"#,
+        )
+        .unwrap()
+    }
+
+    /// Le revendeur masqué ne doit JAMAIS être retenu comme meilleure offre — c'est le
+    /// choix fait ici qui alimente la vitrine, la recherche et la wishlist (un seul prix
+    /// par jeu côté front, donc rien à re-filtrer là-bas).
+    #[test]
+    fn cheapest_skips_excluded_shops() {
+        let entry = prices_entry();
+        let none = HashSet::new();
+        assert_eq!(shop_of(cheapest(&entry, &none).unwrap()), "JoyBuggy");
+
+        let excluded: HashSet<String> = ["JoyBuggy".to_string()].into_iter().collect();
+        assert_eq!(shop_of(cheapest(&entry, &excluded).unwrap()), "Fanatical");
+
+        let excluded: HashSet<String> = ["JoyBuggy", "Fanatical"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let best = cheapest(&entry, &excluded).unwrap();
+        assert_eq!(shop_of(best), "Steam");
+        assert_eq!(num(&best["price"]["amount"]), Some(19.99));
+
+        // Tout masqué : aucune offre retenue (le jeu sort de la grille).
+        let excluded: HashSet<String> = ["JoyBuggy", "Fanatical", "Steam"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(cheapest(&entry, &excluded).is_none());
+    }
+
+    /// `apply_deal` remplace bien prix, remise, boutique et lien d'achat de l'item.
+    #[test]
+    fn apply_deal_rewrites_item() {
+        let entry = prices_entry();
+        let excluded: HashSet<String> = ["JoyBuggy".to_string()].into_iter().collect();
+        let mut item = StoreItem {
+            store_name: "JoyBuggy".into(),
+            price: 9.99,
+            normal_price: 39.99,
+            savings: 75,
+            buy_url: "https://joy/1".into(),
+            ..Default::default()
+        };
+        assert!(apply_deal(&mut item, cheapest(&entry, &excluded).unwrap()));
+        assert_eq!(item.store_name, "Fanatical");
+        assert_eq!(item.price, 12.49);
+        assert_eq!(item.savings, 69);
+        assert_eq!(item.buy_url, "https://fana/1");
     }
 
     #[test]

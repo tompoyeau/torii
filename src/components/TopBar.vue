@@ -10,7 +10,7 @@ import ModeSwitch from "./ModeSwitch.vue";
 
 const { section, query, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
 const { toggle: toggleTheme } = useTheme();
-const { loading, enriching, enrichProgress, reload } = useLibrary();
+const { loading, reload } = useLibrary();
 const { activeCount: friendsOnline, refresh: refreshFriends } = useFriends();
 
 // Identité de l'utilisateur (Steam) affichée dans l'en-tête. Masquée si non connecté.
@@ -34,11 +34,6 @@ function openMe() {
     <div class="topbar-spacer" />
     <span v-if="loading" class="enrich-pill">
       <span class="spinner" />Actualisation…
-    </span>
-    <span v-else-if="enriching" class="enrich-pill">
-      <span class="spinner" />
-      <template v-if="enrichProgress">Métadonnées {{ enrichProgress.done }}/{{ enrichProgress.total }}</template>
-      <template v-else>Métadonnées…</template>
     </span>
     <button class="add-btn" title="Ajouter un jeu manuellement" @click="openAddGame">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>

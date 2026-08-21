@@ -1,5 +1,6 @@
 import type { Game, GameDto, GameSource, PlatformId } from "../types";
 import { gradientFor, relativeTime } from "../lib/covers";
+import { cachedLibrary, displayableCover, scanLibrary } from "../lib/tauri";
 
 /** Clé de rapprochement d'un titre : minuscules, alphanumérique seul (retire
  * ™®, ponctuation, espaces). Strict → évite les fusions abusives. */
@@ -97,9 +98,6 @@ const MOCK_GAMES: Game[] = [
   { id: "rustbound", title: "Rustbound", platform: "epic", genre: "Craft", cover: "linear-gradient(150deg,#3d1c00,#d38312)", hoursPlayed: 47, lastPlayed: "il y a 4 j", developer: "Cogwork", year: 2022, sizeGb: 34, achievements: { unlocked: 26, total: 48 }, installed: false, favorite: false, recent: false, description: DESCRIPTION },
 ];
 
-/** Jeux mis en avant dans le carrousel du mode Salon. */
-export const SPOTLIGHT_IDS = ["neon-requiem", "ashen-kingdoms", "bastion-fall", "aurora-drift"];
-
 const RECENT_WINDOW_DAYS = 21;
 
 /** Convertit un jeu brut (scan Rust) en modèle d'affichage. */
@@ -111,7 +109,9 @@ export function fromDto(dto: GameDto): Game {
     title: dto.title,
     platform: dto.platform,
     cover: gradientFor(dto.id),
-    coverUrl: dto.coverUrl ?? undefined,
+    // Une jaquette de jeu manuel peut être un fichier local choisi par l'utilisateur :
+    // la webview a besoin d'une URL `asset://` pour l'afficher.
+    coverUrl: dto.coverUrl ? displayableCover(dto.coverUrl) : undefined,
     heroUrl: dto.heroUrl ?? undefined,
     installed: dto.installed,
     owned: dto.owned ?? dto.installed,
@@ -137,34 +137,20 @@ export function fromDto(dto: GameDto): Game {
   };
 }
 
-async function invokeGames(command: string): Promise<Game[]> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  const dtos = await invoke<GameDto[]>(command);
-  return dtos.map(fromDto);
-}
-
 /**
  * Source unique des jeux.
  * - Sous Tauri : commande Rust `scan_library` (Steam / Epic / GOG / manuel).
  * - Hors Tauri (navigateur, `npm run dev`) : données fictives.
  */
 export async function fetchGames(): Promise<Game[]> {
-  try {
-    return await invokeGames("scan_library");
-  } catch {
-    return MOCK_GAMES;
-  }
+  const dtos = await scanLibrary();
+  return dtos ? dtos.map(fromDto) : MOCK_GAMES;
 }
 
 /**
- * Version enrichie (genre, jaquettes, captures…) via l'API Steam Store.
- * Plus lente : à appeler en arrière-plan après `fetchGames`.
- * Renvoie `null` hors Tauri (aucun enrichissement à faire).
+ * Bibliothèque du dernier scan (cache disque) : rendue immédiatement au lancement,
+ * le temps que `fetchGames()` termine. Vide au premier lancement et hors Tauri.
  */
-export async function enrichGames(): Promise<Game[] | null> {
-  try {
-    return await invokeGames("enrich_metadata");
-  } catch {
-    return null;
-  }
+export async function fetchCachedGames(): Promise<Game[]> {
+  return (await cachedLibrary()).map(fromDto);
 }

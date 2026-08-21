@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { fetchGames, fromDto, mergeDuplicates } from "../data/games";
+import { fetchCachedGames, fetchGames, fromDto, mergeDuplicates } from "../data/games";
 import { relativeTime } from "../lib/covers";
 import {
   addManualGame,
@@ -9,6 +9,7 @@ import {
   launchGame,
   recordLaunch,
   removeManualGame,
+  updateManualGame,
   setGameFavorite,
   setGameHidden,
   startGameWatch,
@@ -23,8 +24,6 @@ const games = ref<Game[]>([]);
 const loading = ref(false);
 /** false tant que le tout premier scan n'a pas abouti (pilote l'écran de démarrage). */
 const booted = ref(false);
-const enriching = ref(false);
-const enrichProgress = ref<{ done: number; total: number } | null>(null);
 const enrichingId = ref<string | null>(null);
 let started = false;
 
@@ -67,13 +66,32 @@ async function ensureEnriched(id: string) {
   };
 }
 
+/** Le repli sur le cache disque ne sert qu'au tout premier affichage de la session. */
+let usedCache = false;
+/** Passe à true dès que le scan complet a répondu : le cache ne doit plus rien écraser. */
+let freshLoaded = false;
+
 function load() {
   if (started) return;
   started = true;
-
   loading.value = true;
+
+  // 1) Affichage immédiat de la bibliothèque du dernier scan (lecture disque, zéro
+  //    réseau) : l'écran de démarrage s'efface tout de suite au lieu d'attendre les
+  //    allers-retours Steam/GOG/Epic. Ignoré si le scan complet a déjà répondu.
+  if (!usedCache) {
+    usedCache = true;
+    void fetchCachedGames().then((list) => {
+      if (freshLoaded || !list.length) return;
+      games.value = mergeDuplicates(list);
+      booted.value = true;
+    });
+  }
+
+  // 2) Scan complet : remplace la liste affichée dès qu'il arrive.
   fetchGames()
     .then((list) => {
+      freshLoaded = true;
       // Fusionne les doublons cross-plateforme en cartes uniques multi-sources.
       games.value = mergeDuplicates(list);
       // En tâche de fond : IGDB peuple toute la métadonnée descriptive.
@@ -190,6 +208,22 @@ export function useLibrary() {
     return added[added.length - 1] ?? null;
   }
 
+  /**
+   * Met à jour un jeu manuel (persisté côté Rust + rafraîchi dans le store, sans
+   * re-scanner). Favori et masquage sont conservés : ils vivent dans leurs propres
+   * listes, indexées par l'id — que l'édition ne change jamais.
+   */
+  async function updateManual(id: string, input: ManualInput): Promise<Game | null> {
+    const list = await updateManualGame(id, input);
+    const dto = list?.find((d) => d.id === id);
+    if (!dto) return null;
+    const fresh = fromDto(dto);
+    games.value = games.value.map((g) =>
+      g.id === id ? { ...fresh, favorite: g.favorite, hidden: g.hidden } : g,
+    );
+    return fresh;
+  }
+
   /** Retire un jeu manuel (persisté côté Rust + retiré du store). */
   async function removeManual(id: string) {
     await removeManualGame(id);
@@ -244,8 +278,6 @@ export function useLibrary() {
     games,
     loading,
     booted,
-    enriching,
-    enrichProgress,
     enrichingId,
     byId,
     spotlight,
@@ -256,6 +288,7 @@ export function useLibrary() {
     setHidden,
     setFavorite,
     addManual,
+    updateManual,
     removeManual,
     markPlayed,
     launchOrInstall,

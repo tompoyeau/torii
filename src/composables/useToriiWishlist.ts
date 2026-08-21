@@ -10,11 +10,22 @@ import { useWishlist } from "./useWishlist";
  */
 const ids = ref<Set<string>>(new Set());
 let loaded = false;
+/**
+ * Basculements faits par l'utilisateur avant que la liste du disque ne soit revenue.
+ * Sans ça, un clic sur ♥ dans la première seconde était écrasé par `ensureLoaded`
+ * (qui lisait un état antérieur à l'ajout) et le cœur se re-vidait tout seul.
+ */
+const pending = new Map<string, boolean>();
 
 async function ensureLoaded() {
   if (loaded) return;
   loaded = true;
-  ids.value = new Set(await wishlistIds());
+  const disk = new Set(await wishlistIds());
+  for (const [id, on] of pending) {
+    if (on) disk.add(id);
+    else disk.delete(id);
+  }
+  ids.value = disk;
 }
 
 function isWishlisted(id: string): boolean {
@@ -31,15 +42,23 @@ async function toggle(item: { gameId: string; title: string; coverUrl?: string |
   if (next.has(id)) {
     next.delete(id);
     ids.value = next;
-    showToast(`« ${item.title} » retiré de la wishlist`);
+    pending.set(id, false);
     removeLocal(id); // disparition immédiate de la grille
     await wishlistRemove(id);
+    showToast(`« ${item.title} » retiré de ta wishlist`);
   } else {
     next.add(id);
     ids.value = next;
-    showToast(`« ${item.title} » ajouté à la wishlist`);
+    pending.set(id, true);
     addLocal(item); // apparition immédiate (prix « à venir » jusqu'au prochain refresh)
-    await wishlistAdd(id, item.title, item.coverUrl ?? null);
+    // Le retour dit si le jeu a AUSSI été poussé vers la vraie wishlist Steam : autant
+    // le dire, plutôt qu'un « ajouté » qui laissait croire que Steam avait suivi.
+    const onSteam = await wishlistAdd(id, item.title, item.coverUrl ?? null);
+    showToast(
+      onSteam
+        ? `« ${item.title} » ajouté à ta wishlist, Steam compris`
+        : `« ${item.title} » ajouté à ta wishlist`,
+    );
   }
 }
 

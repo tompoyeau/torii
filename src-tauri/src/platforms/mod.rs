@@ -1,8 +1,7 @@
 pub mod epic;
-pub mod excluded_stores;
-pub mod favorites;
 pub mod gog;
-pub mod hidden;
+pub mod id_set;
+pub mod library_cache;
 pub mod manual;
 pub mod playhistory;
 pub mod riot;
@@ -50,8 +49,8 @@ pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
 
     // Marque les jeux masqués (exclusion) et favoris (le front s'appuie dessus pour ses filtres).
     if let Some(dir) = config_dir {
-        let excluded = hidden::load(dir);
-        let favorites = favorites::load(dir);
+        let excluded = id_set::HIDDEN.load(dir);
+        let favorites = id_set::FAVORITES.load(dir);
         if !excluded.is_empty() || !favorites.is_empty() {
             for game in &mut games {
                 game.hidden = excluded.contains(&game.id);

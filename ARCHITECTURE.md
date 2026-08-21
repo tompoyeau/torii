@@ -48,6 +48,64 @@ cargo run --example community        # jeux possédés + famille (via session st
 - Le front doit rester fonctionnel hors Tauri (navigateur) : les appels `invoke` sont
   try/catch → repli sur données mock. Ne pas casser ce chemin.
 - Config/secrets stockés dans le dossier config de l'app (`%APPDATA%\com.tompo.ludo\`).
+- 🔒 **Les identifiants sont chiffrés au repos** : `accounts/secrets.rs` écrit `credentials.dat`
+  via **DPAPI** (`CryptProtectData`, portée utilisateur + entropie applicative), en FFI directe
+  sur `crypt32` (pas de nouvelle dépendance). Un ancien `credentials.json` en clair est migré
+  puis **supprimé** au premier chargement. Un blob illisible (autre compte Windows, fichier
+  copié) → identifiants vides, l'utilisateur se reconnecte ; on ne supprime rien.
+- **Bibliothèque affichée avant le réseau** : `scan_library` persiste son résultat
+  (`platforms/library_cache.rs` → `library_cache_v1.json`), et `cached_library` le relit
+  instantanément. Le front (`useLibrary.load`) affiche ce cache puis le remplace par le scan
+  frais — d'où l'écran de démarrage qui s'efface en ~0,3 s au lieu d'attendre Steam/GOG/Epic.
+  Le repli cache ne joue qu'au **premier** chargement (pas sur `reload()`), et n'écrase jamais
+  un scan frais déjà arrivé.
+- 🔑 **Revendeurs masqués : le filtre est côté RUST.** La vitrine, la recherche et la wishlist
+  ne renvoient qu'UN prix par jeu (la meilleure offre) — le front n'a donc rien à re-filtrer et
+  ne le peut pas. `metadata::store::cheapest(entry, excluded)` est le seul endroit qui choisit
+  une offre ; `deals()` re-tarife en plus les jeux dont l'offre ITAD vient d'un revendeur masqué
+  (un appel groupé). Seule la fiche produit reçoit toutes les offres et filtre côté front (elle
+  affiche les masquées dans un repli « réafficher »).
+
+## Pièges de plomberie (NE PAS refaire les erreurs)
+
+- 🔑 **Écriture wishlist Steam : `store.steampowered.com/api/addtowishlist` est MORT.**
+  Mesuré : il répond `200 {"success":false,"wishlistCount":0}` même avec un cookie store
+  fraîchement régénéré et correctement typé (`aud: ["web:store"]`), donc l'échec est
+  silencieux. L'écriture passe par `IWishlistService/AddToWishlist/v1` et
+  `RemoveFromWishlist/v1` (form `access_token` + `appid`, réponse
+  `{"response":{"wishlist_count":N}}`) — la même famille d'API que la lecture
+  `GetWishlist`, avec le même WebAPIToken (`accounts::steam_access_token`). Vérifié en
+  aller-retour réel : ajout 46→47, retrait 47→46.
+
+- 🔑 **La capsule Steam `library_600x900` n'existe PAS pour tout jeu** : mesuré sur une
+  wishlist réelle, **22 jeux sur 43** renvoient un 404 (nouveautés, jeux non sortis). Toute
+  jaquette construite depuis `cdn…/{appid}/library_600x900.jpg` doit donc avoir un repli.
+  `WishlistItem` porte `cover_fallback_url` (boxart ITAD, déjà présente dans la réponse
+  `games/lookup/v1` — zéro appel de plus) et le front enchaîne capsule → boxart → dégradé.
+- **Le fond des cartes à jaquette est mutualisé** dans `style.css` (`.cover-card` : rayon,
+  ombre, survol, image, voile, titre incrusté, pastille de remise). Bibliothèque, Boutique
+  et Wishlist l'utilisent ; chaque vue n'ajoute que ce qui lui est propre. Ne pas redéclarer
+  `.cover`/`.cover-title` en scoped dans une vue : les trois grilles avaient divergé comme ça
+  (rayon 12 vs 16, pas d'ombre, survol deux fois plus court, titre absent de la jaquette).
+
+- **Une commande Tauri qui touche au réseau ou au disque DOIT être `async` + `spawn_blocking`.**
+  Une commande synchrone s'exécute sur le **thread principal** (`body_blocking` dans
+  `tauri-macros`) : elle y bloque la boucle d'événements → fenêtre « ne répond pas », tray
+  inerte, et toute opération `run_on_main_thread` mise en file derrière. C'était le cas de
+  `scan_library` (scan complet, réseau des comptes compris) jusqu'à la correction.
+- **Un scan n'est pas une lecture locale.** `platforms::scan_all` rejoue toute la séquence
+  réseau des comptes, dont un refresh GOG qui **fait tourner** le refresh token. Ne jamais
+  l'appeler pour « savoir quels jeux existent » : `scan_library` mémorise son résultat dans
+  l'état `LastScan`, que `enrich_igdb` réutilise. Deux scans concurrents = token GOG grillé.
+- **`@tauri-apps/api` s'importe sans erreur dans un navigateur nu** : c'est `invoke` qui échoue
+  (il lit `window.__TAURI_INTERNALS__`). Le pont `lib/tauri.ts` teste donc ce global
+  (`hasTauriRuntime`) pour distinguer « hors Tauri » (repli silencieux) d'une commande qui a
+  vraiment échoué (`console.error`) — les envelopper dans un même `try/catch` déguisait les
+  erreurs backend en mode preview, mocks compris.
+- **Les cinq flux de login passent par les mêmes briques** (`open_login_window`,
+  `probe_login_window`, `poll_login_window`, `wait_for_capture`, `capture_channel`,
+  `forget_credentials` dans `lib.rs`). Ajouter un launcher = fournir son URL, son script de
+  capture et sa sonde, pas recopier 60 lignes.
 
 ## Pièges Steam déjà résolus (NE PAS refaire les erreurs)
 
@@ -146,8 +204,8 @@ cargo run --example community        # jeux possédés + famille (via session st
 ## Enrichissement à la demande (fait)
 
 - Commande `enrich_game(id, platform, launch_target, title)` → `metadata::enrich_one`, appelée à
-  **l'ouverture de la vue détail** (l'enrichissement en masse `enrich_metadata` reste dispo mais
-  n'est plus branché au chargement). Même cache disque `metadata_cache.json`, clé = id du jeu.
+  **l'ouverture de la vue détail**. (L'enrichissement en masse `enrich_metadata` / `enrich_covers`
+  a été supprimé : plus aucun appelant depuis le passage à l'enrichissement à la demande + IGDB.) Même cache disque `metadata_cache.json`, clé = id du jeu.
 - Sources par plateforme (`metadata::fetch`) : **Steam** = `steam_store::appdetails` ;
   **GOG** = `gog_store::product` (API v2 publique `api.gog.com/v2/games/{id}`, UN appel → description
   HTML nettoyée + tronquée, captures via URL templatée `{formatter}`→`product_card_screenshot_748`,
@@ -172,7 +230,8 @@ cargo run --example community        # jeux possédés + famille (via session st
 ## Liste d'exclusion / jeux masqués (fait)
 
 - Masquer un jeu non désiré ou un doublon cross-plateforme. Persisté dans `hidden.json`
-  (`platforms/hidden.rs` : `load`/`set(id, hidden)` → liste d'ids). `scan_all` marque
+  (`platforms/id_set.rs` : `HIDDEN.load(dir)` / `HIDDEN.set(dir, id, on)` → liste d'ids ; le même
+  module sert aux favoris `FAVORITES` et aux revendeurs masqués `EXCLUDED_STORES`). `scan_all` marque
   `GameDto.hidden` d'après cette liste. Commande `set_game_hidden(id, hidden)` → liste à jour.
 - Front : `Game.hidden`, `useLibrary.setHidden(id, hidden)` (maj réactive + persiste). `matches()`
   cache les masqués de toutes les vues SAUF le filtre `"hidden"` (qui ne montre qu'eux). Bouton
