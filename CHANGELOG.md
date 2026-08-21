@@ -4,6 +4,12 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.14.0
+- **Un ami lance un jeu, tu le vois** : un bandeau s'affiche quelques secondes en haut à droite de l'écran, par-dessus les autres fenêtres, sans jamais te voler le clavier. Désactivable dans Réglages → Réseau Torii. Un jeu en plein écran exclusif peut le masquer.
+- **Journal de diagnostic** : Torii écrit désormais ce qui lui arrive dans un fichier (Réglages → À propos → « Ouvrir le journal »). Si l'application se ferme toute seule ou qu'un écran reste blanc, ce fichier dit pourquoi. Trois pannes rencontrées par des joueurs n'avaient laissé aucune trace jusqu'ici.
+- **Ton compte Steam et ton compte Torii se retrouvent tout seuls** : dès que les deux sont connectés, ton identifiant Steam remonte dans ton compte Torii et tes amis Steam déjà sur Torii peuvent te retrouver. Ça n'arrive qu'une fois : si tu éteins cette visibilité, elle reste éteinte.
+- Vue Amis : le bouton « Jouer » est aligné en bas de chaque carte, et tous les amis en partie affichent « en ce moment » — la durée n'était connue que pour une partie d'entre eux, ce qui donnait l'impression d'une information manquante.
+
 ## 0.13.0
 - **Vue Amis repensée** : ceux qui jouent apparaissent en premier, sur des cartes qui montrent le jeu en grand et depuis combien de temps. Les hors ligne sont repliés, les disponibles tiennent en une ligne.
 - **« Tu l'as aussi »** : quand un ami joue à un jeu que tu possèdes, sa carte te le signale et te propose de le lancer — même si vous ne l'avez pas sur le même launcher. C'est ce que Torii sait faire et que personne d'autre ne fait.
