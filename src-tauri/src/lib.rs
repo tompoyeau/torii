@@ -1383,6 +1383,13 @@ async fn torii_invite(app: tauri::AppHandle, friend_code: String) -> Result<(), 
     Ok(offload!(social::invite(&dir, &friend_code))?)
 }
 
+/// Invite une personne trouvée par suggestion (identifiant plutôt que code d'ami).
+#[tauri::command]
+async fn torii_invite_account(app: tauri::AppHandle, account_id: String) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::invite_account(&dir, &account_id))?)
+}
+
 #[tauri::command]
 async fn torii_respond(
     app: tauri::AppHandle,
@@ -1449,13 +1456,26 @@ fn torii_mute_game(app: tauri::AppHandle, id: String, muted: bool) -> Result<Vec
 
 /// Préférences liées à la fenêtre, lues côté Rust (au démarrage et à la fermeture)
 /// donc persistées dans un fichier plutôt qu'en localStorage.
-#[derive(Serialize, serde::Deserialize, Clone, Copy, Default)]
+#[derive(Serialize, serde::Deserialize, Clone, Copy)]
 #[serde(rename_all = "camelCase", default)]
 struct WindowPrefs {
     /// Démarrer réduit dans la zone de notification (fenêtre cachée au lancement).
     start_minimized: bool,
     /// Fermer la fenêtre la réduit dans le tray au lieu de quitter l'application.
     close_to_tray: bool,
+}
+
+impl Default for WindowPrefs {
+    /// 🔑 `close_to_tray` est **vrai** par défaut : Torii doit continuer à détecter les
+    /// parties une fois la fenêtre fermée, sinon « Récemment joué » et la présence
+    /// s'arrêtent dès qu'on range la fenêtre — ce que personne n'associe à une fermeture.
+    /// Qui veut vraiment quitter décoche la case, ou passe par « Quitter » dans le tray.
+    fn default() -> Self {
+        WindowPrefs {
+            start_minimized: false,
+            close_to_tray: true,
+        }
+    }
 }
 
 fn load_window_prefs(app: &tauri::AppHandle) -> WindowPrefs {
@@ -1649,6 +1669,7 @@ pub fn run() {
             torii_set_profile,
             torii_circle,
             torii_invite,
+            torii_invite_account,
             torii_respond,
             torii_remove_friend,
             torii_rotate_code,

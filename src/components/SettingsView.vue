@@ -13,14 +13,18 @@ import PlatformIcon from "./PlatformIcon.vue";
 import AccountsSettings from "./AccountsSettings.vue";
 import ToriiPanel from "./ToriiPanel.vue";
 import { useTorii } from "../composables/useTorii";
+import { useFriends } from "../composables/useFriends";
 
 const { games, setHidden } = useLibrary();
 const { prefs } = usePreferences();
 const { excludedStores, toggleStoreExcluded, clearExcludedStores } = useStore();
 const {
   account: toriiAccount, connected: toriiConnected, prefs: toriiPrefs, mutedGames,
+  suggestions, searching, searched,
   setPrefs: setToriiPrefs, setMuted, setSteamLink, logout: toriiLogout,
+  findSteamFriends, inviteAccount,
 } = useTorii();
+const { friends: steamFriends, refresh: refreshSteamFriends } = useFriends();
 
 /** Délais d'inactivité proposés avant de passer « absent ». */
 const AWAY_DELAYS = [5, 10, 20, 30] as const;
@@ -47,6 +51,23 @@ onMounted(async () => {
 async function onToggleSteamLink() {
   const linked = !!toriiAccount.value?.steamId;
   await setSteamLink(linked ? null : mySteamId.value, !linked);
+}
+
+/** Le lien Steam n'a de sens que si un compte Steam est connecté dans Torii. */
+const canLinkSteam = computed(() => !!mySteamId.value);
+
+/**
+ * Cherche les amis Steam qui ont un compte Torii. On envoie la liste de SteamID de nos
+ * amis Steam ; le serveur ne répond que pour ceux qui se sont rendus découvrables.
+ */
+async function onFindSteamFriends() {
+  if (!steamFriends.value.length) await refreshSteamFriends();
+  await findSteamFriends(steamFriends.value.map((f) => f.steamId));
+}
+
+/** Nom Steam d'une suggestion, plus parlant que le pseudo Torii. */
+function steamNameOf(steamId: string | null | undefined): string | null {
+  return steamFriends.value.find((f) => f.steamId === steamId)?.name ?? null;
 }
 const { theme, setTheme } = useTheme();
 const { settingsOpen, settingsCategory, setSettingsCategory, closeSettings } = useUi();
@@ -243,7 +264,11 @@ function unhide(id: string) {
             <button class="pref toggle-row" role="switch" :aria-checked="closeToTray" @click="toggleCloseToTray">
               <div class="row-text">
                 <span class="row-title">Fermer réduit dans la zone de notification</span>
-                <span class="row-sub">Le bouton fermer garde Torii en arrière-plan (utile pour le suivi des sessions) au lieu de quitter.</span>
+                <span class="row-sub">
+                  Activé par défaut : Torii continue de repérer tes parties une fois la
+                  fenêtre fermée. Décoche pour que la croix quitte vraiment l'application —
+                  « Quitter » reste disponible par clic droit sur l'icône près de l'horloge.
+                </span>
               </div>
               <span class="switch" :class="{ on: closeToTray }"><span class="knob" /></span>
             </button>
@@ -483,17 +508,56 @@ function unhide(id: string) {
                 class="pref toggle-row"
                 role="switch"
                 :aria-checked="!!toriiAccount?.steamDiscoverable"
+                :disabled="!canLinkSteam"
                 @click="onToggleSteamLink"
               >
                 <div class="row-text">
                   <span class="row-title">Visible par mes amis Steam</span>
                   <span class="row-sub">
-                    Permet à tes amis Steam déjà sur Torii de te retrouver, et de fusionner
-                    ta fiche avec ton profil Steam. Il faut que vous l'ayez activé tous les deux.
+                    <template v-if="canLinkSteam">
+                      Permet à tes amis Steam déjà sur Torii de te retrouver, et de fusionner
+                      ta fiche avec ton profil Steam. Il faut que vous l'ayez activé tous les deux.
+                    </template>
+                    <template v-else>
+                      Connecte d'abord ton compte Steam dans « Comptes &amp; launchers » :
+                      sans lui, il n'y a rien à rapprocher.
+                    </template>
                   </span>
                 </div>
                 <span class="switch" :class="{ on: toriiAccount?.steamDiscoverable }"><span class="knob" /></span>
               </button>
+
+              <template v-if="toriiAccount?.steamDiscoverable">
+                <div class="divider" />
+                <h3 class="sub-title">Retrouver mes amis Steam</h3>
+                <p class="pane-hint">
+                  Torii compare ta liste d'amis Steam aux comptes existants. Seuls ceux qui
+                  ont eux aussi activé cette option apparaissent — c'est ce qui empêche de
+                  s'en servir pour savoir qui utilise Torii.
+                </p>
+                <div class="row-actions">
+                  <button class="ghost-btn" :disabled="searching" @click="onFindSteamFriends">
+                    {{ searching ? "Recherche…" : "Chercher parmi mes amis Steam" }}
+                  </button>
+                </div>
+                <div v-if="suggestions.length" class="items">
+                  <div v-for="p in suggestions" :key="p.id" class="item">
+                    <div class="thumb store">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
+                    </div>
+                    <div class="item-text">
+                      <span class="item-title">{{ p.displayName }}</span>
+                      <span v-if="steamNameOf(p.steamId)" class="item-sub">
+                        {{ steamNameOf(p.steamId) }} sur Steam
+                      </span>
+                    </div>
+                    <button class="ghost-btn" @click="inviteAccount(p.id)">Ajouter</button>
+                  </div>
+                </div>
+                <p v-else-if="searched && !searching" class="empty">
+                  Aucun de tes amis Steam n'a de compte Torii visible pour l'instant.
+                </p>
+              </template>
 
               <div class="divider" />
 
