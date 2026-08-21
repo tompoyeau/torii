@@ -158,12 +158,23 @@ pub fn request_code(email: &str) -> Result<Option<String>, String> {
     Ok(body["devCode"].as_str().map(str::to_string))
 }
 
+/// Compte connecté, plus l'indication d'une inscription qui vient d'avoir lieu.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SignIn {
+    pub account: Account,
+    /// Vrai si le compte vient d'être créé : le front propose alors un pseudo.
+    pub created: bool,
+}
+
 /// Échange le code contre une session et la persiste (chiffrée). Renvoie le compte.
-pub fn verify(config_dir: &Path, email: &str, code: &str) -> Result<Account, String> {
+pub fn verify(config_dir: &Path, email: &str, code: &str) -> Result<SignIn, String> {
     #[derive(Deserialize)]
     struct Verified {
         token: String,
         account: Account,
+        #[serde(default)]
+        created: bool,
     }
     // Le nom d'appareil aide à s'y retrouver quand le mobile arrivera : chaque session
     // est indépendante et révocable séparément.
@@ -177,7 +188,10 @@ pub fn verify(config_dir: &Path, email: &str, code: &str) -> Result<Account, Str
     let mut creds = secrets::load(config_dir);
     creds.torii_token = Some(verified.token);
     secrets::save(config_dir, &creds)?;
-    Ok(verified.account)
+    Ok(SignIn {
+        account: verified.account,
+        created: verified.created,
+    })
 }
 
 /// Ferme la session côté serveur puis efface le jeton local.
@@ -336,14 +350,24 @@ pub fn clear_presence(config_dir: &Path) -> Result<(), String> {
 /// battements manqués suffisent donc à passer hors ligne.
 const HEARTBEAT: Duration = Duration::from_secs(30);
 
+/// Ce qu'on laisse voir de soi aux amis.
+pub const PRESENCE_OFFLINE: &str = "offline";
+pub const PRESENCE_ONLINE: &str = "online";
+pub const PRESENCE_DETAILED: &str = "detailed";
+
 /// Réglages de présence, persistés dans `social_prefs.json`.
 ///
-/// 🔑 `share_presence` est **faux par défaut**. Rien ne quitte la machine tant que
-/// l'utilisateur ne l'a pas explicitement activé : une présence dit à quelle heure on
-/// est devant son PC, ce n'est pas une donnée qu'on diffuse par défaut.
+/// 🔑 Le mode par défaut est **hors ligne**. Rien ne quitte la machine tant que
+/// l'utilisateur n'a pas choisi autre chose : une présence dit à quelle heure on est
+/// devant son PC, ce n'est pas une donnée qu'on diffuse par défaut.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SocialPrefs {
+    /// `offline` | `online` | `detailed`. Absent = déduit de `share_presence`.
+    pub presence_mode: Option<String>,
+    /// ⚠️ Ancien réglage booléen, gardé pour une seule raison : ne pas rendre invisibles,
+    /// sans les prévenir, ceux qui avaient déjà activé le partage. Le front écrit
+    /// toujours `presence_mode`.
     pub share_presence: bool,
     /// Minutes d'inactivité avant de passer en « absent ».
     pub away_after_minutes: u32,
@@ -352,8 +376,23 @@ pub struct SocialPrefs {
 impl Default for SocialPrefs {
     fn default() -> Self {
         SocialPrefs {
+            presence_mode: None,
             share_presence: false,
             away_after_minutes: 10,
+        }
+    }
+}
+
+impl SocialPrefs {
+    /// Mode effectif, en tenant compte de l'ancien réglage booléen.
+    pub fn mode(&self) -> &str {
+        match self.presence_mode.as_deref() {
+            Some(PRESENCE_ONLINE) => PRESENCE_ONLINE,
+            Some(PRESENCE_DETAILED) => PRESENCE_DETAILED,
+            Some(PRESENCE_OFFLINE) => PRESENCE_OFFLINE,
+            // Absent ou inconnu : on retombe sur l'ancien booléen.
+            _ if self.share_presence => PRESENCE_DETAILED,
+            _ => PRESENCE_OFFLINE,
         }
     }
 }
@@ -413,7 +452,7 @@ fn beat(app: &tauri::AppHandle, publishing: bool) -> bool {
     }
 
     let prefs = load_prefs(&dir);
-    if !prefs.share_presence {
+    if prefs.mode() == PRESENCE_OFFLINE {
         // Partage coupé alors qu'on publiait : on disparaît tout de suite plutôt que
         // d'attendre les 90 s de péremption.
         if publishing {
@@ -454,27 +493,31 @@ fn presence_for(
     game: Option<(String, String, i64)>,
     idle_seconds: u64,
 ) -> Option<Presence> {
-    if !prefs.share_presence {
-        return None;
+    let absent = idle_seconds >= u64::from(prefs.away_after_minutes) * 60;
+    // Sans jeu : « en ligne », ou « absent » passé le délai d'inactivité.
+    let sans_jeu = Presence {
+        status: if absent { "away".into() } else { "online".into() },
+        ..Default::default()
+    };
+
+    match prefs.mode() {
+        PRESENCE_OFFLINE => None,
+        // « En ligne seulement » : les amis savent que tu es là, jamais à quoi tu joues.
+        // On publie donc `online` même en pleine partie — surtout pas `in-game` sans
+        // titre, qui reviendrait à annoncer « je joue à quelque chose que je te cache ».
+        PRESENCE_ONLINE => Some(sans_jeu),
+        _ => Some(match game {
+            Some((_, title, since)) => Presence {
+                status: "in-game".into(),
+                game_key: Some(game_key(&title)),
+                game_title: Some(title),
+                since: Some(since),
+            },
+            // Une partie en cours prime sur l'inactivité : on peut suivre une
+            // cinématique sans toucher au clavier pendant dix minutes.
+            None => sans_jeu,
+        }),
     }
-    Some(match game {
-        Some((_, title, since)) => Presence {
-            status: "in-game".into(),
-            game_key: Some(game_key(&title)),
-            game_title: Some(title),
-            since: Some(since),
-        },
-        // Une partie en cours prime sur l'inactivité : on peut suivre une cinématique
-        // sans toucher au clavier pendant dix minutes.
-        None if idle_seconds >= u64::from(prefs.away_after_minutes) * 60 => Presence {
-            status: "away".into(),
-            ..Default::default()
-        },
-        None => Presence {
-            status: "online".into(),
-            ..Default::default()
-        },
-    })
 }
 
 /// Nom de la machine, pour distinguer les sessions dans la liste des appareils.
@@ -492,22 +535,55 @@ mod tests {
         Some(("steam:292030".into(), "THE WITCHER 3: WILD HUNT™".into(), 1_787_000_000))
     }
 
+    fn prefs(mode: &str) -> SocialPrefs {
+        SocialPrefs {
+            presence_mode: Some(mode.into()),
+            away_after_minutes: 10,
+            ..Default::default()
+        }
+    }
+
     /// Le partage est coupé par défaut, et rien ne doit sortir tant qu'il l'est —
     /// même avec un jeu en cours.
     #[test]
     fn rien_ne_part_sans_accord() {
-        let prefs = SocialPrefs::default();
-        assert!(!prefs.share_presence, "le partage doit être coupé par défaut");
-        assert!(presence_for(&prefs, None, 0).is_none());
-        assert!(presence_for(&prefs, jeu(), 0).is_none());
+        let defaut = SocialPrefs::default();
+        assert_eq!(defaut.mode(), PRESENCE_OFFLINE, "hors ligne par défaut");
+        assert!(presence_for(&defaut, None, 0).is_none());
+        assert!(presence_for(&defaut, jeu(), 0).is_none());
+        assert!(presence_for(&prefs(PRESENCE_OFFLINE), jeu(), 0).is_none());
+    }
+
+    /// « En ligne seulement » ne doit JAMAIS laisser filtrer le jeu, ni même le fait
+    /// qu'une partie est en cours.
+    #[test]
+    fn mode_en_ligne_ne_dit_rien_du_jeu() {
+        let p = presence_for(&prefs(PRESENCE_ONLINE), jeu(), 0).unwrap();
+        assert_eq!(p.status, "online");
+        assert!(p.game_title.is_none() && p.game_key.is_none() && p.since.is_none());
+        // L'inactivité reste visible : c'est une information sur toi, pas sur ton jeu.
+        assert_eq!(
+            presence_for(&prefs(PRESENCE_ONLINE), jeu(), 9999).unwrap().status,
+            "away"
+        );
+    }
+
+    /// Quelqu'un qui avait activé l'ancien réglage booléen ne doit pas se retrouver
+    /// invisible après la mise à jour.
+    #[test]
+    fn ancien_reglage_conserve() {
+        let herite = SocialPrefs {
+            presence_mode: None,
+            share_presence: true,
+            away_after_minutes: 10,
+        };
+        assert_eq!(herite.mode(), PRESENCE_DETAILED);
+        assert_eq!(presence_for(&herite, jeu(), 0).unwrap().status, "in-game");
     }
 
     #[test]
     fn etats_publies() {
-        let prefs = SocialPrefs {
-            share_presence: true,
-            away_after_minutes: 10,
-        };
+        let prefs = prefs(PRESENCE_DETAILED);
 
         let p = presence_for(&prefs, jeu(), 0).unwrap();
         assert_eq!(p.status, "in-game");
@@ -538,11 +614,19 @@ mod tests {
     fn prefs_roundtrip() {
         let dir = std::env::temp_dir().join(format!("torii-socialprefs-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        assert!(!load_prefs(&dir).share_presence);
+        assert_eq!(load_prefs(&dir).mode(), PRESENCE_OFFLINE);
 
-        save_prefs(&dir, &SocialPrefs { share_presence: true, away_after_minutes: 3 }).unwrap();
+        save_prefs(
+            &dir,
+            &SocialPrefs {
+                presence_mode: Some(PRESENCE_DETAILED.into()),
+                away_after_minutes: 3,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let back = load_prefs(&dir);
-        assert!(back.share_presence);
+        assert_eq!(back.mode(), PRESENCE_DETAILED);
         assert_eq!(back.away_after_minutes, 3);
 
         let _ = std::fs::remove_dir_all(&dir);

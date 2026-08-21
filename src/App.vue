@@ -42,6 +42,20 @@ function navigateBack() {
   goBack();
 }
 
+/**
+ * Supprime le menu contextuel natif de la WebView (« Inspecter », « Enregistrer sous »,
+ * « Imprimer »…). Il n'a aucun sens dans une application, et il trahit qu'on regarde
+ * une page web — d'autant que Torii a son propre clic droit sur les jeux.
+ *
+ * 🔑 Exception : les champs de saisie. Y couper le menu retirerait « Coller », que tout
+ * le monde attend sur un champ texte, et qu'aucun menu maison ne remplace ici.
+ */
+function onContextMenu(e: MouseEvent) {
+  const cible = e.target as HTMLElement | null;
+  if (cible?.closest("input, textarea, [contenteditable='true']")) return;
+  e.preventDefault();
+}
+
 // Le bouton « retour » de la souris = MouseEvent.button === 3 (le 4 = « suivant »).
 // On empêche la webview de naviguer dans son propre historique (mousedown) et on
 // pilote notre navigation applicative sur le relâchement (mouseup).
@@ -57,6 +71,7 @@ function onMouseUp(e: MouseEvent) {
 onMounted(async () => {
   window.addEventListener("mousedown", onMouseDown);
   window.addEventListener("mouseup", onMouseUp);
+  window.addEventListener("contextmenu", onContextMenu);
   unlistenGameExit = await onGameExited((id) => openGame(id));
   // Une partie détectée (même lancée depuis Steam ou le bureau) remonte aussitôt dans
   // « Récemment joué », sans attendre une resynchronisation.
@@ -66,6 +81,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener("mousedown", onMouseDown);
   window.removeEventListener("mouseup", onMouseUp);
+  window.removeEventListener("contextmenu", onContextMenu);
   if (unlistenGameExit) unlistenGameExit();
   if (unlistenGameLaunch) unlistenGameLaunch();
 });

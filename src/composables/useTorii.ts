@@ -6,7 +6,7 @@ import {
   toriiVerify,
 } from "../lib/tauri";
 import type { ToriiPerson } from "../types";
-import type { SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
+import type { PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
 
 /**
  * État du réseau Torii (compte, amis, présence, réglages de partage).
@@ -19,7 +19,7 @@ import type { SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
 
 const account = ref<ToriiAccount | null>(null);
 const circle = ref<ToriiCircle>({ friends: [], incoming: [], outgoing: [] });
-const prefs = ref<SocialPrefs>({ sharePresence: false, awayAfterMinutes: 10 });
+const prefs = ref<SocialPrefs>({ presenceMode: "offline", sharePresence: false, awayAfterMinutes: 10 });
 const mutedGames = ref<string[]>([]);
 /** Amis Steam qui se trouvent avoir un compte Torii découvrable. */
 const suggestions = ref<ToriiPerson[]>([]);
@@ -69,9 +69,12 @@ async function requestCode(email: string): Promise<string | null> {
   return await toriiRequestCode(email.trim());
 }
 
-async function verify(email: string, code: string) {
-  account.value = await toriiVerify(email.trim(), code.trim());
+/** Renvoie `true` si le compte vient d'être créé — le front propose alors un pseudo. */
+async function verify(email: string, code: string): Promise<boolean> {
+  const signIn = await toriiVerify(email.trim(), code.trim());
+  account.value = signIn.account;
   await refresh();
+  return signIn.created;
 }
 
 async function logout() {
@@ -96,6 +99,22 @@ async function setSteamLink(steamId: string | null, discoverable: boolean) {
 
 async function setPrefs(next: Partial<SocialPrefs>) {
   prefs.value = await toriiSetPrefs({ ...prefs.value, ...next });
+}
+
+/**
+ * Mode effectif. Un compte configuré avant l'arrivée des trois états n'a que l'ancien
+ * booléen : on le traduit ici comme le fait le cœur Rust, pour que l'interface montre
+ * la même chose que ce qui est réellement publié.
+ */
+const presenceMode = computed<PresenceMode>(() => {
+  const m = prefs.value.presenceMode;
+  if (m === "offline" || m === "online" || m === "detailed") return m;
+  return prefs.value.sharePresence ? "detailed" : "offline";
+});
+
+/** Change ce qu'on laisse voir. On écrit toujours le mode, jamais l'ancien booléen. */
+async function setPresenceMode(mode: PresenceMode) {
+  await setPrefs({ presenceMode: mode, sharePresence: mode !== "offline" });
 }
 
 /** Ajoute ou retire un jeu de la liste « ne jamais diffuser ». */
@@ -162,6 +181,7 @@ export function useTorii() {
     account,
     circle,
     prefs,
+    presenceMode,
     mutedGames,
     suggestions,
     searching,
@@ -177,6 +197,7 @@ export function useTorii() {
     setDisplayName,
     setSteamLink,
     setPrefs,
+    setPresenceMode,
     setMuted,
     isMuted,
     invite,

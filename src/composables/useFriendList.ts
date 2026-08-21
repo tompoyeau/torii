@@ -1,7 +1,8 @@
 import { computed } from "vue";
 import { useFriends } from "./useFriends";
+import { useLibrary } from "./useLibrary";
 import { useTorii } from "./useTorii";
-import type { Friend, ToriiFriend, ToriiStatus } from "../types";
+import type { Friend, Game, ToriiFriend, ToriiStatus } from "../types";
 
 /**
  * Liste d'amis unifiée : **une seule ligne par personne**, alimentée par deux sources
@@ -32,6 +33,20 @@ export interface UnifiedFriend {
   profileUrl: string | null;
   /** Identifiant Torii, pour retirer l'ami ou répondre à sa demande. */
   toriiId: string | null;
+  /**
+   * Ce jeu dans TA bibliothèque, si tu l'as aussi — quel que soit le launcher.
+   * C'est ce que la clé cross-launcher permet enfin de dire.
+   */
+  ownedGame: Game | null;
+}
+
+/**
+ * Même normalisation que `social::game_key()` côté Rust : minuscules, lettres et chiffres
+ * seulement. Les deux doivent rester d'accord, sinon « il joue au même jeu que toi » ne se
+ * déclenche jamais.
+ */
+function gameKeyOf(title: string): string {
+  return `title:${title.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")}`;
 }
 
 /** Plus le rang est petit, plus la personne est « présente ». */
@@ -66,6 +81,7 @@ function fromSteam(f: Friend): UnifiedFriend {
     source: "steam",
     profileUrl: f.profileUrl,
     toriiId: null,
+    ownedGame: null,
   };
 }
 
@@ -80,6 +96,7 @@ function fromTorii(f: ToriiFriend): UnifiedFriend {
     source: "torii",
     profileUrl: null,
     toriiId: f.id,
+    ownedGame: null,
   };
 }
 
@@ -107,6 +124,20 @@ function merge(steam: UnifiedFriend, torii: UnifiedFriend): UnifiedFriend {
 export function useFriendList() {
   const { friends: steamFriends, loading: steamLoading, steamConnected } = useFriends();
   const { circle, connected: toriiConnected, loading: toriiLoading } = useTorii();
+  const { games } = useLibrary();
+
+  /** Ma bibliothèque indexée par clé de jeu, pour reconnaître le jeu d'un ami. */
+  const mesJeux = computed(() => {
+    const map = new Map<string, Game>();
+    for (const g of games.value) {
+      if (g.hidden) continue;
+      const cle = gameKeyOf(g.title);
+      // À titre égal, on garde le jeu installé : c'est celui qu'on peut lancer.
+      const connu = map.get(cle);
+      if (!connu || (!connu.installed && g.installed)) map.set(cle, g);
+    }
+    return map;
+  });
 
   const all = computed<UnifiedFriend[]>(() => {
     const steamByIdentity = new Map<string, UnifiedFriend>();
@@ -126,6 +157,13 @@ export function useFriendList() {
       }
     }
     merged.push(...steamByIdentity.values());
+
+    // « Tu l'as aussi » : on rapproche le jeu de l'ami de la bibliothèque locale. Pour un
+    // ami Steam on n'a que le titre — on le normalise donc de la même façon.
+    for (const f of merged) {
+      if (f.state !== "in-game") continue;
+      f.ownedGame = f.gameName ? mesJeux.value.get(gameKeyOf(f.gameName)) ?? null : null;
+    }
 
     return merged.sort(
       (a, b) => rank(a.state) - rank(b.state) || a.name.localeCompare(b.name, "fr"),

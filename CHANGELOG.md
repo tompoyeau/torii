@@ -4,6 +4,15 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.13.0
+- **Vue Amis repensée** : ceux qui jouent apparaissent en premier, sur des cartes qui montrent le jeu en grand et depuis combien de temps. Les hors ligne sont repliés, les disponibles tiennent en une ligne.
+- **« Tu l'as aussi »** : quand un ami joue à un jeu que tu possèdes, sa carte te le signale et te propose de le lancer — même si vous ne l'avez pas sur le même launcher. C'est ce que Torii sait faire et que personne d'autre ne fait.
+- **Choisis ce que tes amis voient** : jeu visible, en ligne seulement, ou invisible. En mode « en ligne », personne ne sait à quoi tu joues, même en pleine partie.
+- **Un pseudo** : choisi à l'inscription et modifiable dans les réglages. Avant, ton nom était déduit de ton adresse e-mail sans que tu l'aies voulu.
+- Le bouton de ton compte, en haut à droite, ouvre désormais les réglages de ton compte Torii au lieu de ton profil Steam dans le navigateur.
+- **« Ne pas diffuser ce jeu »** est maintenant aussi dans la roue crantée de la fiche d'un jeu, pas seulement au clic droit.
+- Le menu contextuel de Windows (« Inspecter », « Enregistrer sous »…) ne s'ouvre plus dans l'application. Il reste disponible dans les champs de saisie, pour pouvoir coller.
+
 ## 0.12.2
 - **Correctif** : le bouton « Visible par mes amis Steam » ne répondait plus une fois qu'on l'avait éteint. Il est de nouveau fiable, dans les deux sens.
 - **Correctif** : délier son compte Steam de Torii ne fonctionnait pas — l'identifiant restait enregistré côté serveur alors que l'application affichait le contraire.

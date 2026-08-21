@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useUi } from "../composables/useUi";
 import { useTheme } from "../composables/useTheme";
 import { useLibrary } from "../composables/useLibrary";
 import { useFriends } from "../composables/useFriends";
 import { useFriendList } from "../composables/useFriendList";
-import { openExternal, steamMe } from "../lib/tauri";
+import { useTorii } from "../composables/useTorii";
+import { steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
 import ModeSwitch from "./ModeSwitch.vue";
 
 const { section, query, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
 const { toggle: toggleTheme } = useTheme();
+const { account: toriiAccount, connected: toriiConnected } = useTorii();
 const { loading, reload } = useLibrary();
 const { refresh: refreshFriends } = useFriends();
 // La pastille compte les amis des DEUX sources, dédoublonnés.
@@ -23,9 +25,19 @@ onMounted(async () => {
   // Charge les amis dès le démarrage pour alimenter le badge de l'en-tête.
   refreshFriends();
 });
-function openMe() {
-  if (me.value?.profileUrl) openExternal(me.value.profileUrl);
+/**
+ * Le bouton d'identité mène aux réglages du compte Torii — c'est là que se règlent le
+ * pseudo, ce que voient les amis et le lien avec Steam. Avant, il ouvrait le profil
+ * Steam dans le navigateur : sortir de l'application n'est pas ce qu'on attend en
+ * cliquant sur son propre nom.
+ */
+function openMyAccount() {
+  openSettings("torii");
 }
+
+/** Ce qu'on affiche : le pseudo Torii s'il existe, sinon le nom Steam. */
+const myName = computed(() => toriiAccount.value?.displayName ?? me.value?.name ?? "Mon compte");
+const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase());
 </script>
 
 <template>
@@ -56,9 +68,12 @@ function openMe() {
     <button class="icon-btn" :class="{ active: settingsOpen }" title="Paramètres" @click="openSettings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3.1" /><path d="M19.4 13a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H8a1.6 1.6 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V8a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></svg>
     </button>
-    <button v-if="me" class="me" :title="`${me.name} — voir le profil Steam`" @click="openMe">
-      <img v-if="me.avatarUrl" class="me-avatar" :src="me.avatarUrl" :alt="me.name" />
-      <span class="me-name">{{ me.name }}</span>
+    <button class="me" :title="`${myName} — mon compte Torii`" @click="openMyAccount">
+      <img v-if="me?.avatarUrl" class="me-avatar" :src="me.avatarUrl" :alt="myName" />
+      <span v-else class="me-avatar fallback">{{ myInitials }}</span>
+      <span class="me-name">{{ myName }}</span>
+      <!-- Pastille discrète : le compte Torii est actif, la présence peut circuler. -->
+      <span v-if="toriiConnected" class="me-torii" title="Compte Torii connecté">⛩</span>
     </button>
   </div>
 </template>
@@ -127,5 +142,12 @@ function openMe() {
   width: 28px; height: 28px; border-radius: 50%; flex: none; object-fit: cover;
   background: var(--surface-3);
 }
+/* Sans photo Steam, on affiche les initiales : un bouton d'identité sans visage
+   ressemble à un bouton cassé. */
+.me-avatar.fallback {
+  display: grid; place-items: center;
+  font-size: 11.5px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.02em;
+}
 .me-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me-torii { font-size: 11px; color: var(--accent); margin-left: -2px; }
 </style>

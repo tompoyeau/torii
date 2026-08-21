@@ -4,26 +4,22 @@ import { useTorii } from "../composables/useTorii";
 import { showToast } from "../composables/useToast";
 
 /**
- * Bandeau du réseau Torii, en tête du panneau Amis.
+ * Connexion au réseau Torii, en deux temps : adresse puis code à six chiffres.
  *
- * Trois états : déconnecté (formulaire en deux temps, e-mail puis code), connecté
- * (code d'ami + ajout), et les demandes reçues quand il y en a.
+ * Ce composant ne s'occupe QUE de la connexion. Tout ce qui concerne un compte déjà
+ * connecté — code d'ami, ajout, visibilité — vit là où ça sert : dans la vue Amis pour
+ * les actions du quotidien, dans les Réglages pour l'administration du compte.
  */
 
-const {
-  account, circle, connected, prefs, requestCode, verify, invite, respond, rotateCode, setPrefs,
-} = useTorii();
+const { account, connected, requestCode, verify, setDisplayName } = useTorii();
 
-/** Étape du formulaire de connexion. */
-const step = ref<"idle" | "email" | "code">("idle");
+const step = ref<"idle" | "email" | "code" | "pseudo">("idle");
+const pseudo = ref("");
 const email = ref("");
 const code = ref("");
 const busy = ref(false);
 const error = ref<string | null>(null);
-/**
- * Code rendu directement par le serveur quand il tourne en mode développement : aucun
- * e-mail ne part alors, autant le montrer plutôt que de faire attendre pour rien.
- */
+/** Code rendu directement par le serveur en mode développement (aucun e-mail ne part). */
 const devCode = ref<string | null>(null);
 
 const canSendEmail = computed(() => /\S+@\S+\.\S+/.test(email.value.trim()));
@@ -49,10 +45,18 @@ async function onVerify() {
   busy.value = true;
   error.value = null;
   try {
-    await verify(email.value, code.value);
-    step.value = "idle";
+    const nouveau = await verify(email.value, code.value);
     devCode.value = null;
-    showToast("Compte Torii connecté.");
+    if (nouveau) {
+      // Inscription : on propose un pseudo AVANT que quoi que ce soit soit publié.
+      // Le nom déduit de l'adresse est pré-rempli — autant qu'on voie ce que les autres
+      // verraient si on ne changeait rien.
+      pseudo.value = account.value?.displayName ?? "";
+      step.value = "pseudo";
+    } else {
+      step.value = "idle";
+      showToast("Compte Torii connecté.");
+    }
   } catch (e) {
     error.value = message(e);
   } finally {
@@ -60,21 +64,16 @@ async function onVerify() {
   }
 }
 
-/* ── Ajout d'un ami ────────────────────────────────────────────────────────── */
-
-const adding = ref(false);
-const friendCode = ref("");
-
-async function onInvite() {
-  const value = friendCode.value.trim();
-  if (!value || busy.value) return;
+/** Enregistre le pseudo choisi à l'inscription (ou garde celui proposé). */
+async function onPseudo() {
+  const nom = pseudo.value.trim();
+  if (busy.value || !nom) return;
   busy.value = true;
   error.value = null;
   try {
-    await invite(value);
-    friendCode.value = "";
-    adding.value = false;
-    showToast("Demande envoyée.");
+    if (nom !== account.value?.displayName) await setDisplayName(nom);
+    step.value = "idle";
+    showToast(`Bienvenue, ${nom}.`);
   } catch (e) {
     error.value = message(e);
   } finally {
@@ -82,210 +81,119 @@ async function onInvite() {
   }
 }
 
-async function onCopyCode() {
-  if (!account.value) return;
-  try {
-    await navigator.clipboard.writeText(account.value.friendCode);
-    showToast("Code d'ami copié.");
-  } catch {
-    showToast("Copie impossible ; note le code à la main.");
-  }
-}
-
-async function onRotate() {
-  if (busy.value) return;
-  busy.value = true;
-  try {
-    await rotateCode();
-    showToast("Nouveau code d'ami : l'ancien ne fonctionne plus.");
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function onToggleShare() {
-  await setPrefs({ sharePresence: !prefs.value.sharePresence });
-}
-
-/** Les erreurs remontées par le pont portent le message du serveur, lisible tel quel. */
+/** Les ponts `torii*` laissent remonter le message du serveur : il est fait pour être lu. */
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 </script>
 
 <template>
-  <!-- Déconnecté : invitation à créer un compte, puis formulaire en deux temps -->
-  <div v-if="!connected" class="torii-bar">
+  <!-- Connecté : une seule ligne de rappel, le reste est ailleurs. -->
+  <p v-if="connected" class="signed">
+    Connecté en tant que <strong>{{ account?.displayName }}</strong>
+  </p>
+
+  <div v-else class="invite">
     <div class="pitch">
       <span class="title">Réseau Torii</span>
-      <span class="sub">Vois à quoi jouent tes amis, quel que soit leur launcher.</span>
+      <span class="sub">
+        Vois à quoi jouent tes amis, quel que soit leur launcher — et montre-leur ce que
+        tu joues, si tu le décides.
+      </span>
     </div>
 
     <button v-if="step === 'idle'" class="btn-primary" @click="step = 'email'">
-      Se connecter
+      Créer un compte ou se connecter
     </button>
 
-    <form v-else-if="step === 'email'" class="inline-form" @submit.prevent="onSendCode">
-      <input
-        v-model="email"
-        type="email"
-        placeholder="ton@email.fr"
-        autocomplete="email"
-        spellcheck="false"
-      />
+    <form v-else-if="step === 'email'" class="form" @submit.prevent="onSendCode">
+      <input v-model="email" type="email" placeholder="ton@email.fr" autocomplete="email" spellcheck="false" />
       <button type="submit" class="btn-primary" :disabled="!canSendEmail || busy">
         {{ busy ? "Envoi…" : "Recevoir un code" }}
       </button>
-      <button type="button" class="btn-ghost-sm" @click="step = 'idle'">Annuler</button>
+      <button type="button" class="btn-ghost" @click="step = 'idle'">Annuler</button>
+      <p class="hint">Pas de mot de passe : un code à six chiffres arrive par e-mail.</p>
     </form>
 
-    <form v-else class="inline-form" @submit.prevent="onVerify">
+    <form v-else-if="step === 'pseudo'" class="form" @submit.prevent="onPseudo">
+      <input v-model="pseudo" maxlength="40" placeholder="Ton pseudo" spellcheck="false" autofocus />
+      <button type="submit" class="btn-primary" :disabled="busy || !pseudo.trim()">
+        {{ busy ? "Enregistrement…" : "C'est parti" }}
+      </button>
+      <p class="hint">
+        C'est le nom que verront tes amis. Par défaut il reprend ton adresse e-mail —
+        autant en choisir un vrai. Modifiable à tout moment dans les réglages.
+      </p>
+    </form>
+
+    <form v-else class="form" @submit.prevent="onVerify">
       <input
         v-model="code"
         inputmode="numeric"
         maxlength="6"
         placeholder="123456"
-        class="code-input"
+        class="code"
         autocomplete="one-time-code"
       />
       <button type="submit" class="btn-primary" :disabled="!canVerify || busy">
         {{ busy ? "Vérification…" : "Valider" }}
       </button>
-      <button type="button" class="btn-ghost-sm" @click="step = 'email'">Changer d'adresse</button>
+      <button type="button" class="btn-ghost" @click="step = 'email'">Changer d'adresse</button>
+      <p class="hint">Envoyé à {{ email }}. Regarde aussi tes indésirables.</p>
     </form>
+
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="devCode" class="dev">
+      Serveur en mode développement : aucun e-mail ne part. Ton code est
+      <strong>{{ devCode }}</strong>.
+    </p>
   </div>
-
-  <!-- Connecté : code d'ami, ajout, partage de présence -->
-  <div v-else class="torii-bar">
-    <div class="pitch">
-      <span class="title">{{ account?.displayName }}</span>
-      <span class="sub">
-        Ton code d'ami :
-        <button class="code-chip" title="Copier" @click="onCopyCode">{{ account?.friendCode }}</button>
-        <button class="btn-ghost-sm" title="En générer un nouveau" @click="onRotate">Renouveler</button>
-      </span>
-    </div>
-
-    <button
-      class="btn-share"
-      :class="{ on: prefs.sharePresence }"
-      :title="prefs.sharePresence
-        ? 'Tes amis voient à quoi tu joues'
-        : 'Personne ne voit ce que tu fais'"
-      @click="onToggleShare"
-    >
-      <span class="share-dot" />
-      {{ prefs.sharePresence ? "Visible" : "Invisible" }}
-    </button>
-
-    <form v-if="adding" class="inline-form" @submit.prevent="onInvite">
-      <input
-        v-model="friendCode"
-        placeholder="Code d'ami"
-        maxlength="12"
-        spellcheck="false"
-        class="code-input wide"
-      />
-      <button type="submit" class="btn-primary" :disabled="busy">Ajouter</button>
-      <button type="button" class="btn-ghost-sm" @click="adding = false">Annuler</button>
-    </form>
-    <button v-else class="btn-primary" @click="adding = true">Ajouter un ami</button>
-  </div>
-
-  <p v-if="error" class="torii-error">{{ error }}</p>
-
-  <p v-if="devCode" class="torii-dev">
-    Serveur en mode développement : aucun e-mail ne part. Ton code est
-    <strong>{{ devCode }}</strong>.
-  </p>
-
-  <!-- Demandes reçues -->
-  <section v-if="circle.incoming.length" class="requests">
-    <h4>Demandes d'amis <span>{{ circle.incoming.length }}</span></h4>
-    <div v-for="p in circle.incoming" :key="p.id" class="request">
-      <span class="req-name">{{ p.displayName }}</span>
-      <button class="btn-primary sm" @click="respond(p.id, true)">Accepter</button>
-      <button class="btn-ghost-sm" @click="respond(p.id, false)">Refuser</button>
-    </div>
-  </section>
 </template>
 
 <style scoped>
-.torii-bar {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 14px 16px; margin-bottom: 18px;
+.signed { font-size: 13px; color: var(--text-faint); margin: 0 0 16px; }
+.signed strong { color: var(--text); font-weight: 600; }
+
+.invite {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 18px 20px; margin-bottom: 22px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
 }
-.pitch { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.pitch .title { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; }
-.pitch .sub {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  font-size: 12.5px; color: var(--text-faint);
-}
+.pitch { display: flex; flex-direction: column; gap: 4px; }
+.pitch .title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.pitch .sub { font-size: 13px; color: var(--text-dim); line-height: 1.5; max-width: 60ch; }
 
-.inline-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.inline-form input {
-  padding: 8px 12px; border-radius: 10px; font-size: 13.5px; font-family: inherit;
-  background: var(--bg); border: 1px solid var(--border); color: var(--text); min-width: 190px;
+.form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.form input {
+  padding: 9px 13px; border-radius: 10px; font-size: 13.5px; font-family: inherit;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text); min-width: 210px;
 }
-.inline-form input:focus { outline: none; border-color: var(--accent); }
-.code-input {
-  font-family: var(--mono); letter-spacing: 0.22em; text-align: center; min-width: 130px;
+.form input:focus { outline: none; border-color: var(--accent); }
+.form input.code {
+  font-family: var(--mono); font-size: 16px; letter-spacing: 0.3em; text-align: center; min-width: 150px;
 }
-.code-input.wide { letter-spacing: 0.12em; min-width: 160px; }
+.hint { flex-basis: 100%; margin: 2px 0 0; font-size: 12px; color: var(--text-faint); }
 
 .btn-primary {
   padding: 9px 16px; border-radius: 10px; border: 1px solid transparent; cursor: pointer;
   background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 13.5px;
+  align-self: flex-start;
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 .btn-primary:disabled { opacity: 0.5; cursor: default; }
-.btn-primary.sm { padding: 6px 12px; font-size: 12.5px; }
-
-.btn-ghost-sm {
-  padding: 6px 10px; border-radius: 9px; font-size: 12.5px; cursor: pointer;
+.btn-ghost {
+  padding: 8px 13px; border-radius: 10px; font-size: 12.5px; cursor: pointer;
   background: none; border: 1px solid var(--border); color: var(--text-dim);
 }
-.btn-ghost-sm:hover { color: var(--text); border-color: var(--border-strong); }
+.btn-ghost:hover { color: var(--text); border-color: var(--border-strong); }
 
-.code-chip {
-  font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.12em; cursor: pointer;
-  padding: 3px 9px; border-radius: 7px;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
-}
-.code-chip:hover { border-color: var(--accent); color: var(--accent); }
-
-/* Partage de présence : l'état doit se lire d'un coup d'œil, sans survol. */
-.btn-share {
-  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-  padding: 8px 14px; border-radius: 99px; font-size: 13px; font-weight: 600;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
-}
-.btn-share .share-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint);
-}
-.btn-share.on { color: #3ad07f; border-color: color-mix(in srgb, #3ad07f 45%, transparent); }
-.btn-share.on .share-dot { background: #3ad07f; box-shadow: 0 0 8px #3ad07f; }
-
-.torii-error {
-  margin: -8px 0 16px; padding: 9px 13px; border-radius: 9px; font-size: 12.5px; color: #ff6b6b;
+.error {
+  margin: 0; padding: 9px 13px; border-radius: 9px; font-size: 12.5px; color: #ff6b6b;
   background: color-mix(in srgb, #ff6b6b 12%, transparent);
 }
-.torii-dev {
-  margin: -8px 0 16px; padding: 9px 13px; border-radius: 9px; font-size: 12.5px;
+.dev {
+  margin: 0; padding: 9px 13px; border-radius: 9px; font-size: 12.5px;
   color: var(--text-dim); background: var(--surface-2); border: 1px dashed var(--border-strong);
 }
-.torii-dev strong { font-family: var(--mono); letter-spacing: 0.16em; color: var(--text); }
-
-.requests { margin-bottom: 22px; }
-.requests h4 {
-  font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-faint); margin: 0 0 10px;
-}
-.requests h4 span { font-family: var(--mono); }
-.request {
-  display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 11px;
-}
-.req-name { flex: 1; font-size: 13.5px; font-weight: 600; }
+.dev strong { font-family: var(--mono); letter-spacing: 0.16em; color: var(--text); }
 </style>

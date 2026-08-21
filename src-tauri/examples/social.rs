@@ -21,8 +21,12 @@ fn main() {
 
     println!("── Mauvais code : {:?}", social::verify(&dir, &email, "000000").unwrap_err());
 
-    let account = social::verify(&dir, &email, &code).expect("connexion");
-    println!("── Connecté : {} | code d'ami {}", account.display_name, account.friend_code);
+    let signin = social::verify(&dir, &email, &code).expect("connexion");
+    let account = signin.account;
+    println!(
+        "── Connecté : {} | code d'ami {} | compte créé : {}",
+        account.display_name, account.friend_code, signin.created
+    );
 
     // Le jeton doit être rangé chiffré, comme les autres secrets.
     let creds = ludo_lib::accounts::secrets::load(&dir);
