@@ -8,13 +8,46 @@ import { useUi } from "../composables/useUi";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
-import { appVersion, clearCaches, getAutostart, getWindowPrefs, setAutostart, setWindowPrefs } from "../lib/tauri";
+import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, setAutostart, setWindowPrefs } from "../lib/tauri";
 import PlatformIcon from "./PlatformIcon.vue";
 import AccountsSettings from "./AccountsSettings.vue";
+import ToriiPanel from "./ToriiPanel.vue";
+import { useTorii } from "../composables/useTorii";
 
 const { games, setHidden } = useLibrary();
 const { prefs } = usePreferences();
 const { excludedStores, toggleStoreExcluded, clearExcludedStores } = useStore();
+const {
+  account: toriiAccount, connected: toriiConnected, prefs: toriiPrefs, mutedGames,
+  setPrefs: setToriiPrefs, setMuted, setSteamLink, logout: toriiLogout,
+} = useTorii();
+
+/** Délais d'inactivité proposés avant de passer « absent ». */
+const AWAY_DELAYS = [5, 10, 20, 30] as const;
+
+/** Jeux réduits au silence, résolus en titres depuis la bibliothèque. */
+const mutedList = computed(() =>
+  mutedGames.value.map((id) => ({
+    id,
+    title: games.value.find((g) => g.id === id)?.title ?? id,
+    platform: games.value.find((g) => g.id === id)?.platform ?? "manual",
+  })),
+);
+
+/** SteamID de l'utilisateur, pour pouvoir lier son compte Torii à son compte Steam. */
+const mySteamId = ref<string | null>(null);
+onMounted(async () => {
+  mySteamId.value = (await getSettings())?.steamId ?? null;
+});
+
+/**
+ * Lie le compte Torii au compte Steam connecté, ou rompt le lien. Les deux vont
+ * ensemble : sans SteamID enregistré, « visible par mes amis Steam » n'a aucun effet.
+ */
+async function onToggleSteamLink() {
+  const linked = !!toriiAccount.value?.steamId;
+  await setSteamLink(linked ? null : mySteamId.value, !linked);
+}
 const { theme, setTheme } = useTheme();
 const { settingsOpen, settingsCategory, setSettingsCategory, closeSettings } = useUi();
 const { status: updateStatus, version: updateVersion, check: checkUpdate, install: installUpdate } = useUpdater();
@@ -25,6 +58,7 @@ const CATEGORIES = [
   { key: "hidden", label: "Jeux masqués", group: "Bibliothèque & Boutique" },
   { key: "stores", label: "Revendeurs masqués", group: "Bibliothèque & Boutique" },
   { key: "accounts", label: "Comptes & launchers", group: "Comptes" },
+  { key: "torii", label: "Réseau Torii", group: "Comptes" },
 ] as const;
 
 // --- Choix pour les préférences (segmented) --------------------------------
@@ -396,6 +430,95 @@ function unhide(id: string) {
             </p>
           </template>
 
+          <!-- Réseau Torii -->
+          <template v-else-if="settingsCategory === 'torii'">
+            <h2 class="pane-title">Réseau Torii</h2>
+            <p class="pane-hint">
+              Voir à quoi jouent tes amis, quel que soit leur launcher — et leur montrer ce
+              que tu joues, si tu le décides.
+            </p>
+
+            <ToriiPanel />
+
+            <template v-if="toriiConnected">
+              <button
+                class="pref toggle-row"
+                role="switch"
+                :aria-checked="toriiPrefs.sharePresence"
+                @click="setToriiPrefs({ sharePresence: !toriiPrefs.sharePresence })"
+              >
+                <div class="row-text">
+                  <span class="row-title">Partager ma présence</span>
+                  <span class="row-sub">
+                    Tes amis voient à quoi tu joues et depuis quand. Tant que c'est coupé,
+                    rien ne quitte ton PC.
+                  </span>
+                </div>
+                <span class="switch" :class="{ on: toriiPrefs.sharePresence }"><span class="knob" /></span>
+              </button>
+
+              <div class="divider" />
+
+              <div class="pref">
+                <div class="row-text">
+                  <span class="row-title">Passer « absent » après</span>
+                  <span class="row-sub">Sans action au clavier ni à la souris.</span>
+                </div>
+                <div class="segmented">
+                  <button
+                    v-for="d in AWAY_DELAYS"
+                    :key="d"
+                    class="seg"
+                    :class="{ on: toriiPrefs.awayAfterMinutes === d }"
+                    @click="setToriiPrefs({ awayAfterMinutes: d })"
+                  >
+                    {{ d }} min
+                  </button>
+                </div>
+              </div>
+
+              <div class="divider" />
+
+              <button
+                class="pref toggle-row"
+                role="switch"
+                :aria-checked="!!toriiAccount?.steamDiscoverable"
+                @click="onToggleSteamLink"
+              >
+                <div class="row-text">
+                  <span class="row-title">Visible par mes amis Steam</span>
+                  <span class="row-sub">
+                    Permet à tes amis Steam déjà sur Torii de te retrouver, et de fusionner
+                    ta fiche avec ton profil Steam. Il faut que vous l'ayez activé tous les deux.
+                  </span>
+                </div>
+                <span class="switch" :class="{ on: toriiAccount?.steamDiscoverable }"><span class="knob" /></span>
+              </button>
+
+              <div class="divider" />
+
+              <h3 class="sub-title">Jeux jamais diffusés</h3>
+              <p class="pane-hint">
+                Ces jeux n'apparaissent jamais dans ta présence, même en cours de partie.
+                Utile pour les applications qui tournent en permanence.
+              </p>
+              <div v-if="mutedList.length" class="items">
+                <div v-for="g in mutedList" :key="g.id" class="item">
+                  <div class="thumb"><PlatformIcon :platform="g.platform" /></div>
+                  <div class="item-text"><span class="item-title">{{ g.title }}</span></div>
+                  <button class="ghost-btn" @click="setMuted(g.id, false)">Diffuser à nouveau</button>
+                </div>
+              </div>
+              <p v-else class="empty">
+                Aucun jeu masqué. Fais un clic droit sur un jeu pour l'ajouter.
+              </p>
+
+              <div class="row-actions">
+                <button class="ghost-btn" @click="toriiLogout()">Déconnecter ce compte</button>
+              </div>
+            </template>
+          </template>
+
           <!-- Comptes & launchers -->
           <template v-else>
             <h2 class="pane-title">Comptes &amp; launchers</h2>
@@ -487,6 +610,7 @@ function unhide(id: string) {
 
 /* À propos & maintenance */
 .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.sub-title { font-size: 14px; font-weight: 700; margin: 4px 0 6px; }
 .version-tag {
   flex: none; font-family: var(--mono); font-size: 13px; color: var(--text-dim);
   background: var(--surface-2); border: 1px solid var(--border); padding: 4px 11px; border-radius: 8px;

@@ -65,11 +65,11 @@ npx wrangler deploy
 C'est la seule dépendance externe, et elle demande **un domaine à toi** : on ne peut pas
 expédier depuis `*.workers.dev` (ni SPF ni DKIM n'y sont possibles).
 
-Une fois le domaine sur Cloudflare :
+Le domaine du projet est **`topo-host.com`**, avec un sous-domaine par application.
 
 ```bash
-npx wrangler email sending enable ton-domaine.fr
-npx wrangler secret put EMAIL_FROM      # ex. torii@ton-domaine.fr
+npx wrangler email sending enable topo-host.com
+npx wrangler secret put EMAIL_FROM      # torii@topo-host.com
 ```
 
 puis décommente le bloc `[[send_email]]` dans `wrangler.toml` et redéploie.
@@ -86,6 +86,21 @@ l'envoyer. Tout est testable sans domaine.
 > ⚠️ **Jamais en production.** Actif, ce mode laisse n'importe qui se connecter avec
 > n'importe quelle adresse : il suffit de lire la réponse. À retirer
 > (`npx wrangler secret delete DEV_CODES`) dès que l'envoi réel fonctionne.
+
+## Le nom de domaine de l'API
+
+L'API répond sur **`torii-api.topo-host.com`** (route à ajouter sur le Worker, onglet
+*Settings → Domains & Routes*). Cette adresse est codée en dur dans chaque version
+installée de Torii : passer par un domaine à soi, et non par `*.workers.dev`, permet de
+déménager plus tard sans republier l'application chez tout le monde.
+
+> ⚠️ **Un seul niveau de sous-domaine.** Le certificat SSL gratuit de Cloudflare couvre
+> `topo-host.com` et `*.topo-host.com`, mais **pas** `*.torii.topo-host.com` : une adresse
+> comme `api.torii.topo-host.com` exigerait un certificat payant (Advanced Certificate
+> Manager). D'où `torii-api.topo-host.com` plutôt que `api.torii.topo-host.com`.
+>
+> Convention proposée pour la suite : `torii.topo-host.com` reste libre pour un site de
+> présentation, `<app>-api.topo-host.com` pour les API des autres projets.
 
 ## Développer en local
 

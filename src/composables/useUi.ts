@@ -6,7 +6,7 @@ import { initialPrefs } from "./usePreferences";
 type BureauSection = "library" | "store" | "friends" | "common" | "wishlist";
 
 /** Catégorie affichée dans la pop-in Paramètres. */
-export type SettingsCategory = "general" | "hidden" | "stores" | "accounts" | "about";
+export type SettingsCategory = "general" | "hidden" | "stores" | "accounts" | "torii" | "about";
 
 interface UiState {
   mode: AppMode;
