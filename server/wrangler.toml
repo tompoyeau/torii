@@ -1,0 +1,24 @@
+name = "torii-api"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+# Domaine propre plutôt que *.workers.dev : l'adresse part codée en dur dans chaque
+# version installée (et demain dans l'application mobile), donc elle doit rester à nous.
+# `custom_domain` crée aussi l'enregistrement DNS au déploiement — rien à faire à la main.
+# ⚠️ Un seul niveau : le certificat gratuit couvre *.topo-host.com, pas *.torii.topo-host.com.
+routes = [{ pattern = "torii-api.topo-host.com", custom_domain = true }]
+
+# Base D1 : comptes, amis, présence.
+# `database_id` est renseigné par `npx wrangler d1 create torii` (voir README).
+[[d1_databases]]
+binding = "DB"
+database_name = "torii"
+database_id = "31434d10-7937-4902-a05b-96e2b2328f04"  # remplacé par 
+
+# Envoi des codes de connexion. Nécessite un domaine à toi, onboardé via
+# `npx wrangler email sending enable <ton-domaine>`. Tant que ce n'est pas fait,
+# laisse la ligne commentée et utilise le secret DEV_CODES=1 (cf. README).
+# [[send_email]]
+# name = "EMAIL"
+
+# Les secrets (PEPPER, EMAIL_FROM, DEV_CODES) ne sont PAS ici : `wrangler secret put`.

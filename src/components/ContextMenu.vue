@@ -3,11 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useContextMenu } from "../composables/useContextMenu";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
+import { useTorii } from "../composables/useTorii";
 import { openInstallDir, uninstallGame } from "../lib/tauri";
 
 const { ctx, closeContext } = useContextMenu();
 const { setFavorite, setHidden, removeManual, launchOrInstall } = useLibrary();
 const { openGame, openEditGame } = useUi();
+const { connected: toriiConnected, isMuted, setMuted } = useTorii();
 
 const menuEl = ref<HTMLElement | null>(null);
 // Position réellement appliquée (le clic sert d'ancrage, puis on rabat le menu
@@ -59,6 +61,12 @@ function onDetail() {
   if (game.value) openGame(game.value.id);
   closeContext();
 }
+/** N'annonce plus (ou de nouveau) ce jeu aux amis Torii. */
+function onToggleMuted() {
+  if (game.value) void setMuted(game.value.id, !isMuted(game.value.id));
+  closeContext();
+}
+
 /** Jeu ajouté à la main : ouvre la modale pré-remplie pour corriger ses informations. */
 function onEdit() {
   if (game.value) openEditGame(game.value.id);
@@ -119,6 +127,10 @@ onBeforeUnmount(() => {
         <span>{{ game.hidden ? "Réafficher" : "Masquer ce jeu" }}</span>
       </button>
       <template v-if="isManual || game.installed">
+        <button v-if="toriiConnected" class="ctx-item" @click="onToggleMuted">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18" /><path d="M9 8v8a1 1 0 0 0 1.6.8L14 14" /><path d="M14 10V6.2a1 1 0 0 0-1.6-.8L10 7" /><path d="M18 8a5 5 0 0 1 .8 5.5" /></svg>
+          <span>{{ game && isMuted(game.id) ? "Diffuser ce jeu aux amis" : "Ne pas diffuser ce jeu" }}</span>
+        </button>
         <div class="ctx-sep" />
         <button v-if="isManual" class="ctx-item" @click="onEdit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z" /><path d="M14.5 7.5 16.5 9.5" /></svg>
