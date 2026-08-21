@@ -2,6 +2,7 @@ pub mod accounts;
 pub mod metadata;
 pub mod models;
 pub mod procwatch;
+pub mod social;
 pub mod platforms;
 
 use models::{GameDto, GameMeta};
@@ -1305,6 +1306,147 @@ fn start_game_watch(app: tauri::AppHandle, game_id: String, install_dir: String)
     }
 }
 
+/* ── Service social : comptes, amis, présence ──────────────────────────────── */
+
+/// Dossier de config — facteur commun de toutes les commandes sociales.
+fn social_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_config_dir().map_err(|e| e.to_string())
+}
+
+/// Exécute hors du thread principal : chacune de ces commandes fait un aller-retour
+/// réseau, qui gèlerait l'interface si elle tournait là où elle est appelée.
+macro_rules! offload {
+    ($body:expr) => {
+        tauri::async_runtime::spawn_blocking(move || $body)
+            .await
+            .map_err(|e| e.to_string())?
+    };
+}
+
+/// Demande un code de connexion. Renvoie le code lui-même si le serveur est en mode
+/// développement (aucun e-mail ne partira alors), sinon `null`.
+#[tauri::command]
+async fn torii_request_code(email: String) -> Result<Option<String>, String> {
+    Ok(offload!(social::request_code(&email))?)
+}
+
+/// Vérifie le code et ouvre une session (persistée chiffrée).
+#[tauri::command]
+async fn torii_verify(
+    app: tauri::AppHandle,
+    email: String,
+    code: String,
+) -> Result<social::Account, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::verify(&dir, &email, &code))?)
+}
+
+/// Compte connecté, ou `null` si aucune session valide.
+#[tauri::command]
+async fn torii_me(app: tauri::AppHandle) -> Result<Option<social::Account>, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::me(&dir)))
+}
+
+#[tauri::command]
+async fn torii_logout(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::logout(&dir))?)
+}
+
+#[tauri::command]
+async fn torii_set_profile(
+    app: tauri::AppHandle,
+    display_name: Option<String>,
+    steam_id: Option<String>,
+    steam_discoverable: Option<bool>,
+) -> Result<social::Account, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::set_profile(
+        &dir,
+        display_name,
+        steam_id,
+        steam_discoverable
+    ))?)
+}
+
+/// Amis, demandes reçues et demandes envoyées.
+#[tauri::command]
+async fn torii_circle(app: tauri::AppHandle) -> Result<social::Circle, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::circle(&dir))?)
+}
+
+#[tauri::command]
+async fn torii_invite(app: tauri::AppHandle, friend_code: String) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::invite(&dir, &friend_code))?)
+}
+
+#[tauri::command]
+async fn torii_respond(
+    app: tauri::AppHandle,
+    account_id: String,
+    accept: bool,
+) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::respond(&dir, &account_id, accept))?)
+}
+
+#[tauri::command]
+async fn torii_remove_friend(app: tauri::AppHandle, account_id: String) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::remove_friend(&dir, &account_id))?)
+}
+
+/// Régénère son code d'ami : l'ancien cesse aussitôt de fonctionner.
+#[tauri::command]
+async fn torii_rotate_code(app: tauri::AppHandle) -> Result<String, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::rotate_code(&dir))?)
+}
+
+/// Amis Steam déjà sur Torii (les deux comptes doivent être découvrables).
+#[tauri::command]
+async fn torii_suggestions(
+    app: tauri::AppHandle,
+    steam_ids: Vec<String>,
+) -> Result<Vec<social::Person>, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::suggestions(&dir, &steam_ids))?)
+}
+
+/// Réglages de partage de présence (partage coupé par défaut).
+#[tauri::command]
+fn torii_prefs(app: tauri::AppHandle) -> Result<social::SocialPrefs, String> {
+    Ok(social::load_prefs(&social_dir(&app)?))
+}
+
+#[tauri::command]
+fn torii_set_prefs(
+    app: tauri::AppHandle,
+    prefs: social::SocialPrefs,
+) -> Result<social::SocialPrefs, String> {
+    let dir = social_dir(&app)?;
+    social::save_prefs(&dir, &prefs)?;
+    Ok(prefs)
+}
+
+/// Jeux qu'on ne diffuse jamais aux amis (applications permanentes, jeux privés).
+#[tauri::command]
+fn torii_muted_games(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let dir = social_dir(&app)?;
+    let mut list: Vec<String> = platforms::id_set::PRESENCE_MUTED.load(&dir).into_iter().collect();
+    list.sort();
+    Ok(list)
+}
+
+#[tauri::command]
+fn torii_mute_game(app: tauri::AppHandle, id: String, muted: bool) -> Result<Vec<String>, String> {
+    let dir = social_dir(&app)?;
+    platforms::id_set::PRESENCE_MUTED.set(&dir, &id, muted)
+}
+
 /// Préférences liées à la fenêtre, lues côté Rust (au démarrage et à la fermeture)
 /// donc persistées dans un fichier plutôt qu'en localStorage.
 #[derive(Serialize, serde::Deserialize, Clone, Copy, Default)]
@@ -1423,6 +1565,9 @@ pub fn run() {
             // Détection des parties (y compris lancées hors de Torii) : un seul fil,
             // qui dort la plupart du temps. Voir `procwatch` pour le coût mesuré.
             procwatch::spawn(app.handle().clone());
+            // Présence : ne publie rien tant qu'aucun compte n'est connecté ET que le
+            // partage n'a pas été activé explicitement (cf. `social::SocialPrefs`).
+            social::spawn_heartbeat(app.handle().clone());
             // La fenêtre est créée cachée (`visible:false`) pour éviter tout flash au
             // démarrage : on l'affiche seulement si « Démarrer minimisé » n'est PAS actif.
             // (Sinon elle reste dans le tray, sans clignotement.)
@@ -1497,6 +1642,21 @@ pub fn run() {
             get_window_prefs,
             set_window_prefs,
             start_game_watch,
+            torii_request_code,
+            torii_verify,
+            torii_me,
+            torii_logout,
+            torii_set_profile,
+            torii_circle,
+            torii_invite,
+            torii_respond,
+            torii_remove_friend,
+            torii_rotate_code,
+            torii_suggestions,
+            torii_prefs,
+            torii_set_prefs,
+            torii_muted_games,
+            torii_mute_game,
             notify_user
         ])
         .run(tauri::generate_context!())

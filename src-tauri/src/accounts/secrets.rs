@@ -32,6 +32,9 @@ pub struct Credentials {
     pub gog_refresh_token: Option<String>,
     /// Jeton de rafraîchissement Epic (même principe : access token ~8 h).
     pub epic_refresh_token: Option<String>,
+    /// Session du service social Torii (comptes, amis, présence). Secret de longue
+    /// durée : il a sa place ici, chiffré, et pas dans le stockage de la WebView.
+    pub torii_token: Option<String>,
 }
 
 /// Fichier chiffré (format courant).
