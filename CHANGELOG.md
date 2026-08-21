@@ -4,6 +4,11 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.12.2
+- **Correctif** : le bouton « Visible par mes amis Steam » ne répondait plus une fois qu'on l'avait éteint. Il est de nouveau fiable, dans les deux sens.
+- **Correctif** : délier son compte Steam de Torii ne fonctionnait pas — l'identifiant restait enregistré côté serveur alors que l'application affichait le contraire.
+- Le bouton devient cliquable dès qu'on connecte Steam, sans avoir à redémarrer Torii.
+
 ## 0.12.1
 - **Correctif majeur** : Torii se fermait tout seul juste après une connexion à Steam (ou à GOG / Epic). La fenêtre de connexion, en se refermant, était prise pour la fenêtre principale et faisait quitter l'application. Ça touchait toutes les nouvelles installations.
 - **Retrouver ses amis Steam** fonctionne enfin : la recherche existait côté serveur mais aucun écran ne l'appelait. Elle est maintenant dans Réglages → Réseau Torii, et on peut ajouter directement les personnes trouvées.

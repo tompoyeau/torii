@@ -217,8 +217,17 @@ pub fn set_profile(
     if let Some(v) = display_name {
         patch.insert("displayName".into(), v.into());
     }
+    // 🔑 Chaîne VIDE = délier, `None` = ne pas toucher.
+    //
+    // Un `null` JSON se désérialise en `None` dans un `Option<String>` : impossible d'y
+    // distinguer « je ne parle pas de ce champ » de « efface-le ». Envoyer `null` pour
+    // délier ne faisait donc rien du tout — le SteamID restait en base alors que
+    // l'interface croyait l'avoir retiré.
     if let Some(v) = steam_id {
-        patch.insert("steamId".into(), v.into());
+        patch.insert(
+            "steamId".into(),
+            if v.is_empty() { serde_json::Value::Null } else { v.into() },
+        );
     }
     if let Some(v) = steam_discoverable {
         patch.insert("steamDiscoverable".into(), v.into());
