@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Torii</title>
+    <style>
+      /* Palette reprise de l'application (src/style.css). Le bandeau vit hors de la
+         fenêtre principale : il ne peut pas hériter de ses variables, on les redit ici. */
+      :root {
+        --bg: #1b1823;
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #ece9f3;
+        --text-dim: #a39daf;
+        --accent: #ff6b57;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      /* 🔑 Le fond doit être OPAQUE et de la couleur de la carte : la fenêtre n'est pas
+         déclarée transparente, donc un fond transparent laisserait apparaître le blanc
+         par défaut de la WebView — un cadre clair tout autour du bandeau. */
+      html, body { height: 100%; background: var(--bg); overflow: hidden; }
+      body {
+        font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+        /* Le bandeau arrive par la droite : le mouvement dit d'où il vient et attire
+           l'œil sans clignoter. */
+        animation: entree 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+      }
+      @keyframes entree {
+        from { transform: translateX(24px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      .carte {
+        display: flex; align-items: center; gap: 13px; height: 100%;
+        padding: 0 16px;
+        background: var(--bg);
+        /* Pas d'arrondi : sans fenêtre transparente, les coins arrondis découperaient
+           du blanc. Windows 11 arrondit lui-même les bords de la fenêtre. */
+        border-left: 3px solid var(--accent);
+      }
+      .marque {
+        width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid;
+        place-items: center; background: linear-gradient(140deg, var(--accent), #ff9a6b);
+      }
+      .marque svg { width: 20px; height: 20px; }
+      .texte { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+      .titre {
+        font-size: 13.5px; font-weight: 700; color: var(--text);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .corps {
+        font-size: 12.5px; color: var(--text-dim); line-height: 1.3;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      }
+      @media (prefers-reduced-motion: reduce) { body { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="carte">
+      <span class="marque">
+        <svg viewBox="0 0 24 24" fill="#1a0f0c">
+          <path d="M6.6 7.3 L8.7 7.3 L9.1 19.6 L6.2 19.6 Z" />
+          <path d="M15.3 7.3 L17.4 7.3 L17.8 19.6 L14.9 19.6 Z" />
+          <rect x="11.2" y="8.9" width="1.6" height="2.6" />
+          <rect x="4.5" y="11.1" width="15" height="2.1" rx="0.4" />
+          <path d="M2.5 5 Q12 7.5 21.5 5 L21.5 7.4 Q12 9.9 2.5 7.4 Z" />
+          <path d="M2.5 5 L1.3 4 L0.9 5.7 L2.5 7.4 Z" />
+          <path d="M21.5 5 L22.7 4 L23.1 5.7 L21.5 7.4 Z" />
+        </svg>
+      </span>
+      <div class="texte">
+        <div class="titre" id="titre"></div>
+        <div class="corps" id="corps"></div>
+      </div>
+    </div>
+    <script>
+      // Le contenu est injecté par Rust via `initialization_script` : pas de query string
+      // à échapper, et le texte passe par `textContent` — un pseudo ou un titre de jeu
+      // vient d'ailleurs, il ne doit jamais être interprété comme du HTML.
+      var t = window.__TOAST__ || {};
+      document.getElementById("titre").textContent = t.titre || "Torii";
+      document.getElementById("corps").textContent = t.corps || "";
+    </script>
+  </body>
+</html>

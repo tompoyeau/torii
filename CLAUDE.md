@@ -443,6 +443,58 @@ cargo run --example community        # jeux possédés + famille (via session st
 - ⚠️ Un `window_prefs.json` existant garde ses valeurs : le nouveau défaut ne vaut que pour
   les fichiers absents ou incomplets (donc les nouvelles installations).
 
+## Journal et bandeau de notification
+
+- **`journal.rs`** : `logs/torii.log` dans le dossier de config. Ligne au démarrage,
+  **paniques Rust** (emplacement + pile), et erreurs d'interface remontées par
+  `main.ts` (`window.onerror`, promesses rejetées, `app.config.errorHandler`) via la
+  commande `log_front_error`. Rotation à 512 Ko vers `torii.log.1`. Bouton « Ouvrir le
+  journal » dans Réglages → À propos.
+- 🔑 Ce que le journal NE capte PAS : un arrêt violent du process (violation d'accès,
+  plantage WebView2). Le signe est alors **deux lignes de démarrage sans ligne d'arrêt
+  entre elles** — d'où la journalisation des arrêts volontaires (tray, fermeture).
+- `journal::init` est appelé en TOUT DÉBUT de `setup` : une panique plus tôt ne laisserait
+  aucune trace.
+- **`toast.rs`** : bandeau en haut à droite, fenêtre sans décoration, `always_on_top`,
+  `skip_taskbar`, et surtout **`focused(false)`** — voler le clavier à quelqu'un qui joue
+  serait pire que de ne rien afficher. Contenu injecté par `initialization_script`
+  (`window.__TOAST__`) plutôt que par la query string : pas d'échappement d'URL, et
+  `public/toast.html` écrit le texte avec `textContent` — un pseudo vient d'ailleurs, il
+  ne doit jamais être interprété comme du HTML.
+- 🔑 Le fond de `toast.html` doit être **opaque** : la fenêtre n'est pas déclarée
+  transparente, donc un fond transparent laisse apparaître le blanc par défaut de la
+  WebView (cadre clair autour du bandeau). Même raison pour l'absence d'arrondi.
+- ⚠️ Un jeu en plein écran **exclusif** masque le bandeau : Steam y arrive en s'injectant
+  dans le jeu, ce qu'on ne fait pas. En fenêtré sans bordure, ça marche.
+- 🔑🔑 **Ne JAMAIS construire la fenêtre depuis le fil principal.** Une commande Tauri
+  synchrone s'exécute sur le fil principal ; y appeler `WebviewWindowBuilder::build()`
+  fige la boucle d'évènements, car la création d'une WebView2 attend une réponse que
+  seule cette boucle pourrait délivrer. Symptômes vécus, et tous trompeurs : la fenêtre
+  **existe** mais reste invisible et non positionnée, l'interface devient blanche, Windows
+  la déclare pourtant « répond » (boucle de messages imbriquée), et **aucune ligne de
+  journal** n'est écrite après l'appel. `toast::show` fait donc tout sur un fil dédié.
+- 🔑 Le placement doit lire `position()` de l'écran, pas seulement `size()` : sur plusieurs
+  écrans, celui de gauche a des coordonnées **négatives** et le bandeau atterrissait sur
+  l'écran voisin. L'écran de référence est celui de la fenêtre `main`, à défaut le principal.
+- Le journal du bandeau est volontairement bavard (construction / placé / affiché / fermé) :
+  c'est une ligne `demande :` **sans suite** qui a désigné le coupable ci-dessus.
+- Déclencheur : `social::signaler_lancements` compare le couple (ami, jeu) d'un battement
+  à l'autre. 🔑 Le **premier** cercle reçu ne notifie rien (`amorce`) — sinon tous ceux qui
+  jouent déjà paraîtraient venir de commencer au démarrage de Torii. Réglage
+  `notify_friend_launch`, activé par défaut.
+
+## Rapprochement Steam ↔ Torii
+
+- `useTorii.reconcilierSteam()` fait remonter le SteamID dans le compte Torii dès que les
+  **deux** connexions existent. Appelé aux trois moments où l'état change : démarrage,
+  connexion Torii, et juste après une connexion Steam (`AccountsSettings.onConnect`).
+- 🔑 **Une seule fois**, mémorisé par `steamAutoLinked` dans `social_prefs.json`. Sans ce
+  drapeau, « jamais lié » et « visibilité éteinte à la main » sont indiscernables — le
+  SteamID est vide dans les deux cas — et on rallumerait à chaque démarrage ce que la
+  personne vient d'éteindre. Un défaut se propose, il ne se réimpose pas.
+- 🔑 SteamID et visibilité partent **ensemble** : se déclarer visible sans identifiant lié
+  afficherait un interrupteur allumé qui ne rapproche rien.
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.

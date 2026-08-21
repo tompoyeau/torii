@@ -1,8 +1,10 @@
 pub mod accounts;
 pub mod metadata;
+pub mod journal;
 pub mod models;
 pub mod procwatch;
 pub mod social;
+pub mod toast;
 pub mod platforms;
 
 use models::{GameDto, GameMeta};
@@ -1463,6 +1465,27 @@ fn torii_mute_game(app: tauri::AppHandle, id: String, muted: bool) -> Result<Vec
     platforms::id_set::PRESENCE_MUTED.set(&dir, &id, muted)
 }
 
+/// Note une erreur remontée par l'interface (script cassé, promesse rejetée…).
+/// Sans ça, une page blanche ne laisse aucune trace : le Rust va bien, et personne ne
+/// sait que la vue a cessé de fonctionner.
+#[tauri::command]
+fn log_front_error(app: tauri::AppHandle, message: String) {
+    if let Ok(dir) = app.path().app_config_dir() {
+        journal::write(&dir, "INTERFACE", &message);
+    }
+}
+
+/// Ouvre le journal dans l'éditeur par défaut, pour pouvoir l'envoyer.
+#[tauri::command]
+fn open_log(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let fichier = journal::path(&dir);
+    if !fichier.exists() {
+        journal::write(&dir, "INFO", "journal ouvert depuis les réglages");
+    }
+    tauri_plugin_opener::open_path(fichier, None::<&str>).map_err(|e| e.to_string())
+}
+
 /// Préférences liées à la fenêtre, lues côté Rust (au démarrage et à la fermeture)
 /// donc persistées dans un fichier plutôt qu'en localStorage.
 #[derive(Serialize, serde::Deserialize, Clone, Copy)]
@@ -1526,7 +1549,12 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => reveal_window(app),
-            "quit" => app.exit(0),
+            "quit" => {
+                if let Ok(dir) = app.path().app_config_dir() {
+                    journal::write(&dir, "INFO", "arrêt demandé depuis la zone de notification");
+                }
+                app.exit(0)
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -1564,6 +1592,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(LastScan::default())
         .manage(procwatch::Watch::default())
+        .manage(toast::Toasts::default())
         // ⚠️ DOIT être enregistré en premier. Empêche une 2e instance : quand l'app
         // tourne déjà (ex. réduite dans le tray via « fermer dans la zone de notification »)
         // et qu'on la relance, la nouvelle instance se ferme et la fenêtre existante est
@@ -1589,6 +1618,12 @@ pub fn run() {
             None,
         ))
         .setup(|app| {
+            // Journal en premier : une panique survenue plus tôt ne laisserait rien.
+            if let Ok(dir) = app.path().app_config_dir() {
+                journal::init(dir);
+            }
+            // Un bandeau resté d'une session précédente n'a rien à faire là.
+            toast::nettoyer_au_demarrage(&app.handle().clone());
             // Icône dans la zone de notification (tray).
             build_tray(app)?;
             // Détection des parties (y compris lancées hors de Torii) : un seul fil,
@@ -1626,6 +1661,9 @@ pub fn run() {
                     api.prevent_close();
                     let _ = window.hide();
                 } else {
+                    if let Ok(dir) = window.app_handle().path().app_config_dir() {
+                        journal::write(&dir, "INFO", "arrêt : fermeture de la fenêtre");
+                    }
                     // Sinon on QUITTE vraiment. Sans ça, l'icône du tray garde le process
                     // vivant après destruction de la fenêtre → instance fantôme sans fenêtre
                     // qui bloque les relances (single-instance ne trouve plus de fenêtre à
@@ -1683,6 +1721,8 @@ pub fn run() {
             get_window_prefs,
             set_window_prefs,
             start_game_watch,
+            log_front_error,
+            open_log,
             torii_request_code,
             torii_verify,
             torii_me,
