@@ -14,20 +14,58 @@ import AccountsSettings from "./AccountsSettings.vue";
 import ToriiPanel from "./ToriiPanel.vue";
 import { useTorii } from "../composables/useTorii";
 import { useFriends } from "../composables/useFriends";
+import { showToast } from "../composables/useToast";
 
 const { games, setHidden } = useLibrary();
 const { prefs } = usePreferences();
 const { excludedStores, toggleStoreExcluded, clearExcludedStores } = useStore();
 const {
   account: toriiAccount, connected: toriiConnected, prefs: toriiPrefs, mutedGames,
-  suggestions, searching, searched,
-  setPrefs: setToriiPrefs, setMuted, setSteamLink, logout: toriiLogout,
-  findSteamFriends, inviteAccount,
+  suggestions, searching, searched, presenceMode,
+  setPrefs: setToriiPrefs, setPresenceMode, setMuted, setSteamLink, logout: toriiLogout,
+  findSteamFriends, inviteAccount, rotateCode, setDisplayName,
 } = useTorii();
+
+/** Pseudo en cours d'édition (non enregistré tant qu'on ne valide pas). */
+const pseudoDraft = ref("");
+const pseudoBusy = ref(false);
+/** Rien à enregistrer si le champ est vide ou identique à ce qui est déjà en place. */
+const pseudoDirty = computed(() => {
+  const v = pseudoDraft.value.trim();
+  return !!v && v !== toriiAccount.value?.displayName;
+});
+watch(
+  toriiAccount,
+  (a) => { if (a && !pseudoDirty.value) pseudoDraft.value = a.displayName; },
+  { immediate: true },
+);
+async function onSavePseudo() {
+  if (!pseudoDirty.value || pseudoBusy.value) return;
+  pseudoBusy.value = true;
+  try {
+    await setDisplayName(pseudoDraft.value.trim());
+    showToast("Pseudo mis à jour.");
+  } finally {
+    pseudoBusy.value = false;
+  }
+}
+
+/** Les trois niveaux de partage, du plus ouvert au plus discret. */
+const PRESENCE_MODES = [
+  { key: "detailed" as const, label: "Jeu visible", hint: "Tes amis voient à quoi tu joues et depuis quand." },
+  { key: "online" as const, label: "En ligne", hint: "Ils te savent connecté, sans savoir à quoi tu joues." },
+  { key: "offline" as const, label: "Invisible", hint: "Personne ne voit rien. Tu vois toujours tes amis." },
+];
 const { friends: steamFriends, refresh: refreshSteamFriends } = useFriends();
 
 /** Délais d'inactivité proposés avant de passer « absent ». */
 const AWAY_DELAYS = [5, 10, 20, 30] as const;
+
+/** Renouvelle le code d'ami ; l'ancien cesse aussitôt de fonctionner. */
+async function onRotateCode() {
+  await rotateCode();
+  showToast("Nouveau code d'ami : l'ancien ne fonctionne plus.");
+}
 
 /** Jeux réduits au silence, résolus en titres depuis la bibliothèque. */
 const mutedList = computed(() =>
@@ -470,21 +508,60 @@ function unhide(id: string) {
             <ToriiPanel />
 
             <template v-if="toriiConnected">
-              <button
-                class="pref toggle-row"
-                role="switch"
-                :aria-checked="toriiPrefs.sharePresence"
-                @click="setToriiPrefs({ sharePresence: !toriiPrefs.sharePresence })"
-              >
+              <div class="pref">
                 <div class="row-text">
-                  <span class="row-title">Partager ma présence</span>
+                  <span class="row-title">Ton pseudo</span>
                   <span class="row-sub">
-                    Tes amis voient à quoi tu joues et depuis quand. Tant que c'est coupé,
-                    rien ne quitte ton PC.
+                    Le nom que voient tes amis. Il n'a pas besoin d'être unique et ne
+                    permet à personne de te retrouver — seul ton code d'ami le permet.
                   </span>
                 </div>
-                <span class="switch" :class="{ on: toriiPrefs.sharePresence }"><span class="knob" /></span>
-              </button>
+                <div class="row-actions" style="margin-top: 0">
+                  <input v-model="pseudoDraft" class="pseudo-input" maxlength="40" spellcheck="false" />
+                  <button class="ghost-btn" :disabled="!pseudoDirty || pseudoBusy" @click="onSavePseudo">
+                    {{ pseudoBusy ? "…" : "Enregistrer" }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="divider" />
+
+              <div class="pref">
+                <div class="row-text">
+                  <span class="row-title">Ton code d'ami</span>
+                  <span class="row-sub">
+                    À donner de la main à la main pour qu'on t'ajoute. Le renouveler rend
+                    l'ancien inutilisable — pratique si tu l'as diffusé trop largement.
+                  </span>
+                </div>
+                <div class="row-actions" style="margin-top: 0">
+                  <span class="friend-code">{{ toriiAccount?.friendCode }}</span>
+                  <button class="ghost-btn" @click="onRotateCode">Renouveler</button>
+                </div>
+              </div>
+
+              <div class="divider" />
+
+              <div class="pref presence-choice">
+                <div class="row-text">
+                  <span class="row-title">Ce que tes amis voient</span>
+                  <span class="row-sub">
+                    Tant que tu es invisible, rien de ce que tu joues ne quitte ton PC.
+                  </span>
+                </div>
+                <div class="modes">
+                  <button
+                    v-for="m in PRESENCE_MODES"
+                    :key="m.key"
+                    class="mode"
+                    :class="{ on: presenceMode === m.key }"
+                    @click="setPresenceMode(m.key)"
+                  >
+                    <span class="mode-label">{{ m.label }}</span>
+                    <span class="mode-hint">{{ m.hint }}</span>
+                  </button>
+                </div>
+              </div>
 
               <div class="divider" />
 
@@ -679,6 +756,29 @@ function unhide(id: string) {
 /* À propos & maintenance */
 .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .sub-title { font-size: 14px; font-weight: 700; margin: 4px 0 6px; }
+.presence-choice { flex-direction: column; align-items: stretch; gap: 12px; }
+.modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.mode {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer;
+  padding: 11px 13px; border-radius: 11px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+}
+.mode:hover { border-color: var(--border-strong); color: var(--text); }
+.mode.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.mode-label { font-size: 13.5px; font-weight: 600; }
+.mode-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; }
+
+.pseudo-input {
+  padding: 8px 12px; border-radius: 9px; font-size: 13.5px; font-family: inherit; min-width: 190px;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+}
+.pseudo-input:focus { outline: none; border-color: var(--accent); }
+
+.friend-code {
+  font-family: var(--mono); font-size: 15px; letter-spacing: 0.16em; font-weight: 600;
+  padding: 7px 13px; border-radius: 9px;
+  background: var(--surface-2); border: 1px dashed var(--border-strong);
+}
 .version-tag {
   flex: none; font-family: var(--mono); font-size: 13px; color: var(--text-dim);
   background: var(--surface-2); border: 1px solid var(--border); padding: 4px 11px; border-radius: 8px;

@@ -284,14 +284,30 @@ export interface ToriiPerson {
   steamId?: string | null;
 }
 
+/** Résultat d'une connexion : le compte, et s'il vient d'être créé. */
+export interface ToriiSignIn {
+  account: ToriiAccount;
+  created: boolean;
+}
+
 export interface ToriiCircle {
   friends: ToriiFriend[];
   incoming: ToriiPerson[];
   outgoing: ToriiPerson[];
 }
 
-/** Réglages de partage. `sharePresence` est faux tant qu'on ne l'active pas. */
+/**
+ * Ce qu'on laisse voir de soi aux amis :
+ *   - `offline`  : personne ne te voit ;
+ *   - `online`   : ils te savent connecté, sans savoir à quoi tu joues ;
+ *   - `detailed` : ils voient le jeu et depuis quand.
+ */
+export type PresenceMode = "offline" | "online" | "detailed";
+
+/** Réglages de partage. Le mode est `offline` tant qu'on n'a rien choisi. */
 export interface SocialPrefs {
+  presenceMode?: PresenceMode | null;
+  /** Ancien réglage booléen, encore lu pour ne pas réinitialiser les comptes existants. */
   sharePresence: boolean;
   awayAfterMinutes: number;
 }

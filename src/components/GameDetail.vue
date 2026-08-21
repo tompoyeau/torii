@@ -4,6 +4,7 @@ import { useLibrary } from "../composables/useLibrary";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
+import { useTorii } from "../composables/useTorii";
 import { useScrollLock } from "../composables/useScrollLock";
 import { platformName } from "../data/platforms";
 import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
@@ -13,6 +14,7 @@ import PlatformIcon from "./PlatformIcon.vue";
 const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
+const { connected: toriiConnected, isMuted, setMuted } = useTorii();
 const { selectedGameId, closeGame, showStore, openEditGame } = useUi();
 
 /**
@@ -133,6 +135,20 @@ function onOpenFolder() {
   if (game.value?.installDir) openInstallDir(game.value.installDir);
   uninstallMenuOpen.value = false;
 }
+/** Ce jeu est-il tenu à l'écart de ce que voient les amis ? */
+const gameMuted = computed(() => !!game.value && isMuted(game.value.id));
+
+/**
+ * Empêche (ou rétablit) la diffusion de ce jeu aux amis. Sa place est ici autant que
+ * dans le clic droit : c'est sur la fiche qu'on se dit « celui-là, je le garde pour moi ».
+ */
+async function onToggleMuted() {
+  const g = game.value;
+  if (!g) return;
+  await setMuted(g.id, !gameMuted.value);
+  uninstallMenuOpen.value = false;
+}
+
 /** Un jeu manuel n'est référencé que par Torii : « désinstaller » = le retirer d'ici. */
 const isManual = computed(() => game.value?.platform === "manual");
 
@@ -387,6 +403,10 @@ onBeforeUnmount(() => {
                 <button v-if="game.installDir" class="settings-opt" @click="onOpenFolder">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
                   <span>Ouvrir l'emplacement du fichier</span>
+                </button>
+                <button v-if="toriiConnected" class="settings-opt" @click="onToggleMuted">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18" /><path d="M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg>
+                  <span>{{ gameMuted ? "Diffuser ce jeu aux amis" : "Ne pas diffuser ce jeu" }}</span>
                 </button>
                 <button v-if="isManual" class="settings-opt" @click="onEdit">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z" /><path d="M14.5 7.5 16.5 9.5" /></svg>

@@ -170,6 +170,10 @@ export async function verifyCode(request, env) {
     .bind(email)
     .first();
 
+  // Première connexion = inscription. Le client s'en sert pour proposer de choisir un
+  // pseudo tout de suite, plutôt que de laisser le nom dérivé de l'adresse e-mail.
+  const created = !account;
+
   if (!account) {
     account = {
       id: newId(),
@@ -195,7 +199,7 @@ export async function verifyCode(request, env) {
     .bind(await hash(token, env.PEPPER), account.id, device, now(), now())
     .run();
 
-  return json({ token, account: publicAccount(account) });
+  return json({ token, created, account: publicAccount(account) });
 }
 
 /** `POST /v1/auth/logout` — révoque la session courante (les autres appareils restent connectés). */

@@ -1345,7 +1345,7 @@ async fn torii_verify(
     app: tauri::AppHandle,
     email: String,
     code: String,
-) -> Result<social::Account, String> {
+) -> Result<social::SignIn, String> {
     let dir = social_dir(&app)?;
     Ok(offload!(social::verify(&dir, &email, &code))?)
 }

@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, ToriiAccount, ToriiCircle, ToriiPerson, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, ToriiAccount, ToriiCircle, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -280,8 +280,8 @@ export async function toriiRequestCode(email: string): Promise<string | null> {
 }
 
 /** Vérifie le code et ouvre la session (persistée chiffrée côté Rust). */
-export async function toriiVerify(email: string, code: string): Promise<ToriiAccount> {
-  return await social<ToriiAccount>("torii_verify", { email, code });
+export async function toriiVerify(email: string, code: string): Promise<ToriiSignIn> {
+  return await social<ToriiSignIn>("torii_verify", { email, code });
 }
 
 /** Compte connecté, ou `null` (session absente, révoquée, ou hors application). */

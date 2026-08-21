@@ -67,7 +67,7 @@ export function useFriends() {
 // --- Données fictives (hors Tauri : preview) ---------------------------------
 
 const MOCK_FRIENDS: Friend[] = [
-  { steamId: "1", name: "Sterben", avatarUrl: "", state: "in-game", gameName: "Baldur's Gate 3", profileUrl: "#" },
+  { steamId: "1", name: "Sterben", avatarUrl: "", state: "in-game", gameName: "NEON REQUIEM™", profileUrl: "#" },
   { steamId: "2", name: "Ecrevisse", avatarUrl: "", state: "in-game", gameName: "Counter-Strike 2", profileUrl: "#" },
   { steamId: "3", name: "Illusionnelle", avatarUrl: "", state: "online", gameName: null, profileUrl: "#" },
   { steamId: "4", name: "Jordan", avatarUrl: "", state: "away", gameName: null, profileUrl: "#" },
