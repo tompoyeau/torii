@@ -243,6 +243,17 @@ pub fn invite(config_dir: &Path, friend_code: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Invite quelqu'un trouvé par suggestion : on connaît son identifiant, pas son code.
+pub fn invite_account(config_dir: &Path, account_id: &str) -> Result<(), String> {
+    let _: serde_json::Value = call(
+        config_dir,
+        "POST",
+        "/v1/friends/invite",
+        Some(serde_json::json!({ "accountId": account_id })),
+    )?;
+    Ok(())
+}
+
 pub fn respond(config_dir: &Path, account_id: &str, accept: bool) -> Result<(), String> {
     let _: serde_json::Value = call(
         config_dir,

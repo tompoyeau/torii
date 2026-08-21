@@ -403,6 +403,14 @@ cargo run --example community        # jeux possédés + famille (via session st
 - Le vrai envoi d'e-mails exige **un domaine à soi** (impossible depuis `*.workers.dev`)
   et wrangler 4 (`wrangler email sending enable <domaine>`).
 
+- 🔑 **Suggestions Steam** : `POST /v1/friends/invite` accepte `{ accountId }` en plus de
+  `{ friendCode }`. Sans ça, une suggestion (qui rend un identifiant) ne pouvait pas mener
+  à une invitation — le tuyau existait sans robinet. Aucun risque d'énumération : un
+  identifiant fait 25 caractères aléatoires, et on ne l'obtient que par une suggestion,
+  laquelle exige la découvrabilité des DEUX comptes.
+- ⚠️ Le SteamID d'un ami n'est renvoyé dans le cercle que s'il est découvrable : c'est ce
+  champ qui permet à `useFriendList` de fusionner sa ligne Torii et sa ligne Steam.
+
 ### Côté client — `social.rs`
 
 - Client de l'API + **battement de cœur** (30 s) qui publie la présence et reçoit le cercle
@@ -425,6 +433,15 @@ cargo run --example community        # jeux possédés + famille (via session st
   remplacer par l'id IGDB quand il sera persisté.
 - ⚠️ Les ponts `torii*` de `lib/tauri.ts` **laissent remonter les erreurs**, contrairement
   au reste du fichier : les messages du serveur sont écrits pour être affichés tels quels.
+
+## Fenêtre et zone de notification
+
+- 🔑 **`close_to_tray` est VRAI par défaut** (`impl Default for WindowPrefs`) : fermer la
+  fenêtre garde Torii en tâche de fond. Sinon la détection de parties et la présence
+  s'arrêtent dès qu'on range la fenêtre — ce que personne n'associe à un clic sur la croix.
+  Décocher la case rétablit une vraie fermeture ; « Quitter » reste dans le menu du tray.
+- ⚠️ Un `window_prefs.json` existant garde ses valeurs : le nouveau défaut ne vaut que pour
+  les fichiers absents ou incomplets (donc les nouvelles installations).
 
 ## Prochaines étapes
 

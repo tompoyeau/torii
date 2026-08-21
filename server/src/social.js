@@ -80,16 +80,31 @@ export async function listFriends(request, env, session) {
   return json(await loadCircle(env, session.accountId));
 }
 
-/** `POST /v1/friends/invite` — { friendCode } */
+/**
+ * `POST /v1/friends/invite` — { friendCode } ou { accountId }.
+ *
+ * L'invitation par **identifiant** sert aux suggestions : on vient d'apprendre qu'un ami
+ * Steam est sur Torii, on n'a pas son code sous la main. Ça n'ouvre aucune porte — un
+ * identifiant fait 25 caractères tirés au hasard, et on ne l'obtient qu'en étant déjà lié
+ * à la personne, ou via une suggestion, laquelle exige que vous vous soyez tous les deux
+ * rendus découvrables.
+ */
 export async function invite(request, env, session) {
   const data = (await body(request)) || {};
   const code = clamp(data.friendCode, 16).toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (code.length < 6) return fail(400, "code_invalide", "Ce code d'ami n'est pas valide.");
+  const accountId = clamp(data.accountId, 40);
+  if (!accountId && code.length < 6) {
+    return fail(400, "code_invalide", "Ce code d'ami n'est pas valide.");
+  }
 
-  const target = await env.DB.prepare("SELECT id, display_name FROM accounts WHERE friend_code = ?")
-    .bind(code)
-    .first();
-  if (!target) return fail(404, "introuvable", "Aucun compte ne correspond à ce code.");
+  const target = accountId
+    ? await env.DB.prepare("SELECT id, display_name FROM accounts WHERE id = ?")
+        .bind(accountId)
+        .first()
+    : await env.DB.prepare("SELECT id, display_name FROM accounts WHERE friend_code = ?")
+        .bind(code)
+        .first();
+  if (!target) return fail(404, "introuvable", "Ce compte est introuvable.");
   if (target.id === session.accountId) {
     return fail(400, "soi_meme", "C'est ton propre code d'ami.");
   }

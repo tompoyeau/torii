@@ -309,6 +309,11 @@ export async function toriiInvite(friendCode: string): Promise<void> {
   await social<void>("torii_invite", { friendCode });
 }
 
+/** Invite une personne trouvée par suggestion : on a son identifiant, pas son code. */
+export async function toriiInviteAccount(accountId: string): Promise<void> {
+  await social<void>("torii_invite_account", { accountId });
+}
+
 export async function toriiRespond(accountId: string, accept: boolean): Promise<void> {
   await social<void>("torii_respond", { accountId, accept });
 }

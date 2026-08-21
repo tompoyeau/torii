@@ -1,9 +1,11 @@
 import { computed, ref } from "vue";
 import {
-  onToriiCircle, toriiCircle, toriiInvite, toriiLogout, toriiMe, toriiMutedGames,
-  toriiMuteGame, toriiPrefs, toriiRemoveFriend, toriiRequestCode, toriiRespond,
-  toriiRotateCode, toriiSetPrefs, toriiSetProfile, toriiVerify,
+  onToriiCircle, toriiCircle, toriiInvite, toriiInviteAccount, toriiLogout, toriiMe,
+  toriiMutedGames, toriiMuteGame, toriiPrefs, toriiRemoveFriend, toriiRequestCode,
+  toriiRespond, toriiRotateCode, toriiSetPrefs, toriiSetProfile, toriiSuggestions,
+  toriiVerify,
 } from "../lib/tauri";
+import type { ToriiPerson } from "../types";
 import type { SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
 
 /**
@@ -19,6 +21,11 @@ const account = ref<ToriiAccount | null>(null);
 const circle = ref<ToriiCircle>({ friends: [], incoming: [], outgoing: [] });
 const prefs = ref<SocialPrefs>({ sharePresence: false, awayAfterMinutes: 10 });
 const mutedGames = ref<string[]>([]);
+/** Amis Steam qui se trouvent avoir un compte Torii découvrable. */
+const suggestions = ref<ToriiPerson[]>([]);
+const searching = ref(false);
+/** Vrai une fois la recherche faite, pour distinguer « rien trouvé » de « pas cherché ». */
+const searched = ref(false);
 const loading = ref(false);
 const booted = ref(false);
 
@@ -99,6 +106,31 @@ function isMuted(gameId: string): boolean {
 
 /* ── Amis ──────────────────────────────────────────────────────────────────── */
 
+/**
+ * Cherche, parmi les SteamID fournis, ceux qui ont un compte Torii.
+ *
+ * 🔑 Le serveur exige que **les deux** personnes se soient rendues découvrables : sans
+ * cette double condition, envoyer une liste de SteamID suffirait à cartographier les
+ * utilisateurs de Torii. Une liste vide n'a donc rien d'anormal.
+ */
+async function findSteamFriends(steamIds: string[]) {
+  searching.value = true;
+  try {
+    const known = new Set(circle.value.friends.map((f) => f.id));
+    suggestions.value = (await toriiSuggestions(steamIds)).filter((p) => !known.has(p.id));
+    searched.value = true;
+  } finally {
+    searching.value = false;
+  }
+}
+
+/** Envoie une demande à quelqu'un trouvé par suggestion. */
+async function inviteAccount(accountId: string) {
+  await toriiInviteAccount(accountId);
+  suggestions.value = suggestions.value.filter((p) => p.id !== accountId);
+  await refresh();
+}
+
 async function invite(friendCode: string) {
   await toriiInvite(friendCode.trim());
   await refresh();
@@ -128,6 +160,9 @@ export function useTorii() {
     circle,
     prefs,
     mutedGames,
+    suggestions,
+    searching,
+    searched,
     loading,
     booted,
     connected: computed(() => account.value !== null),
@@ -142,6 +177,8 @@ export function useTorii() {
     setMuted,
     isMuted,
     invite,
+    inviteAccount,
+    findSteamFriends,
     respond,
     removeFriend,
     rotateCode,
