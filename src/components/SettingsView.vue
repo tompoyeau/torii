@@ -23,6 +23,7 @@ const {
   account: toriiAccount, connected: toriiConnected, prefs: toriiPrefs, mutedGames,
   suggestions, searching, searched, presenceMode,
   setPrefs: setToriiPrefs, setPresenceMode, setMuted, setSteamLink, logout: toriiLogout,
+  deleteAccount: toriiDeleteAccount,
   findSteamFriends, inviteAccount, rotateCode, setDisplayName,
 } = useTorii();
 
@@ -89,7 +90,57 @@ async function onToggleSteamLink() {
   // deux divergeaient, chaque clic était lu comme « délier » et le bouton ne répondait
   // plus. On envoie donc toujours les deux champs ensemble, cohérents par construction.
   const visible = !toriiAccount.value?.steamDiscoverable;
-  await setSteamLink(visible ? mySteamId.value : "", visible);
+  steamLinkError.value = null;
+  try {
+    await setSteamLink(visible ? mySteamId.value : "", visible);
+  } catch (e) {
+    // Le refus le plus probable : ce compte Steam est déjà relié ailleurs. Le message
+    // s'affiche SOUS l'interrupteur, à l'endroit exact où le clic n'a pas eu l'effet
+    // attendu — un toast passe et s'en va, alors que l'explication doit rester sous les
+    // yeux tant que l'interrupteur est dans un état qui n'est pas celui qu'on voulait.
+    steamLinkError.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+/** Dernier refus du serveur sur le lien Steam. Effacé dès qu'une tentative aboutit. */
+const steamLinkError = ref<string | null>(null);
+
+/* ── Suppression du compte ─────────────────────────────────────────────────── */
+
+/**
+ * Suppression définitive, derrière une confirmation qui demande de **recopier son
+ * pseudo**. Ce n'est pas de la cérémonie : c'est la seule action de l'application qu'on
+ * ne peut pas défaire, et elle est à deux centimètres d'un bouton « Déconnecter » qui,
+ * lui, est anodin. Recopier son nom oblige à lire ce qu'on est en train de faire.
+ */
+const deleteOpen = ref(false);
+const deleteEcho = ref("");
+const deleteBusy = ref(false);
+const deleteError = ref<string | null>(null);
+
+const deleteReady = computed(
+  () => deleteEcho.value.trim() === (toriiAccount.value?.displayName ?? "").trim(),
+);
+
+function openDelete() {
+  deleteOpen.value = true;
+  deleteEcho.value = "";
+  deleteError.value = null;
+}
+
+async function onDeleteAccount() {
+  if (!deleteReady.value || deleteBusy.value) return;
+  deleteBusy.value = true;
+  deleteError.value = null;
+  try {
+    await toriiDeleteAccount();
+    deleteOpen.value = false;
+    showToast("Ton compte Torii a été supprimé.");
+  } catch (e) {
+    deleteError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    deleteBusy.value = false;
+  }
 }
 
 /** Le lien Steam n'a de sens que si un compte Steam est connecté dans Torii. */
@@ -620,6 +671,7 @@ function unhide(id: string) {
                 </div>
                 <span class="switch" :class="{ on: toriiAccount?.steamDiscoverable }"><span class="knob" /></span>
               </button>
+              <p v-if="steamLinkError" class="row-error" role="alert">{{ steamLinkError }}</p>
 
               <template v-if="toriiAccount?.steamDiscoverable">
                 <div class="divider" />
@@ -692,6 +744,44 @@ function unhide(id: string) {
               <div class="row-actions">
                 <button class="ghost-btn" @click="toriiLogout()">Déconnecter ce compte</button>
               </div>
+
+              <div class="divider" />
+
+              <h3 class="sub-title danger">Supprimer mon compte</h3>
+              <p class="pane-hint">
+                Ton pseudo, ton code d'ami et toutes tes relations disparaissent du serveur.
+                Tes amis ne te verront plus dans leur liste. Ta bibliothèque et tes réglages
+                restent sur cet ordinateur : seul le compte Torii est supprimé.
+              </p>
+
+              <div v-if="!deleteOpen" class="row-actions">
+                <button class="danger-btn" @click="openDelete">Supprimer mon compte Torii</button>
+              </div>
+
+              <div v-else class="danger-zone">
+                <p class="danger-lead">
+                  C'est définitif : il n'y a pas de corbeille, et le même code d'ami ne
+                  reviendra pas. Recopie <strong>{{ toriiAccount?.displayName }}</strong>
+                  pour confirmer.
+                </p>
+                <div class="controls">
+                  <input
+                    v-model="deleteEcho"
+                    :placeholder="toriiAccount?.displayName"
+                    spellcheck="false"
+                    autocomplete="off"
+                  />
+                  <button
+                    class="danger-btn"
+                    :disabled="!deleteReady || deleteBusy"
+                    @click="onDeleteAccount"
+                  >
+                    {{ deleteBusy ? "Suppression…" : "Supprimer définitivement" }}
+                  </button>
+                  <button class="ghost-btn" @click="deleteOpen = false">Annuler</button>
+                </div>
+                <p v-if="deleteError" class="row-error" role="alert">{{ deleteError }}</p>
+              </div>
             </template>
           </template>
 
@@ -759,6 +849,37 @@ function unhide(id: string) {
 .row-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .row-title { font-weight: 600; font-size: 14px; color: var(--text); }
 .row-sub { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+/* Refus du serveur, juste sous l'interrupteur concerné : il reste affiché tant que la
+   situation n'est pas réglée, là où le clic n'a pas produit l'effet attendu. */
+.sub-title.danger { color: #ff6b6b; }
+.danger-zone {
+  display: flex; flex-direction: column; gap: 12px; margin-top: 12px;
+  padding: 14px 16px; border-radius: 12px;
+  background: color-mix(in srgb, #ff6b6b 7%, transparent);
+  border: 1px solid color-mix(in srgb, #ff6b6b 26%, transparent);
+}
+.danger-lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.danger-lead strong { color: var(--text); font-weight: 700; }
+.danger-zone input {
+  padding: 9px 13px; border-radius: 10px; font-size: 13.5px; font-family: inherit;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text); min-width: 200px;
+}
+.danger-zone input:focus { outline: none; border-color: #ff6b6b; }
+.danger-btn {
+  padding: 9px 15px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: inherit; color: #ff6b6b;
+  background: color-mix(in srgb, #ff6b6b 12%, transparent);
+  border: 1px solid color-mix(in srgb, #ff6b6b 38%, transparent);
+}
+.danger-btn:hover:not(:disabled) { background: color-mix(in srgb, #ff6b6b 20%, transparent); }
+.danger-btn:disabled { opacity: 0.45; cursor: default; }
+
+.row-error {
+  margin: 12px 0 4px; padding: 9px 12px; border-radius: 9px;
+  font-size: 12.5px; line-height: 1.45; color: #ff6b6b;
+  background: color-mix(in srgb, #ff6b6b 12%, transparent);
+  border: 1px solid color-mix(in srgb, #ff6b6b 28%, transparent);
+}
 .toggle-row { width: 100%; text-align: left; background: none; border: none; padding: 0; cursor: pointer; }
 .toggle-row:disabled { cursor: default; opacity: 0.6; }
 .divider { height: 1px; background: var(--border); margin: 18px 0; }

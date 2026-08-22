@@ -12,6 +12,7 @@ import StoreGameDetail from "./components/StoreGameDetail.vue";
 import SettingsView from "./components/SettingsView.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AddGameModal from "./components/AddGameModal.vue";
+import ToriiSignInDialog from "./components/ToriiSignInDialog.vue";
 import UpdateBanner from "./components/UpdateBanner.vue";
 import Toast from "./components/Toast.vue";
 import SplashScreen from "./components/SplashScreen.vue";
@@ -96,6 +97,7 @@ onBeforeUnmount(() => {
     <SettingsView />
     <ContextMenu />
     <AddGameModal />
+    <ToriiSignInDialog />
     <UpdateBanner />
     <Toast />
     <SplashScreen />

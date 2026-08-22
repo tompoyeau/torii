@@ -17,7 +17,7 @@
  */
 
 import { CORS, fail, json } from "./lib.js";
-import { authenticate, logout, me, requestCode, updateMe, verifyCode } from "./auth.js";
+import { authenticate, deleteMe, logout, me, requestCode, signup, updateMe, verifyCode } from "./auth.js";
 import {
   clearPresence, invite, listFriends, publishPresence, removeFriend, respond,
   rotateCode, suggestions,
@@ -27,12 +27,14 @@ import {
 const PUBLIC = {
   "POST /v1/auth/request-code": requestCode,
   "POST /v1/auth/verify": verifyCode,
+  "POST /v1/auth/signup": signup,
 };
 
 /** Routes exigeant un jeton valide ; la session résolue leur est passée en 3ᵉ argument. */
 const PRIVATE = {
   "GET /v1/me": me,
   "PATCH /v1/me": updateMe,
+  "DELETE /v1/me": deleteMe,
   "POST /v1/auth/logout": logout,
   "GET /v1/friends": listFriends,
   "POST /v1/friends/invite": invite,

@@ -22,6 +22,45 @@ const MAX_SENDS = 5;
 const SEND_WINDOW = 3600;
 /** Essais autorisés avant de brûler le code : 6 chiffres ne résistent qu'à ça près. */
 const MAX_ATTEMPTS = 5;
+/** Validité du laissez-passer d'inscription : le temps de choisir un pseudo, pas plus. */
+const SIGNUP_TTL = 15 * 60;
+
+function b64url(texte) {
+  const octets = new TextEncoder().encode(texte);
+  return btoa(String.fromCharCode(...octets)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function deb64url(texte) {
+  const brut = atob(texte.replace(/-/g, "+").replace(/_/g, "/"));
+  return new TextDecoder().decode(Uint8Array.from(brut, (c) => c.charCodeAt(0)));
+}
+
+/**
+ * Laissez-passer d'inscription : `<adresse base64url>.<expiration>.<signature>`.
+ *
+ * 🔑 Ni table ni ligne à nettoyer : la signature au poivre du serveur suffit à prouver
+ * que cette adresse vient d'être vérifiée ici. C'est tout l'objet de la manœuvre — tant
+ * que le pseudo n'est pas choisi, RIEN n'existe en base.
+ */
+async function emettreLaissezPasser(email, env) {
+  const charge = `${b64url(email)}.${now() + SIGNUP_TTL}`;
+  return `${charge}.${await hash(charge, env.PEPPER)}`;
+}
+
+/** Renvoie l'adresse portée par le laissez-passer, ou `null` s'il ne vaut rien. */
+async function lireLaissezPasser(jeton, env) {
+  const morceaux = String(jeton || "").split(".");
+  if (morceaux.length !== 3) return null;
+  const [adresse, expiration, signature] = morceaux;
+  if (!/^\d+$/.test(expiration) || Number(expiration) < now()) return null;
+  if (!sameHash(await hash(`${adresse}.${expiration}`, env.PEPPER), signature)) return null;
+  try {
+    const email = normalizeEmail(deb64url(adresse));
+    return looksLikeEmail(email) ? email : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * `POST /v1/auth/request-code` — envoie un code à l'adresse donnée.
@@ -174,6 +213,21 @@ export async function verifyCode(request, env) {
   // pseudo tout de suite, plutôt que de laisser le nom dérivé de l'adresse e-mail.
   const created = !account;
 
+  // 🔑 Inscription différée, quand le client le demande. On ne crée rien ici : on renvoie
+  // un laissez-passer, et le compte n'existera qu'une fois le pseudo choisi. Sans ça,
+  // fermer la fenêtre au milieu laisse derrière soi un compte jamais terminé, portant un
+  // pseudo tiré de l'adresse e-mail que personne n'a validé.
+  //
+  // ⚠️ Sans le drapeau : comportement d'avant, à l'identique. Les clients déjà installés
+  // chez les joueurs continuent de s'inscrire comme ils l'ont toujours fait.
+  if (created && data.deferProfile) {
+    return json({
+      created: true,
+      needsProfile: true,
+      signupToken: await emettreLaissezPasser(email, env),
+    });
+  }
+
   if (!account) {
     account = {
       id: newId(),
@@ -200,6 +254,87 @@ export async function verifyCode(request, env) {
     .run();
 
   return json({ token, created, account: publicAccount(account) });
+}
+
+/**
+ * `POST /v1/auth/signup` — { signupToken, displayName } : crée enfin le compte.
+ *
+ * C'est le SEUL endroit où naît un compte en inscription différée. Pas de pseudo, pas de
+ * compte : c'est exactement la garantie demandée côté application.
+ */
+export async function signup(request, env) {
+  const data = (await body(request)) || {};
+  const displayName = clamp(data.displayName, 40).trim();
+  const device = clamp(data.device, 60) || "inconnu";
+  if (!displayName) return fail(400, "pseudo_manquant", "Choisis un pseudo.");
+
+  const email = await lireLaissezPasser(data.signupToken, env);
+  if (!email) {
+    return fail(400, "inscription_expiree", "Cette inscription a expiré. Recommence depuis ton adresse.");
+  }
+
+  // Un laissez-passer rejoué, ou deux fenêtres ouvertes en même temps : le compte déjà
+  // créé l'emporte, et on se contente d'ouvrir une session dessus. Jamais de doublon.
+  let account = await env.DB.prepare(
+    "SELECT id, email, display_name, friend_code, steam_id, steam_discoverable FROM accounts WHERE email = ?",
+  )
+    .bind(email)
+    .first();
+  const created = !account;
+
+  if (!account) {
+    account = {
+      id: newId(),
+      email,
+      display_name: displayName,
+      friend_code: newFriendCode(),
+      steam_id: null,
+      steam_discoverable: 0,
+    };
+    await env.DB.prepare(
+      `INSERT INTO accounts (id, email, display_name, friend_code, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(account.id, account.email, account.display_name, account.friend_code, now())
+      .run();
+  }
+
+  const token = randomToken();
+  await env.DB.prepare(
+    `INSERT INTO sessions (token_hash, account_id, device, created_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  )
+    .bind(await hash(token, env.PEPPER), account.id, device, now(), now())
+    .run();
+
+  return json({ token, created, account: publicAccount(account) });
+}
+
+/**
+ * `DELETE /v1/me` — supprime le compte et tout ce qui s'y rattache.
+ *
+ * 🔑 Suppression explicite table par table, plutôt que de s'en remettre au
+ * `ON DELETE CASCADE` du schéma : si les clés étrangères ne sont pas appliquées — ce qui
+ * ne se voit pas, ça ne lève aucune erreur — on laisserait derrière soi des amitiés vers
+ * un compte disparu et un code de connexion encore valable pour cette adresse. La cascade
+ * reste en place, mais comme filet, pas comme mécanisme.
+ *
+ * `batch()` s'exécute en transaction : tout part, ou rien ne part.
+ */
+export async function deleteMe(request, env, session) {
+  const id = session.accountId;
+  const email = session.account.email;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM presence WHERE account_id = ?").bind(id),
+    // Les deux sens : une amitié est une seule ligne, orientée par qui a demandé.
+    env.DB.prepare("DELETE FROM friendships WHERE requester_id = ? OR addressee_id = ?").bind(id, id),
+    // Toutes les sessions, pas seulement celle-ci : les autres appareils doivent tomber.
+    env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(id),
+    // Un code en cours de route ne doit pas ressusciter l'adresse.
+    env.DB.prepare("DELETE FROM login_codes WHERE email = ?").bind(email),
+    env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(id),
+  ]);
+  return json({ ok: true });
 }
 
 /** `POST /v1/auth/logout` — révoque la session courante (les autres appareils restent connectés). */
@@ -259,6 +394,23 @@ export async function updateMe(request, env, session) {
     if (steamId && !/^\d{17}$/.test(steamId)) {
       return fail(400, "steamid_invalide", "Un SteamID compte 17 chiffres.");
     }
+    // 🔑 Un compte Steam ne se relie qu'à un seul compte Torii. Sans ça, la même personne
+    // apparaît deux fois chez ses amis — dont une ligne inerte — et n'importe qui peut
+    // rattacher à son compte le SteamID d'un autre pour en porter l'avatar.
+    if (steamId) {
+      const pris = await env.DB.prepare(
+        "SELECT id FROM accounts WHERE steam_id = ? AND id <> ?",
+      )
+        .bind(steamId, session.accountId)
+        .first();
+      if (pris) {
+        return fail(
+          409,
+          "steam_deja_lie",
+          "Ce compte Steam est déjà relié à un autre compte Torii. Délie-le depuis ce compte avant de le rattacher ici.",
+        );
+      }
+    }
     patch.push("steam_id = ?");
     values.push(steamId || null);
   }
@@ -269,9 +421,22 @@ export async function updateMe(request, env, session) {
   if (!patch.length) return json({ account: publicAccount(session.account) });
 
   values.push(session.accountId);
-  await env.DB.prepare(`UPDATE accounts SET ${patch.join(", ")} WHERE id = ?`)
-    .bind(...values)
-    .run();
+  try {
+    await env.DB.prepare(`UPDATE accounts SET ${patch.join(", ")} WHERE id = ?`)
+      .bind(...values)
+      .run();
+  } catch (e) {
+    // L'index unique tranche les courses que le contrôle ci-dessus ne peut pas voir :
+    // deux requêtes parties en même temps pour le même SteamID.
+    if (String(e).includes("UNIQUE")) {
+      return fail(
+        409,
+        "steam_deja_lie",
+        "Ce compte Steam vient d'être relié à un autre compte Torii.",
+      );
+    }
+    throw e;
+  }
 
   const fresh = await env.DB.prepare(
     "SELECT id, email, display_name, friend_code, steam_id, steam_discoverable FROM accounts WHERE id = ?",

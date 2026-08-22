@@ -284,6 +284,16 @@ export async function toriiVerify(email: string, code: string): Promise<ToriiSig
   return await social<ToriiSignIn>("torii_verify", { email, code });
 }
 
+/** Crée le compte avec le pseudo choisi. C'est ici, et nulle part ailleurs, qu'il naît. */
+export async function toriiSignup(signupToken: string, displayName: string): Promise<ToriiAccount> {
+  return await social<ToriiAccount>("torii_signup", { signupToken, displayName });
+}
+
+/** Supprime le compte Torii, définitivement. Rien n'est conservé côté serveur. */
+export async function toriiDeleteAccount(): Promise<void> {
+  await social<void>("torii_delete_account", {});
+}
+
 /** Compte connecté, ou `null` (session absente, révoquée, ou hors application). */
 export async function toriiMe(): Promise<ToriiAccount | null> {
   return await call<ToriiAccount | null>("torii_me", undefined, null);
