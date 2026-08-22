@@ -285,9 +285,18 @@ export interface ToriiPerson {
 }
 
 /** Résultat d'une connexion : le compte, et s'il vient d'être créé. */
+/**
+ * Issue d'une validation de code.
+ *
+ * 🔑 `account` est `null` en inscription : le compte **n'existe pas encore** côté serveur.
+ * Ce n'est pas une donnée manquante, c'est l'état réel — il naîtra au choix du pseudo,
+ * et jamais avant.
+ */
 export interface ToriiSignIn {
-  account: ToriiAccount;
+  account: ToriiAccount | null;
   created: boolean;
+  /** Laissez-passer à rendre avec le pseudo. Ne vit qu'en mémoire, expire en 15 min. */
+  signupToken: string | null;
 }
 
 export interface ToriiCircle {

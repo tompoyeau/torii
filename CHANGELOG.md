@@ -4,6 +4,15 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.15.0
+- **Création de compte repensée** : tout se passe dans une fenêtre unique — adresse, code reçu par e-mail, puis pseudo. Le pseudo n'est plus une suggestion qu'on pouvait sauter : ton compte est créé avec celui que tu choisis, et pas avec un nom déduit de ton adresse e-mail.
+- **Rien n'est créé tant que tu n'as pas fini.** Si tu fermes Torii au milieu de l'inscription, aucun compte n'est enregistré et ton adresse reste libre.
+- **Supprimer son compte Torii**, depuis Réglages → Réseau Torii. Pseudo, code d'ami et relations disparaissent du serveur ; ta bibliothèque et tes réglages restent sur ton ordinateur. Il faut recopier son pseudo pour confirmer — c'est définitif.
+- **Retirer un ami** : une corbeille apparaît au survol de chaque ami Torii, dans la vue Amis, avec une confirmation sur place. Le retrait vaut des deux côtés. Les amis Steam, eux, se gèrent depuis Steam.
+- **Un compte Steam ne peut plus être relié à deux comptes Torii.** Ça produisait des doublons chez tes amis — dont une ligne inerte — et permettait de porter l'avatar Steam de quelqu'un d'autre.
+- Barres de défilement aux couleurs de l'application, en thème clair comme en sombre.
+- Vue Amis : bouton aligné en bas des cartes, et « en ce moment » pour tout le monde.
+
 ## 0.14.0
 - **Un ami lance un jeu, tu le vois** : un bandeau s'affiche quelques secondes en haut à droite de l'écran, par-dessus les autres fenêtres, sans jamais te voler le clavier. Désactivable dans Réglages → Réseau Torii. Un jeu en plein écran exclusif peut le masquer.
 - **Journal de diagnostic** : Torii écrit désormais ce qui lui arrive dans un fichier (Réglages → À propos → « Ouvrir le journal »). Si l'application se ferme toute seule ou qu'un écran reste blanc, ce fichier dit pourquoi. Trois pannes rencontrées par des joueurs n'avaient laissé aucune trace jusqu'ici.

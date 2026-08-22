@@ -26,7 +26,13 @@ CREATE TABLE IF NOT EXISTS accounts (
   steam_discoverable INTEGER NOT NULL DEFAULT 0,
   created_at         INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS accounts_steam ON accounts(steam_id) WHERE steam_id IS NOT NULL;
+-- 🔑 UNIQUE, et pas seulement un index de recherche. Deux comptes Torii portant le même
+-- SteamID rendaient les suggestions ambiguës (deux propositions pour une personne), la
+-- fusion côté client arbitraire (le premier arrivé absorbe l'identité Steam, le second
+-- s'affiche en double et paraît mort) et la présence contradictoire. Le contrôle est fait
+-- dans `updateMe`, mais il est ici aussi : deux requêtes simultanées passeraient à travers
+-- un contrôle applicatif seul.
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_steam ON accounts(steam_id) WHERE steam_id IS NOT NULL;
 
 -- Code de connexion en cours de validité (un seul à la fois par e-mail).
 CREATE TABLE IF NOT EXISTS login_codes (

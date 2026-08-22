@@ -13,7 +13,7 @@ const { loaded, steamConnected, refresh } = useFriends();
 const { inGame, online, offline, activeCount, loading } = useFriendList();
 const {
   account, circle, connected: toriiConnected, presenceMode,
-  refresh: refreshTorii, invite, respond, setPresenceMode,
+  refresh: refreshTorii, invite, respond, setPresenceMode, removeFriend,
 } = useTorii();
 const { launchOrInstall } = useLibrary();
 const { openSettings, openGame } = useUi();
@@ -96,7 +96,7 @@ const SOURCES = {
   },
   steam: {
     court: "Steam",
-    aide: "Ami Steam : tu vois ses jeux Steam, même s'il n'a pas Torii.",
+    aide: "Ami Steam : tu vois ses jeux Steam, même s'il n'a pas Torii. Cette liste vient de Steam et se gère depuis Steam.",
   },
   both: {
     court: "Torii + Steam",
@@ -129,6 +129,56 @@ function onSameGame(f: UnifiedFriend) {
   if (!g) return;
   if (g.installed) launchOrInstall(g);
   else openGame(g.id);
+}
+
+/* ── Retirer un ami ────────────────────────────────────────────────────────── */
+
+/**
+ * Seuls les amis **Torii** se retirent d'ici. Une liste d'amis Steam appartient à Steam :
+ * Torii la lit, il ne la modifie pas. Sans identifiant Torii, pas de bouton — plutôt
+ * qu'un bouton qui échouerait.
+ */
+function canRemove(f: UnifiedFriend): boolean {
+  return !!f.toriiId;
+}
+
+/**
+ * Ce que le clic va vraiment faire. Deux conséquences que personne ne devine :
+ * le lien est supprimé **des deux côtés** (tu disparais aussi de sa liste), et pour un
+ * ami des deux bords, seul le lien Torii saute — Steam n'y est pour rien.
+ */
+function removeHint(f: UnifiedFriend): string {
+  const base = `Retirer ${f.name} de tes amis Torii. Vous disparaîtrez de la liste l'un de l'autre.`;
+  return f.source === "both"
+    ? `${base} Vous resterez amis sur Steam, et tu continueras de le voir par là.`
+    : base;
+}
+
+/**
+ * Confirmation en place, dans la ligne elle-même. Retirer quelqu'un est irréversible
+ * (il faudra une nouvelle demande, acceptée des deux côtés) : ça ne doit pas tenir à un
+ * clic mal visé. Pas de fenêtre modale pour autant — elle ferait perdre de vue QUI on
+ * s'apprête à retirer.
+ */
+const confirmKey = ref<string | null>(null);
+const removing = ref<string | null>(null);
+
+async function onRemove(f: UnifiedFriend) {
+  if (!f.toriiId || removing.value) return;
+  removing.value = f.key;
+  try {
+    await removeFriend(f.toriiId);
+    showToast(
+      f.source === "both"
+        ? `${f.name} a été retiré de tes amis Torii. Vous restez amis sur Steam.`
+        : `${f.name} a été retiré de tes amis, des deux côtés.`,
+    );
+  } catch (e) {
+    showToast(`Retrait impossible : ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    removing.value = null;
+    confirmKey.value = null;
+  }
 }
 
 /** Les gens joignables tout de suite : en jeu ou disponibles. */
@@ -168,9 +218,12 @@ async function choosePresence(mode: (typeof MODES)[number]["key"]) {
 /** Ferme le menu au clic ailleurs et à Échap, comme les autres menus de l'app. */
 function onDocClick() {
   presenceOpen.value = false;
+  confirmKey.value = null;
 }
 function onEsc(e: KeyboardEvent) {
-  if (e.key === "Escape") presenceOpen.value = false;
+  if (e.key !== "Escape") return;
+  presenceOpen.value = false;
+  confirmKey.value = null;
 }
 onMounted(() => {
   document.addEventListener("click", onDocClick);
@@ -311,11 +364,23 @@ onBeforeUnmount(() => {
                 </span>
               </span>
             </button>
+            <button
+              v-if="canRemove(f) && confirmKey !== f.key"
+              class="icon-remove card-remove"
+              :title="removeHint(f)"
+              :aria-label="removeHint(f)"
+              @click.stop="confirmKey = f.key"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
             <div class="card-game">
               <span class="game-name">{{ f.gameName ?? "Un jeu" }}</span>
               <span v-if="f.ownedGame" class="game-same">Tu l'as aussi</span>
             </div>
-            <button v-if="f.ownedGame" class="btn-play" @click="onSameGame(f)">
+            <div v-if="confirmKey === f.key" class="confirm card-confirm" @click.stop>
+              <span class="c-text">Le retirer ?</span>
+              <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
+              <button class="c-no" @click="confirmKey = null">Annuler</button>
+            </div>
+            <button v-else-if="f.ownedGame" class="btn-play" @click="onSameGame(f)">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
               {{ f.ownedGame.installed ? "Jouer" : "Voir la fiche" }}
             </button>
@@ -327,16 +392,29 @@ onBeforeUnmount(() => {
       <section v-if="disponibles.length" class="block">
         <h3 class="block-title">Disponibles <span>{{ disponibles.length }}</span></h3>
         <div class="rows">
-          <button v-for="f in disponibles" :key="f.key" class="row" @click="openProfile(f)">
-            <span class="avatar">
-              <img v-if="avatar(f)" :src="avatar(f)!" alt="" loading="lazy" @error="onAvatarError(f.avatarUrl)" />
-              <span v-else class="avatar-fallback">{{ initials(f.name) }}</span>
-              <span class="dot" :class="f.state" />
-            </span>
-            <span class="row-name">{{ f.name }}</span>
-            <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
-            <span class="row-state" :class="f.state">{{ stateLabel(f) }}</span>
-          </button>
+          <div v-for="f in disponibles" :key="f.key" class="row-shell">
+            <button class="row" @click="openProfile(f)">
+              <span class="avatar">
+                <img v-if="avatar(f)" :src="avatar(f)!" alt="" loading="lazy" @error="onAvatarError(f.avatarUrl)" />
+                <span v-else class="avatar-fallback">{{ initials(f.name) }}</span>
+                <span class="dot" :class="f.state" />
+              </span>
+              <span class="row-name">{{ f.name }}</span>
+              <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
+              <span class="row-state" :class="f.state">{{ stateLabel(f) }}</span>
+            </button>
+            <div v-if="confirmKey === f.key" class="confirm" @click.stop>
+              <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
+              <button class="c-no" @click="confirmKey = null">Annuler</button>
+            </div>
+            <button
+              v-else-if="canRemove(f)"
+              class="icon-remove"
+              :title="removeHint(f)"
+              :aria-label="removeHint(f)"
+              @click.stop="confirmKey = f.key"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+          </div>
         </div>
       </section>
 
@@ -347,16 +425,29 @@ onBeforeUnmount(() => {
           Hors ligne <span>{{ offline.length }}</span>
         </button>
         <div v-if="showOffline" class="rows">
-          <button v-for="f in offline" :key="f.key" class="row off" :title="offlineHint(f)" @click="openProfile(f)">
-            <span class="avatar">
-              <img v-if="avatar(f)" :src="avatar(f)!" alt="" loading="lazy" @error="onAvatarError(f.avatarUrl)" />
-              <span v-else class="avatar-fallback">{{ initials(f.name) }}</span>
-              <span class="dot offline" />
-            </span>
-            <span class="row-name">{{ f.name }}</span>
-            <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
-            <span class="row-state">{{ f.source === "torii" ? "Torii fermé" : "Hors ligne" }}</span>
-          </button>
+          <div v-for="f in offline" :key="f.key" class="row-shell">
+            <button class="row off" :title="offlineHint(f)" @click="openProfile(f)">
+              <span class="avatar">
+                <img v-if="avatar(f)" :src="avatar(f)!" alt="" loading="lazy" @error="onAvatarError(f.avatarUrl)" />
+                <span v-else class="avatar-fallback">{{ initials(f.name) }}</span>
+                <span class="dot offline" />
+              </span>
+              <span class="row-name">{{ f.name }}</span>
+              <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
+              <span class="row-state">{{ f.source === "torii" ? "Torii fermé" : "Hors ligne" }}</span>
+            </button>
+            <div v-if="confirmKey === f.key" class="confirm" @click.stop>
+              <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
+              <button class="c-no" @click="confirmKey = null">Annuler</button>
+            </div>
+            <button
+              v-else-if="canRemove(f)"
+              class="icon-remove"
+              :title="removeHint(f)"
+              :aria-label="removeHint(f)"
+              @click.stop="confirmKey = f.key"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+          </div>
         </div>
       </section>
 
@@ -512,6 +603,7 @@ onBeforeUnmount(() => {
 /* ── Cartes « en jeu » ───────────────────────────────── */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
 .card {
+  position: relative;
   display: flex; flex-direction: column; gap: 12px; padding: 14px 16px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
 }
@@ -546,6 +638,42 @@ onBeforeUnmount(() => {
 }
 .btn-play:hover { background: var(--accent-hover); }
 .btn-play svg { width: 14px; height: 14px; }
+
+/* ── Retirer un ami ──────────────────────────────────── */
+
+/* La ligne reste un seul bouton cliquable ; la corbeille vit à côté, pas dedans —
+   un bouton dans un bouton n'est pas du HTML valide et ne se clique pas de façon
+   fiable. D'où cette coquille. */
+.row-shell { display: flex; align-items: center; gap: 4px; }
+.row-shell > .row { flex: 1; min-width: 0; }
+
+/* Discrète au repos : on ne met pas une corbeille sous les yeux de quelqu'un qui
+   consulte sa liste d'amis. Elle apparaît au survol, et au clavier par le focus. */
+.icon-remove {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px;
+  border-radius: 9px; cursor: pointer; color: var(--text-faint);
+  background: none; border: 1px solid transparent; opacity: 0; transition: opacity 0.12s;
+}
+.row-shell:hover .icon-remove, .card:hover .icon-remove, .icon-remove:focus-visible { opacity: 1; }
+.icon-remove:hover { color: #ff6b6b; background: color-mix(in srgb, #ff6b6b 13%, transparent); }
+.icon-remove svg { width: 15px; height: 15px; }
+.card-remove { position: absolute; top: 10px; right: 10px; z-index: 1; }
+
+.confirm { display: flex; align-items: center; gap: 6px; flex: none; }
+.card-confirm { margin-top: auto; }
+.c-text { font-size: 12.5px; color: var(--text-dim); margin-right: auto; }
+.c-yes, .c-no {
+  padding: 7px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.c-yes {
+  color: #ff6b6b; background: color-mix(in srgb, #ff6b6b 14%, transparent);
+  border: 1px solid color-mix(in srgb, #ff6b6b 40%, transparent);
+}
+.c-yes:hover:not(:disabled) { background: color-mix(in srgb, #ff6b6b 22%, transparent); }
+.c-yes:disabled { opacity: 0.5; cursor: default; }
+.c-no { color: var(--text-dim); background: none; border: 1px solid var(--border); }
+.c-no:hover { color: var(--text); border-color: var(--border-strong); }
 
 /* ── Lignes ──────────────────────────────────────────── */
 .rows { display: flex; flex-direction: column; gap: 3px; }

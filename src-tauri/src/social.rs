@@ -161,40 +161,108 @@ pub fn request_code(email: &str) -> Result<Option<String>, String> {
     Ok(body["devCode"].as_str().map(str::to_string))
 }
 
-/// Compte connecté, plus l'indication d'une inscription qui vient d'avoir lieu.
+/// Issue d'une validation de code : soit une session ouverte, soit une inscription qui
+/// attend son pseudo.
+///
+/// 🔑 `account` est absent en inscription parce que le compte **n'existe pas encore**.
+/// Ce n'est pas une valeur manquante, c'est l'état réel du système : tant que le pseudo
+/// n'est pas choisi, rien n'a été créé côté serveur.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SignIn {
-    pub account: Account,
-    /// Vrai si le compte vient d'être créé : le front propose alors un pseudo.
+    pub account: Option<Account>,
+    /// Vrai si c'est une première connexion (inscription).
     pub created: bool,
+    /// Laissez-passer à rendre avec le pseudo pour créer le compte. Ne vit qu'en mémoire
+    /// côté interface, et expire en quinze minutes.
+    pub signup_token: Option<String>,
 }
 
-/// Échange le code contre une session et la persiste (chiffrée). Renvoie le compte.
+/// Échange le code contre une session et la persiste (chiffrée), OU contre un
+/// laissez-passer d'inscription si le compte reste à créer.
 pub fn verify(config_dir: &Path, email: &str, code: &str) -> Result<SignIn, String> {
     #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
     struct Verified {
-        token: String,
-        account: Account,
+        #[serde(default)]
+        token: Option<String>,
+        #[serde(default)]
+        account: Option<Account>,
         #[serde(default)]
         created: bool,
+        #[serde(default)]
+        needs_profile: bool,
+        #[serde(default)]
+        signup_token: Option<String>,
     }
     // Le nom d'appareil aide à s'y retrouver quand le mobile arrivera : chaque session
     // est indépendante et révocable séparément.
     let device = format!("PC {}", whoami_host());
     let resp = ureq::post(&format!("{}/v1/auth/verify", api()))
         .timeout(TIMEOUT)
-        .send_json(serde_json::json!({ "email": email, "code": code, "device": device }))
+        // `deferProfile` : on demande explicitement au serveur de ne rien créer avant le
+        // pseudo. Un serveur plus ancien ignore le drapeau et se comporte comme avant —
+        // la validation reste donc fonctionnelle pendant un déploiement.
+        .send_json(serde_json::json!({
+            "email": email, "code": code, "device": device, "deferProfile": true,
+        }))
         .map_err(api_error)?;
     let verified: Verified = resp.into_json().map_err(|e| e.to_string())?;
 
+    // Inscription à terminer : aucune session à persister, il n'y a pas encore de compte.
+    if verified.needs_profile {
+        let jeton = verified
+            .signup_token
+            .ok_or("Le serveur n'a pas renvoyé de laissez-passer d'inscription.")?;
+        return Ok(SignIn { account: None, created: true, signup_token: Some(jeton) });
+    }
+
+    let (Some(token), Some(account)) = (verified.token, verified.account) else {
+        return Err("Réponse de connexion incomplète.".into());
+    };
     let mut creds = secrets::load(config_dir);
-    creds.torii_token = Some(verified.token);
+    creds.torii_token = Some(token);
     secrets::save(config_dir, &creds)?;
-    Ok(SignIn {
-        account: verified.account,
-        created: verified.created,
-    })
+    Ok(SignIn { account: Some(account), created: verified.created, signup_token: None })
+}
+
+/// Crée le compte avec le pseudo choisi et ouvre la session.
+///
+/// 🔑 C'est le seul chemin de création en inscription différée : pas de pseudo, pas de
+/// compte. Quelqu'un qui ferme la fenêtre avant cette étape — ou dont l'application est
+/// tuée — ne laisse **rien** derrière lui.
+pub fn signup(config_dir: &Path, signup_token: &str, display_name: &str) -> Result<Account, String> {
+    #[derive(Deserialize)]
+    struct Created {
+        token: String,
+        account: Account,
+    }
+    let device = format!("PC {}", whoami_host());
+    let resp = ureq::post(&format!("{}/v1/auth/signup", api()))
+        .timeout(TIMEOUT)
+        .send_json(serde_json::json!({
+            "signupToken": signup_token, "displayName": display_name, "device": device,
+        }))
+        .map_err(api_error)?;
+    let cree: Created = resp.into_json().map_err(|e| e.to_string())?;
+
+    let mut creds = secrets::load(config_dir);
+    creds.torii_token = Some(cree.token);
+    secrets::save(config_dir, &creds)?;
+    Ok(cree.account)
+}
+
+/// Supprime le compte, définitivement, puis efface le jeton local.
+///
+/// 🔑 Le jeton n'est effacé qu'en cas de succès, à l'inverse de la déconnexion : si la
+/// suppression échoue, le compte existe toujours et il faut pouvoir réessayer. Effacer
+/// d'abord laisserait un compte vivant que plus personne ne peut atteindre.
+pub fn delete_account(config_dir: &Path) -> Result<(), String> {
+    let _: serde_json::Value = call(config_dir, "DELETE", "/v1/me", None)?;
+    let mut creds = secrets::load(config_dir);
+    creds.torii_token = None;
+    secrets::save(config_dir, &creds)?;
+    Ok(())
 }
 
 /// Ferme la session côté serveur puis efface le jeton local.
@@ -770,7 +838,6 @@ mod tests {
         assert_eq!(t6, vec![("bob".to_string(), "Celeste".to_string())]);
     }
 
-    #[test]
     /// Un fichier écrit avant l'arrivée du bandeau n'a pas le champ. Sans `#[serde(default)]`
     /// + un `Default` à `true`, tous les comptes existants se retrouveraient sans
     /// notifications sans l'avoir demandé — silencieusement.

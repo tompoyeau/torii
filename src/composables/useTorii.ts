@@ -3,8 +3,9 @@ import {
   getSettings,
   onToriiCircle, toriiCircle, toriiInvite, toriiInviteAccount, toriiLogout, toriiMe,
   toriiMutedGames, toriiMuteGame, toriiPrefs, toriiRemoveFriend, toriiRequestCode,
-  toriiRespond, toriiRotateCode, toriiSetPrefs, toriiSetProfile, toriiSuggestions,
-  toriiVerify,
+  toriiDeleteAccount, toriiRespond, toriiRotateCode, toriiSetPrefs, toriiSetProfile,
+  toriiSignup,
+  toriiSuggestions, toriiVerify,
 } from "../lib/tauri";
 import type { ToriiPerson } from "../types";
 import type { PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
@@ -36,6 +37,16 @@ const searched = ref(false);
 const loading = ref(false);
 const booted = ref(false);
 
+/**
+ * Laissez-passer d'inscription. Volontairement hors de `ref` et jamais persisté : il ne
+ * doit ni survivre à la fermeture de l'application, ni apparaître dans l'interface.
+ */
+let laissezPasser: string | null = null;
+/**
+ * La fenêtre de connexion est unique et vit à la racine de l'application : la vue Amis
+ * comme les Réglages l'ouvrent, mais il ne doit jamais y en avoir deux.
+ */
+const signInOpen = ref(false);
 let started = false;
 let unlisten: (() => void) | null = null;
 
@@ -79,13 +90,44 @@ async function requestCode(email: string): Promise<string | null> {
   return await toriiRequestCode(email.trim());
 }
 
-/** Renvoie `true` si le compte vient d'être créé — le front propose alors un pseudo. */
+/**
+ * Valide le code. Renvoie `true` s'il reste un pseudo à choisir — dans ce cas **aucun
+ * compte n'a été créé** et rien n'est connecté : le laissez-passer est gardé de côté,
+ * en mémoire seulement.
+ */
 async function verify(email: string, code: string): Promise<boolean> {
   const signIn = await toriiVerify(email.trim(), code.trim());
+  if (signIn.signupToken) {
+    laissezPasser = signIn.signupToken;
+    return true;
+  }
+  laissezPasser = null;
   account.value = signIn.account;
   await reconcilierSteam();
   await refresh();
-  return signIn.created;
+  return false;
+}
+
+/**
+ * Termine l'inscription avec le pseudo choisi. C'est cet appel — et lui seul — qui crée
+ * le compte : abandonner avant ne laisse rien derrière soi, pas même une ligne à nettoyer.
+ */
+async function completeSignup(displayName: string) {
+  if (!laissezPasser) throw new Error("Cette inscription a expiré. Recommence depuis ton adresse.");
+  account.value = await toriiSignup(laissezPasser, displayName.trim());
+  laissezPasser = null;
+  await reconcilierSteam();
+  await refresh();
+}
+
+/** Une inscription est-elle en cours, en attente de son pseudo ? */
+function signupPending(): boolean {
+  return laissezPasser !== null;
+}
+
+/** Abandonne l'inscription en cours. Rien à défaire côté serveur : rien n'y a été créé. */
+function abandonSignup() {
+  laissezPasser = null;
 }
 
 /**
@@ -128,8 +170,37 @@ async function marquerSteamRapproche() {
 
 async function logout() {
   await toriiLogout();
+  await oublierLeCompte();
+}
+
+/**
+ * Supprime le compte, définitivement. Ni les amitiés, ni le code d'ami, ni le pseudo ne
+ * survivent, et les amis perdent la ligne correspondante.
+ */
+async function deleteAccount() {
+  await toriiDeleteAccount();
+  await oublierLeCompte();
+}
+
+/**
+ * Remet l'état local à zéro après une déconnexion ou une suppression.
+ *
+ * 🔑 `steamAutoLinked` repasse à faux : ce drapeau dit « le rapprochement a déjà été
+ * proposé **pour ce compte** ». Le garder ferait qu'un compte suivant, sur la même
+ * machine, ne serait jamais relié à Steam — sans que personne comprenne pourquoi.
+ */
+async function oublierLeCompte() {
   account.value = null;
   circle.value = { friends: [], incoming: [], outgoing: [] };
+  suggestions.value = [];
+  searched.value = false;
+  if (prefs.value.steamAutoLinked) {
+    try {
+      await setPrefs({ steamAutoLinked: false });
+    } catch {
+      // Réglage de confort : son échec ne doit pas faire échouer une suppression réussie.
+    }
+  }
 }
 
 /* ── Profil et réglages ────────────────────────────────────────────────────── */
@@ -227,6 +298,16 @@ async function rotateCode() {
 export function useTorii() {
   void start();
   return {
+    signInOpen,
+    openSignIn: () => {
+      signInOpen.value = true;
+    },
+    closeSignIn: () => {
+      // Fermer sans avoir terminé : le laissez-passer meurt ici. Rien à défaire côté
+      // serveur, puisque rien n'y a été créé.
+      laissezPasser = null;
+      signInOpen.value = false;
+    },
     account,
     circle,
     prefs,
@@ -242,7 +323,11 @@ export function useTorii() {
     refresh,
     requestCode,
     verify,
+    completeSignup,
+    signupPending,
+    abandonSignup,
     logout,
+    deleteAccount,
     setDisplayName,
     setSteamLink,
     reconcilierSteam,

@@ -1352,6 +1352,24 @@ async fn torii_verify(
     Ok(offload!(social::verify(&dir, &email, &code))?)
 }
 
+/// Termine l'inscription : crée le compte avec le pseudo choisi et ouvre la session.
+#[tauri::command]
+async fn torii_signup(
+    app: tauri::AppHandle,
+    signup_token: String,
+    display_name: String,
+) -> Result<social::Account, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::signup(&dir, &signup_token, &display_name))?)
+}
+
+/// Supprime définitivement le compte Torii et tout ce qui s'y rattache.
+#[tauri::command]
+async fn torii_delete_account(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::delete_account(&dir))?)
+}
+
 /// Compte connecté, ou `null` si aucune session valide.
 #[tauri::command]
 async fn torii_me(app: tauri::AppHandle) -> Result<Option<social::Account>, String> {
@@ -1725,6 +1743,8 @@ pub fn run() {
             open_log,
             torii_request_code,
             torii_verify,
+            torii_signup,
+            torii_delete_account,
             torii_me,
             torii_logout,
             torii_set_profile,

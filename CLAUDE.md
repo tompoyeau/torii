@@ -483,6 +483,48 @@ cargo run --example community        # jeux possédés + famille (via session st
   jouent déjà paraîtraient venir de commencer au démarrage de Torii. Réglage
   `notify_friend_launch`, activé par défaut.
 
+## Cycle de vie d'un compte Torii
+
+### Inscription différée (le compte naît au pseudo, pas avant)
+
+- `POST /v1/auth/verify` avec `deferProfile: true` **ne crée rien**. Il renvoie
+  `{ created, needsProfile, signupToken }` ; le compte est créé par
+  `POST /v1/auth/signup { signupToken, displayName }`, et seulement là.
+- 🔑 C'est ce qui permet à la fenêtre d'inscription (`ToriiSignInDialog`) de verrouiller
+  l'étape du pseudo — ni croix, ni Échap, ni clic à côté — **sans piéger personne** :
+  fermer Torii à ce moment n'abandonne rien à nettoyer, puisque rien n'existe.
+- Le laissez-passer est **signé, pas stocké** : `<adresse base64url>.<expiration>.<HMAC au
+  poivre>`, 15 minutes. Aucune table, donc aucune ligne morte à ramasser.
+- Rejouer un laissez-passer ne crée pas de doublon : le compte existant l'emporte, sous
+  son pseudo d'origine, et on se contente d'ouvrir une session.
+- ⚠️ **Sans le drapeau, comportement d'avant à l'identique.** Les clients déjà installés
+  chez les joueurs s'inscrivent comme ils l'ont toujours fait. Ne pas casser ça.
+
+### Un compte Steam = un compte Torii
+
+- `steam_id` porte un **index UNIQUE partiel**, et `updateMe` refuse en 409
+  (`steam_deja_lie`) avec la marche à suivre. Les deux, pas l'un ou l'autre : le contrôle
+  applicatif ne voit pas deux requêtes simultanées.
+- Ce que ça réparait : deux comptes portant le même SteamID rendaient les suggestions
+  ambiguës, la fusion côté client arbitraire (le premier arrivé absorbe l'identité Steam,
+  le second s'affiche en double et paraît mort) et la présence contradictoire.
+- ⚠️ Ça reste du **premier arrivé, premier servi** : rien ne prouve encore qu'on possède
+  le compte Steam déclaré. La vraie réponse est une connexion Steam OpenID au moment du
+  lien — non fait.
+
+### Suppression
+
+- `DELETE /v1/me` efface présence, amitiés (les deux sens), sessions (tous les appareils),
+  code de connexion en cours, puis le compte. En `batch()`, donc en transaction.
+- 🔑 Suppression **explicite table par table** plutôt que de s'en remettre au
+  `ON DELETE CASCADE` : des clés étrangères non appliquées ne lèvent aucune erreur, elles
+  laissent juste des lignes orphelines. La cascade reste, comme filet.
+- Côté client, le jeton local n'est effacé qu'**en cas de succès** (l'inverse de la
+  déconnexion) : sinon un échec réseau laisserait un compte vivant que plus personne ne
+  peut atteindre pour le supprimer.
+- L'interface demande de **recopier son pseudo**. C'est la seule action indéfaisable de
+  l'application, et elle voisine un « Déconnecter » anodin.
+
 ## Rapprochement Steam ↔ Torii
 
 - `useTorii.reconcilierSteam()` fait remonter le SteamID dans le compte Torii dès que les
