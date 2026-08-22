@@ -551,8 +551,15 @@ les amis. Le surveillant l'adopte désormais tout seul.
   lancement**, donc un index périmé doit être rafraîchi avant de conclure « pas un jeu ».
 - **Garde-fous** (`plausible`) : dossiers système, clients de launcher (steam.exe,
   upc.exe, riotclientservices.exe…), utilitaires embarqués (crashhandler, updater,
-  easyanticheat…), et `java(w).exe` — une machine virtuelle Java ne donne jamais un titre
-  présentable (Minecraft s'ajoute à la main).
+  easyanticheat…).
+- **Moteurs partagés** (`runtime_partage` : java/javaw/python/node) : le même exécutable
+  fait tourner n'importe quel jeu, donc ni son nom ni son dossier n'apprennent rien.
+  C'est là que les autres champs de la fiche Game Bar tranchent — `Title` s'il existe,
+  sinon **`Arguments`** (`minecraft` pour Minecraft, relevé en réel). Sans nom
+  exploitable (argument long, chemin, tirets) on s'abstient plutôt que d'inventer, et la
+  racine surveillée est le **chemin exact du moteur**, jamais son dossier — sans quoi
+  tout programme Java du même dossier passerait pour le jeu.
+  ⚠️ Écarter `javaw.exe` (ce que faisait la 0.16.0) revient à écarter Minecraft.
 - **Titre deviné** (`title_and_root`) : on remonte les dossiers en sautant les étages
   techniques (`Binaries\Win64`, `runtime`…), on s'arrête sur une étagère (`E:\Games`,
   `steamapps\common`, `AppData\Local`), et on retient le dossier qui parle du même jeu
@@ -572,9 +579,22 @@ les amis. Le surveillant l'adopte désormais tout seul.
   possible : `update_manual_game` / `remove_manual_game` routent sur le préfixe de l'id.
 - Événement `game-detected` (DTO complet) émis deux fois — à la découverte puis après
   IGDB ; `useLibrary.noteDetected` insère/rafraîchit la carte sans re-scanner.
+- **Sursis** (`SURSIS`, `MAX_SURSIS` dans `procwatch`) : Windows n'inscrit un jeu dans sa
+  liste qu'au moment où il le remarque, ce qui arrive souvent APRÈS le démarrage du
+  process à la toute première partie. Un process inconnu au profil de jeu est donc
+  rejugé à chaque passage pendant 2 min, et non une seule fois. Table plafonnée à 24
+  entrées, le plus ancien évincé au profit du nouveau venu (c'est lui qui vient de
+  démarrer).
+- **Cible provisoire** (`Target.provisoire`) : un jeu tout juste découvert est tenu hors
+  de la présence tant qu'IGDB n'a pas tranché. Sinon les amis reçoivent le titre deviné
+  puis le vrai quelques secondes plus tard, et `signaler_lancements` (qui compare les
+  titres) leur compte deux lancements. `liberer()` lève la réserve dans TOUS les cas —
+  succès, jeu introuvable, panne réseau — sans quoi une recherche infructueuse
+  retiendrait la présence pour toute la session.
 - Diagnostic : `cargo run --release --example detect` — ce que Torii ferait de la liste
   Game Bar, sans rien écrire. Sur la machine de dev : 31 exécutables encore installés,
-  27 déjà dans la bibliothèque, 1 écarté (JVM), 2 vrais jeux détectés.
+  27 déjà dans la bibliothèque, 0 écarté, 3 jeux détectés (Minecraft, Dolphin,
+  Rainbow Six).
 
 ## Prochaines étapes
 

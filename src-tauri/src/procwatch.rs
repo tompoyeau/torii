@@ -31,12 +31,31 @@ const POLL_IN_GAME: Duration = Duration::from_secs(15);
 /// Au-delà, un « Jouer » cliqué dans Torii dont aucun process n'est apparu est abandonné
 /// (jeu qui ne démarre pas, exécutable hors du dossier connu…).
 const ARM_TIMEOUT: Duration = Duration::from_secs(120);
+/// Durée pendant laquelle un process inconnu est réexaminé à chaque passage. Windows
+/// n'inscrit un jeu dans sa liste qu'au moment où il le remarque : à la toute première
+/// partie, cette inscription arrive souvent APRÈS le démarrage du process. Sans ce
+/// sursis, on ne jugerait ce process qu'une fois, trop tôt, et la partie serait perdue.
+const SURSIS: Duration = Duration::from_secs(120);
+/// Plafond de process en sursis : borne la mémoire et le travail par passage, même sur
+/// une machine qui lance beaucoup de programmes.
+const MAX_SURSIS: usize = 24;
+
+/// Un process pas (encore) reconnu, gardé sous le coude le temps du sursis.
+struct Candidat {
+    exe: String,
+    depuis: Instant,
+}
 
 /// Un jeu détectable : les chemins dont l'apparition d'un process signe une partie.
 struct Target {
     id: String,
     /// Titre affichable, repris tel quel dans la présence publiée aux amis.
     title: String,
+    /// Jeu tout juste découvert dont le titre n'est encore qu'une devinette : on le
+    /// tient hors de la présence le temps qu'IGDB tranche. Sans ça, les amis voient
+    /// « Rainbow Six » puis « Tom Clancy's Rainbow Six Siege » quelques secondes après,
+    /// ce qui leur compte deux lancements et fait surgir deux bandeaux.
+    provisoire: bool,
     /// Dossier d'installation et/ou exécutable, normalisés (comparaison façon Windows).
     roots: Vec<String>,
 }
@@ -103,6 +122,7 @@ fn targets_from(games: &[GameDto]) -> Vec<Target> {
                 id: g.id.clone(),
                 title: g.title.clone(),
                 roots,
+                provisoire: false,
             })
         })
         .collect()
@@ -141,6 +161,7 @@ fn adopt(
         roots: vec![normalize(
             game.install_dir.as_deref().unwrap_or(&game.launch_target),
         )],
+        provisoire: true,
     });
     Some((game.id.clone(), Some(game)))
 }
@@ -149,7 +170,12 @@ fn adopt(
 /// enregistrée, la présence en cours et l'affichage. Tourne sur son propre fil : la
 /// requête réseau n'a rien à faire dans la boucle de surveillance.
 fn resolve_title(app: &tauri::AppHandle, config_dir: std::path::PathBuf, game: GameDto) {
-    let Some((name, meta)) = crate::metadata::igdb::recognize(&game.title) else {
+    let reconnu = crate::metadata::igdb::recognize(&game.title);
+    // 🔑 Quoi qu'il arrive ensuite — titre reconnu, introuvable, ou panne réseau — la
+    // cible cesse d'être provisoire : sinon une recherche infructueuse suffirait à
+    // retenir la présence de ce jeu pour toute la session.
+    let Some((name, meta)) = reconnu else {
+        liberer(app, &game.id, None);
         return;
     };
     let Some(updated) = detected::refine(&config_dir, &game.id, |g| {
@@ -164,23 +190,32 @@ fn resolve_title(app: &tauri::AppHandle, config_dir: std::path::PathBuf, game: G
             g.screenshots = meta.screenshots.clone();
         }
     }) else {
+        liberer(app, &game.id, None);
         return;
     };
 
-    // La partie en cours est peut-être déjà diffusée sous le titre deviné : on renomme
-    // aussi la cible, sinon les amis garderaient « Genshin Impact Game » jusqu'à la
-    // prochaine ouverture de Torii.
-    if let Ok(mut state) = app.state::<Watch>().0.lock() {
-        if let Some(target) = state.targets.iter_mut().find(|t| t.id == updated.id) {
-            target.title = updated.title.clone();
-        }
-    }
+    // La partie en cours n'a pas encore été diffusée (cible provisoire) : on lui donne
+    // son vrai nom avant de la libérer, pour que les amis ne voient que celui-là.
+    liberer(app, &updated.id, Some(&updated.title));
     journal::write(
         &config_dir,
         "INFO",
         &format!("jeu détecté reconnu par IGDB : « {} » → « {} »", game.title, updated.title),
     );
     let _ = app.emit("game-detected", updated);
+}
+
+/// Lève la réserve posée sur un jeu fraîchement découvert : sa présence peut circuler,
+/// éventuellement sous le nom qu'IGDB a rendu.
+fn liberer(app: &tauri::AppHandle, id: &str, titre: Option<&str>) {
+    if let Ok(mut state) = app.state::<Watch>().0.lock() {
+        if let Some(cible) = state.targets.iter_mut().find(|t| t.id == id) {
+            if let Some(titre) = titre {
+                cible.title = titre.to_string();
+            }
+            cible.provisoire = false;
+        }
+    }
 }
 
 /// Partie en cours : `(id, titre, depuis)`. Utilisé par le battement de cœur de la
@@ -190,12 +225,12 @@ pub fn current_game(app: &tauri::AppHandle) -> Option<(String, String, i64)> {
     let state = app.state::<Watch>();
     let state = state.0.lock().ok()?;
     let (id, running) = state.running.iter().max_by_key(|(_, r)| r.since)?;
-    let title = state
-        .targets
-        .iter()
-        .find(|t| &t.id == id)
-        .map(|t| t.title.clone())
-        .unwrap_or_default();
+    let cible = state.targets.iter().find(|t| &t.id == id);
+    // Titre encore provisoire : on ne publie rien plutôt qu'un nom qui va changer.
+    if cible.is_some_and(|t| t.provisoire) {
+        return None;
+    }
+    let title = cible.map(|t| t.title.clone()).unwrap_or_default();
     Some((id.clone(), title, running.since))
 }
 
@@ -231,8 +266,9 @@ pub fn arm(app: &tauri::AppHandle, game_id: String) {
 pub fn spawn(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut seen: HashSet<u32> = HashSet::new();
+        let mut candidats: HashMap<u32, Candidat> = HashMap::new();
         loop {
-            let delay = tick(&app, &mut seen);
+            let delay = tick(&app, &mut seen, &mut candidats);
             std::thread::sleep(delay);
         }
     });
@@ -240,7 +276,11 @@ pub fn spawn(app: tauri::AppHandle) {
 
 /// Un passage : repère les process apparus et disparus, en déduit les parties.
 /// Renvoie le délai avant le prochain passage.
-fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
+fn tick(
+    app: &tauri::AppHandle,
+    seen: &mut HashSet<u32>,
+    candidats: &mut HashMap<u32, Candidat>,
+) -> Duration {
     let config_dir = app.path().app_config_dir().ok();
     let state_handle = app.state::<Watch>();
     let Ok(mut state) = state_handle.0.lock() else {
@@ -254,11 +294,22 @@ fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
 
     let alive: HashSet<u32> = pids().into_iter().collect();
 
-    // 1) Process apparus depuis le dernier passage → est-ce un jeu connu ?
+    // 1) Process à examiner : ceux qui viennent d'apparaître (dont il faut résoudre le
+    //    chemin), plus les inconnus encore en sursis, dont on a déjà le chemin.
     let mut launched: Vec<(String, Option<i64>)> = Vec::new();
     let mut discovered: Vec<GameDto> = Vec::new();
+    candidats.retain(|pid, c| alive.contains(pid) && c.depuis.elapsed() < SURSIS);
+    let mut examiner: Vec<(u32, String)> = candidats
+        .iter()
+        .map(|(pid, c)| (*pid, c.exe.clone()))
+        .collect();
     for pid in alive.difference(seen) {
-        let Some(exe) = exe_path(*pid) else { continue };
+        if let Some(exe) = exe_path(*pid) {
+            examiner.push((*pid, exe));
+        }
+    }
+
+    for (pid, exe) in examiner {
         let id = match match_id(&state.targets, &exe) {
             Some(id) => id,
             // Inconnu de la bibliothèque : Windows sait peut-être, lui, que c'est un
@@ -266,18 +317,41 @@ fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
             // tenante — la présence et « Récemment joué » suivent sans attendre un scan.
             None => match adopt(&mut state, config_dir.as_deref(), &exe) {
                 Some((id, game)) => {
+                    candidats.remove(&pid);
                     if let Some(game) = game {
                         discovered.push(game);
                     }
                     id
                 }
-                None => continue,
+                // Pas (encore) reconnu : on le garde en sursis s'il a le profil d'un
+                // jeu, pour le rejuger quand Windows aura peut-être tranché.
+                None => {
+                    if detected::peut_etre_un_jeu(&exe) {
+                        // Plafond atteint : on fait de la place en évinçant le plus
+                        // ancien, jamais en refusant le nouveau venu — c'est lui qui
+                        // vient de démarrer, donc le plus susceptible d'être la partie.
+                        if candidats.len() >= MAX_SURSIS && !candidats.contains_key(&pid) {
+                            if let Some(vieux) = candidats
+                                .iter()
+                                .min_by_key(|(_, c)| c.depuis)
+                                .map(|(pid, _)| *pid)
+                            {
+                                candidats.remove(&vieux);
+                            }
+                        }
+                        candidats.entry(pid).or_insert_with(|| Candidat {
+                            exe,
+                            depuis: Instant::now(),
+                        });
+                    }
+                    continue;
+                }
             },
         };
         let first = !state.running.contains_key(&id);
-        let started = started_at(*pid).unwrap_or_else(|| now_unix());
+        let started = started_at(pid).unwrap_or_else(|| now_unix());
         let entry = state.running.entry(id.clone()).or_default();
-        entry.pids.insert(*pid);
+        entry.pids.insert(pid);
         if first {
             entry.since = started;
             // Date = démarrage RÉEL du process, pas l'instant où on le remarque. Ça

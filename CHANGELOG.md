@@ -4,6 +4,11 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.16.1
+- **Minecraft est enfin détecté.** Il tourne dans une machine virtuelle Java, que Torii écartait par prudence : le chemin du fichier ne parle que du moteur, jamais du jeu. Torii demande maintenant son nom à Windows, qui le connaît. Même chose pour les autres jeux lancés par un moteur partagé.
+- **Un jeu tout neuf est vu dès sa première partie.** Windows n'inscrit un jeu dans sa liste qu'au moment où il le remarque, parfois quelques secondes après son lancement — Torii concluait trop vite et attendait la partie suivante. Il laisse désormais sa chance à un jeu inconnu pendant deux minutes.
+- **Plus de double notification chez tes amis.** Un jeu fraîchement détecté n'est annoncé qu'une fois son vrai titre connu, au lieu de partir sous son nom provisoire puis d'être corrigé — ce qui comptait deux lancements.
+
 ## 0.16.0
 - **Tes amis voient enfin les jeux qui ne viennent d'aucun launcher.** Genshin Impact, Dofus, un jeu du Game Pass, un jeu installé à la main : jusqu'ici Torii ne les voyait pas, donc personne ne savait que tu y jouais. Ils sont maintenant repérés tout seuls, ajoutés à ta bibliothèque sous « Hors launcher », avec leur vrai titre et leur jaquette — et ils comptent dans « Récemment joué » comme les autres.
 - Torii ne devine pas au hasard : il s'appuie sur la liste de jeux que **Windows tient déjà** pour sa barre de jeu. Un navigateur ou un traitement de texte ne risque donc pas d'être annoncé à tes amis. Si un titre tombe quand même à côté, il se corrige depuis la fiche du jeu, et « Retirer de la bibliothèque » l'écarte pour de bon.

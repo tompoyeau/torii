@@ -27,7 +27,7 @@
 //! à partir du dossier, puis **corrigé par IGDB** (qui fournit aussi la jaquette).
 
 use crate::models::GameDto;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -70,11 +70,6 @@ const NOT_A_GAME: &[&str] = &[
     "ealaunchhelper.exe",
     "torii.exe",
     "ludo.exe",
-    // Une machine virtuelle Java n'est pas un jeu : le chemin ne mène qu'au moteur
-    // d'exécution (pour Minecraft, un dossier « java-runtime-gamma »), jamais à un
-    // titre présentable. Un tel jeu s'ajoute à la main.
-    "java.exe",
-    "javaw.exe",
 ];
 
 /// Fragments de nom qui trahissent un utilitaire embarqué avec le jeu (anti-triche,
@@ -217,10 +212,27 @@ pub fn forget(config_dir: &Path, id: &str) -> Result<Vec<GameDto>, String> {
 /// `None` = ce n'est pas un jeu (ou on n'en sait rien, ce qui revient au même).
 pub fn identify(exe: &str) -> Option<GameDto> {
     let path = normalize(exe);
-    if !plausible(&path) || !windows_calls_it_a_game(&path) {
+    if !plausible(&path) {
         return None;
     }
-    let (title, root) = title_and_root(exe);
+    let fiche = game_bar_entry(&path);
+    // Un jeu Game Pass est reconnu à son chemin même sans fiche de la Game Bar.
+    if fiche.is_none() && !path.contains("\\xboxgames\\") {
+        return None;
+    }
+    let fiche = fiche.unwrap_or_default();
+
+    let (title, root) = match runtime_partage(&path) {
+        // Moteur partagé (une machine virtuelle Java, un interpréteur…) : le chemin ne
+        // nomme que le moteur, jamais le jeu. Windows, lui, retient de quoi trancher —
+        // pour Minecraft, `Arguments = minecraft`. Sans cette indication, on s'abstient.
+        true => (fiche.nom()?, exe.to_string()),
+        false => {
+            let (devine, root) = title_and_root(exe);
+            // Le titre de la Game Bar, quand il existe, vaut mieux qu'une devinette.
+            (fiche.title.clone().filter(|t| !t.is_empty()).unwrap_or(devine), root)
+        }
+    };
     if title.is_empty() {
         return None;
     }
@@ -233,6 +245,24 @@ pub fn identify(exe: &str) -> Option<GameDto> {
         launch_target: exe.to_string(),
         ..Default::default()
     })
+}
+
+/// Exécutables qui ne sont qu'un **moteur d'exécution** : le même fichier fait tourner
+/// n'importe quel jeu, donc ni son nom ni son dossier n'apprennent quoi que ce soit.
+fn runtime_partage(path: &str) -> bool {
+    const MOTEURS: &[&str] = &["java.exe", "javaw.exe", "python.exe", "pythonw.exe", "node.exe"];
+    let file = path.rsplit('\\').next().unwrap_or_default();
+    MOTEURS.contains(&file)
+}
+
+/// Cet exécutable a-t-il seulement le profil d'un jeu ? Sert au surveillant à décider
+/// quels process inconnus valent la peine d'être rejugés au passage suivant : sans ce
+/// tri, il garderait sous le coude chaque onglet de navigateur qui s'ouvre.
+///
+/// Répondre `true` ne dit rien de plus que « ce n'est pas exclu d'office » — seule
+/// [`identify`] tranche.
+pub fn peut_etre_un_jeu(exe: &str) -> bool {
+    plausible(&normalize(exe))
 }
 
 /// Écarte d'emblée ce qui ne peut pas être un jeu : dossiers système, clients de
@@ -249,25 +279,62 @@ fn plausible(path: &str) -> bool {
     !NOISE.iter().any(|n| stem.contains(n))
 }
 
-/// Windows considère-t-il cet exécutable comme un jeu ? (liste de la Game Bar, plus
-/// les installations Game Pass qui vivent sous `C:\XboxGames`).
-fn windows_calls_it_a_game(path: &str) -> bool {
-    if path.contains("\\xboxgames\\") {
-        return true;
+/// Ce que la Game Bar retient d'un jeu. `Arguments` est la pièce décisive pour les
+/// moteurs partagés : le même `javaw.exe` sert à tous les jeux Java, et Windows y note
+/// `minecraft`.
+#[derive(Clone, Default)]
+struct FicheGameBar {
+    title: Option<String>,
+    arguments: Option<String>,
+}
+
+impl FicheGameBar {
+    /// Nom du jeu tel que Windows le connaît : son titre, sinon son argument — refusé
+    /// s'il ressemble à autre chose qu'un nom (chemin, ligne de commande entière).
+    fn nom(&self) -> Option<String> {
+        let brut = self
+            .title
+            .clone()
+            .filter(|t| !t.trim().is_empty())
+            .or_else(|| self.arguments.clone())?;
+        let brut = brut.trim();
+        if brut.is_empty() || brut.len() > 40 || brut.contains(['\\', '/', '-']) {
+            return None;
+        }
+        Some(capitalise(&pretty(brut)))
     }
-    if index_contains(path) {
-        return true;
+}
+
+/// Première lettre de chaque mot en majuscule (`minecraft` → « Minecraft ») : un
+/// argument de ligne de commande n'est pas écrit pour être lu.
+fn capitalise(s: &str) -> String {
+    s.split(' ')
+        .map(|mot| {
+            let mut c = mot.chars();
+            match c.next() {
+                Some(p) => p.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Fiche de la Game Bar pour cet exécutable, si Windows le tient pour un jeu.
+fn game_bar_entry(path: &str) -> Option<FicheGameBar> {
+    if let Some(fiche) = index_get(path) {
+        return Some(fiche);
     }
     // L'entrée de la Game Bar naît au **premier** lancement du jeu : si notre index
     // date d'avant, il ne peut pas la connaître. On le rafraîchit une fois avant de
     // conclure que ce n'en est pas un.
     refresh_index();
-    index_contains(path)
+    index_get(path)
 }
 
 /// Index des exécutables classés « jeu » par Windows, avec l'instant de sa lecture.
 struct Index {
-    exes: HashSet<String>,
+    exes: HashMap<String, FicheGameBar>,
     read_at: Instant,
 }
 
@@ -280,12 +347,11 @@ fn index() -> &'static Mutex<Option<Index>> {
     &INDEX
 }
 
-fn index_contains(path: &str) -> bool {
+fn index_get(path: &str) -> Option<FicheGameBar> {
     index()
         .lock()
         .ok()
-        .and_then(|slot| slot.as_ref().map(|idx| idx.exes.contains(path)))
-        .unwrap_or(false)
+        .and_then(|slot| slot.as_ref().and_then(|idx| idx.exes.get(path).cloned()))
 }
 
 fn refresh_index() {
@@ -294,18 +360,18 @@ fn refresh_index() {
         return;
     }
     *slot = Some(Index {
-        exes: game_bar_exes(),
+        exes: game_bar_entries(),
         read_at: Instant::now(),
     });
 }
 
-/// Chemins d'exécutables listés par la Game Bar (`MatchedExeFullPath`).
+/// Fiches de la Game Bar, indexées par chemin d'exécutable normalisé.
 #[cfg(windows)]
-fn game_bar_exes() -> HashSet<String> {
+fn game_bar_entries() -> HashMap<String, FicheGameBar> {
     use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
 
-    let mut out = HashSet::new();
+    let mut out = HashMap::new();
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let Ok(children) = hkcu.open_subkey(r"System\GameConfigStore\Children") else {
         return out;
@@ -315,16 +381,23 @@ fn game_bar_exes() -> HashSet<String> {
             continue;
         };
         let path: String = entry.get_value("MatchedExeFullPath").unwrap_or_default();
-        if !path.is_empty() {
-            out.insert(normalize(&path));
+        if path.is_empty() {
+            continue;
         }
+        out.insert(
+            normalize(&path),
+            FicheGameBar {
+                title: entry.get_value("Title").ok(),
+                arguments: entry.get_value("Arguments").ok(),
+            },
+        );
     }
     out
 }
 
 #[cfg(not(windows))]
-fn game_bar_exes() -> HashSet<String> {
-    HashSet::new()
+fn game_bar_entries() -> HashMap<String, FicheGameBar> {
+    HashMap::new()
 }
 
 // --- Titre et dossier du jeu ------------------------------------------------------
@@ -520,6 +593,33 @@ mod tests {
         // Sigle préservé, et le « Game » final tombe comme tout mot parasite.
         assert_eq!(pretty("XCOMGame"), "XCOM");
         assert_eq!(pretty("Moria-Win64-Shipping"), "Moria");
+    }
+
+    /// Minecraft tourne dans une machine virtuelle Java : le chemin ne mène qu'au
+    /// moteur (« java-runtime-gamma »), et c'est Windows qui sait quel jeu y tourne.
+    #[test]
+    fn nomme_les_jeux_des_moteurs_partages() {
+        let jvm = r"e:\wpsystem\...\packages\microsoft.4297127d64ec6_8wekyb3d8bbwe\localcache\local\runtime\java-runtime-gamma\windows-x64\java-runtime-gamma\bin\javaw.exe";
+        assert!(runtime_partage(jvm));
+        assert!(!runtime_partage(r"e:\games\far cry 4\farcry4.exe"));
+
+        let fiche = FicheGameBar { title: None, arguments: Some("minecraft".into()) };
+        assert_eq!(fiche.nom().as_deref(), Some("Minecraft"));
+
+        // Le titre de la Game Bar prime sur l'argument quand il existe.
+        let fiche = FicheGameBar {
+            title: Some("Minecraft Legends".into()),
+            arguments: Some("minecraft".into()),
+        };
+        assert_eq!(fiche.nom().as_deref(), Some("Minecraft Legends"));
+
+        // Une vraie ligne de commande n'est pas un nom de jeu : on préfère s'abstenir.
+        let fiche = FicheGameBar {
+            title: None,
+            arguments: Some(r"-jar C:\jeux\truc.jar --fullscreen".into()),
+        };
+        assert_eq!(fiche.nom(), None);
+        assert_eq!(FicheGameBar::default().nom(), None);
     }
 
     #[test]
