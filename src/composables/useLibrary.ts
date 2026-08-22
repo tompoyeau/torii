@@ -16,7 +16,7 @@ import {
   type ManualInput,
 } from "../lib/tauri";
 import { usePreferences } from "./usePreferences";
-import type { Game, LibraryFilter } from "../types";
+import type { Game, GameDto, LibraryFilter } from "../types";
 
 const { prefs } = usePreferences();
 
@@ -224,10 +224,39 @@ export function useLibrary() {
     return fresh;
   }
 
-  /** Retire un jeu manuel (persisté côté Rust + retiré du store). */
+  /** Retire un jeu manuel — ou détecté (le backend route sur l'id). */
   async function removeManual(id: string) {
     await removeManualGame(id);
     games.value = games.value.filter((g) => g.id !== id);
+  }
+
+  /**
+   * Jeu découvert hors launcher par le surveillant de process : il entre dans la
+   * bibliothèque sans attendre un scan, pour que sa carte existe pendant la partie —
+   * c'est elle que « Récemment joué » et la fiche du jeu vont chercher.
+   *
+   * Émis deux fois : à la détection (titre deviné) puis après reconnaissance IGDB
+   * (vrai titre + jaquette). Le second passage rafraîchit la carte sans toucher au
+   * favori ni au masquage, qui appartiennent à l'utilisateur.
+   */
+  function noteDetected(dto: GameDto) {
+    const fresh = fromDto(dto);
+    const idx = games.value.findIndex((g) => g.id === fresh.id);
+    if (idx === -1) {
+      games.value = [...games.value, fresh].sort((a, b) =>
+        a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
+      );
+      return;
+    }
+    const current = games.value[idx];
+    games.value[idx] = {
+      ...fresh,
+      favorite: current.favorite,
+      hidden: current.hidden,
+      recent: current.recent,
+      lastPlayed: current.lastPlayed ?? fresh.lastPlayed,
+      lastPlayedAt: current.lastPlayedAt ?? fresh.lastPlayedAt,
+    };
   }
 
   /**
@@ -301,6 +330,7 @@ export function useLibrary() {
     removeManual,
     markPlayed,
     notePlayed,
+    noteDetected,
     launchOrInstall,
   };
 }

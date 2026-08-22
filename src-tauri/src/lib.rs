@@ -1282,6 +1282,10 @@ fn add_manual_game(app: tauri::AppHandle, input: ManualInput) -> Result<Vec<Game
 }
 
 /// Met à jour un jeu manuel existant (édition depuis sa fiche).
+///
+/// Les jeux **détectés hors launcher** se corrigent par le même chemin : ils vivent
+/// dans leur propre fichier mais offrent exactement les mêmes champs, et le front les
+/// édite avec la même modale.
 #[tauri::command]
 fn update_manual_game(
     app: tauri::AppHandle,
@@ -1289,13 +1293,20 @@ fn update_manual_game(
     input: ManualInput,
 ) -> Result<Vec<GameDto>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    if id.starts_with("detected:") {
+        return platforms::detected::update(&dir, &id, input);
+    }
     platforms::manual::update(&dir, &id, input)
 }
 
-/// Retire un jeu manuel par son id.
+/// Retire un jeu manuel par son id — ou un jeu détecté, qui rejoint alors la liste des
+/// exécutables refusés pour ne pas réapparaître à la partie suivante.
 #[tauri::command]
 fn remove_manual_game(app: tauri::AppHandle, id: String) -> Result<Vec<GameDto>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    if id.starts_with("detected:") {
+        return platforms::detected::forget(&dir, &id);
+    }
     platforms::manual::remove(&dir, &id)
 }
 

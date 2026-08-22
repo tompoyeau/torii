@@ -9,6 +9,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
   ea: { id: "ea", name: "EA", color: "var(--ea)" },
   battlenet: { id: "battlenet", name: "Battle.net", color: "var(--battlenet)" },
   manual: { id: "manual", name: "Manuel", color: "var(--manual)" },
+  detected: { id: "detected", name: "Hors launcher", color: "var(--detected)" },
 };
 
 export function platformName(id: PlatformId): string {

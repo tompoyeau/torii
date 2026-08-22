@@ -1,4 +1,14 @@
-export type PlatformId = "steam" | "epic" | "gog" | "riot" | "ubisoft" | "ea" | "battlenet" | "manual";
+export type PlatformId =
+  | "steam"
+  | "epic"
+  | "gog"
+  | "riot"
+  | "ubisoft"
+  | "ea"
+  | "battlenet"
+  | "manual"
+  /** Jeu repéré hors launcher par le surveillant de process (Genshin, Dofus, Game Pass…). */
+  | "detected";
 
 export interface Platform {
   id: PlatformId;
@@ -78,7 +88,7 @@ export interface Game {
    * lui coller l'URL `asset://` de rendu dans le formulaire.
    */
   coverSource?: string;
-  /** Visuel paysage (hero, tuiles Salon, bannière détail) si disponible. */
+  /** Visuel paysage (hero, bannière de la fiche) si disponible. */
   heroUrl?: string;
   /** Captures d'écran (fournisseur en ligne). */
   screenshots?: string[];
@@ -346,8 +356,6 @@ export interface WishlistItem {
   /** Plus bas prix historique (EUR), si connu. */
   historyLow?: number | null;
 }
-
-export type AppMode = "bureau" | "salon";
 
 /** Critère de tri de la bibliothèque. */
 export type SortKey = "recent" | "alpha" | "playtime";

@@ -25,7 +25,7 @@ cargo run --example community        # jeux possédés + famille (via session st
 
 - **Front `src/`** : `types.ts`, `data/` (games.ts = fetchGames/enrichGames + mock, platforms.ts),
   `lib/` (tauri.ts pont commandes, covers.ts), `composables/` (useLibrary, useUi, useTheme),
-  `components/` (Bureau*, Salon*, GameCard, GameDetail, Sidebar, TopBar, SettingsPanel).
+  `components/` (AppShell, GameCard, GameDetail, Sidebar, TopBar, SettingsView).
 - **Natif `src-tauri/src/`** : `lib.rs` (commandes + fenêtre login), `models.rs` (GameDto/GameMeta),
   `platforms/` (scan INSTALLÉS : steam/epic/gog/manual + agrégation `scan_all`),
   `accounts/` (POSSÉDÉS : secrets.rs = credentials.json, steam.rs = session/famille),
@@ -267,9 +267,9 @@ cargo run --example community        # jeux possédés + famille (via session st
 
 ## Tri de la bibliothèque (fait)
 
-- Puces Bureau fonctionnelles : **Récemment joué** (`lastPlayedAt` desc), **A → Z** (`title`
+- Puces de tri fonctionnelles : **Récemment joué** (`lastPlayedAt` desc), **A → Z** (`title`
   localeCompare fr), **Temps de jeu** (`hoursPlayed` desc). État `sort: SortKey` dans `useUi`
-  (défaut "recent"), `sortGames()` dans BureauView appliqué après `filtered()`.
+  (défaut "recent"), `sortGames()` dans AppShell appliqué après `filtered()`.
 - 🔑 `lastPlayedAt` (Unix, pour le tri) ajouté à `Game` en plus de `lastPlayed` (chaîne d'affichage) :
   `fromDto` gardait seulement la chaîne relative. Fusion : `lastPlayedAt`/`hoursPlayed` = max des sources.
 
@@ -286,7 +286,7 @@ cargo run --example community        # jeux possédés + famille (via session st
 ## Menu contextuel, ajout manuel, auto-update (fait)
 
 - **Menu contextuel (clic droit)** : `useContextMenu.ts` (singleton `{open,x,y,game}`) + `ContextMenu.vue`
-  monté globalement dans `App.vue`. Clic droit sur `GameCard`/`SalonTile` (`@contextmenu="openContext($event, game)"`).
+  monté globalement dans `App.vue`. Clic droit sur `GameCard` (`@contextmenu="openContext($event, game)"`).
   Items : Jouer, Voir la fiche, (Ré)favori, Masquer/Réafficher, puis **Désinstaller** (si `installed`) ou
   **Retirer de la bibliothèque** (si `platform==="manual"` → `removeManual`). Position rabattue dans le viewport
   (mesure après `nextTick`). Ferme au clic-fond/Échap/scroll.
@@ -311,8 +311,8 @@ cargo run --example community        # jeux possédés + famille (via session st
 
 - Filtrage par **genre**, qui se **combine** aux filtres sidebar (plateforme/favoris/…) + recherche + tri.
   État `genre: string|null` dans `useUi` (`setGenre`, null = toutes). Menu déroulant dans l'en-tête de
-  `BureauView` (à côté des puces de tri), affiché seulement si des genres existent.
-- `availableGenres` (computed BureauView) : genres uniques des jeux non masqués, triés par nombre décroissant
+  `AppShell` (à côté des puces de tri), affiché seulement si des genres existent.
+- `availableGenres` (computed AppShell) : genres uniques des jeux non masqués, triés par nombre décroissant
   (compteurs affichés). `shownGames` applique `g.genre === genre` après le filtre courant. Menu = bouton
   `.genre-btn` (actif en accent si un genre est choisi) + popover `.genre-menu` avec « Toutes les catégories »
   en tête. Ferme au clic-dehors (listener document).
@@ -376,7 +376,7 @@ cargo run --example community        # jeux possédés + famille (via session st
   **clic sur Jouer** comme date de dernière session. `platforms/playhistory.rs` : `last_played.json` (id → Unix),
   `record(dir, id)`/`load(dir)`. Commande `record_launch(id)`. `scan_all` fusionne : `last_played = max(launcher, maison)`.
 - Front : `useLibrary.markPlayed(id)` (maj optimiste `lastPlayedAt`/`recent` + persiste via `recordLaunch`), appelé à
-  chaque point de lancement (GameDetail onPlay/playFrom, ContextMenu, SalonHero, HeroFeatured). Le jeu remonte aussitôt
+  chaque point de lancement (GameDetail onPlay/playFrom, ContextMenu, HeroFeatured). Le jeu remonte aussitôt
   dans « Récemment joué ». ⚠️ Limite assumée : lancement HORS Torii = non capté (le user était OK). Piste future :
   surveiller le process du jeu pour le vrai temps de jeu (plus fragile).
 
@@ -536,6 +536,45 @@ cargo run --example community        # jeux possédés + famille (via session st
   personne vient d'éteindre. Un défaut se propose, il ne se réimpose pas.
 - 🔑 SteamID et visibilité partent **ensemble** : se déclarer visible sans identifiant lié
   afficherait un interrupteur allumé qui ne rapproche rien.
+
+## Jeux détectés hors launcher — `platforms/detected.rs`
+
+Un jeu qui ne vient d'aucun launcher scanné (Genshin, Dofus, un jeu Game Pass, un `.exe`
+posé sur le disque) n'existait pas pour Torii : ni « Récemment joué », ni présence chez
+les amis. Le surveillant l'adopte désormais tout seul.
+
+- **Classifieur = Windows lui-même.** `HKCU\System\GameConfigStore\Children` est la liste
+  de la Game Bar (une entrée par jeu lancé au moins une fois : `MatchedExeFullPath`,
+  `WorkingDirectory`, `LastAccessed`). Relevé réel : 278 entrées, **zéro** navigateur /
+  Discord / IDE. S'y ajoute la règle de chemin `C:\XboxGames\` (Game Pass). Index en
+  mémoire, relu au plus toutes les 30 s — l'entrée d'un jeu **naît à son premier
+  lancement**, donc un index périmé doit être rafraîchi avant de conclure « pas un jeu ».
+- **Garde-fous** (`plausible`) : dossiers système, clients de launcher (steam.exe,
+  upc.exe, riotclientservices.exe…), utilitaires embarqués (crashhandler, updater,
+  easyanticheat…), et `java(w).exe` — une machine virtuelle Java ne donne jamais un titre
+  présentable (Minecraft s'ajoute à la main).
+- **Titre deviné** (`title_and_root`) : on remonte les dossiers en sautant les étages
+  techniques (`Binaries\Win64`, `runtime`…), on s'arrête sur une étagère (`E:\Games`,
+  `steamapps\common`, `AppData\Local`), et on retient le dossier qui parle du même jeu
+  que l'exécutable. Si aucun ne parle, le **nom le plus informatif** l'emporte entre
+  dossier et exécutable (`…\Ubisoft\r6s\RainbowSix.exe` → « Rainbow Six », pas « r6s »).
+  Puis `pretty()` : décollage `motMot`, séparateurs, mots parasites finaux (win64,
+  shipping, launcher, vulkan…), MAJUSCULES capitalisées sauf sigle d'un seul mot.
+- **Correction par IGDB** : `igdb::recognize(titre deviné)` (recherche tolérante + garde-fou
+  d'inclusion, ≥ 5 caractères) rend le vrai nom et la jaquette. Tourne sur son propre fil
+  et **renomme aussi la cible en cours**, sinon les amis garderaient le titre deviné
+  jusqu'au prochain démarrage.
+- **Cycle de vie** : entrée `detected:<slug>` dans `detected_games.json` (plateforme
+  `detected`, « Hors launcher » côté front), reprise par `scan_all`. L'id ne change
+  jamais, même quand IGDB corrige le titre (favoris / masqués / historique / présence en
+  dépendent). « Retirer de la bibliothèque » range l'exécutable dans
+  `detected_ignored.json` — sans quoi la partie suivante le ferait revenir. Édition
+  possible : `update_manual_game` / `remove_manual_game` routent sur le préfixe de l'id.
+- Événement `game-detected` (DTO complet) émis deux fois — à la découverte puis après
+  IGDB ; `useLibrary.noteDetected` insère/rafraîchit la carte sans re-scanner.
+- Diagnostic : `cargo run --release --example detect` — ce que Torii ferait de la liste
+  Game Bar, sans rien écrire. Sur la machine de dev : 31 exécutables encore installés,
+  27 déjà dans la bibliothèque, 1 écarté (JVM), 2 vrais jeux détectés.
 
 ## Prochaines étapes
 

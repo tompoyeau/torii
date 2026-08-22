@@ -11,10 +11,7 @@ y compris toute la **bibliothèque familiale Steam**.
 
 ## Fonctionnalités
 
-- **Deux modes d'affichage**
-  - **Bureau** — barre latérale + grille de jaquettes, orienté souris/clavier.
-  - **Salon** — interface « canapé » cinématique (grandes tuiles, rangées horizontales,
-    hero en carrousel), **fenêtrée et pilotable à la souris** (pas un plein écran exclusif).
+- **Bibliothèque** — barre latérale + grille de jaquettes, orientée souris/clavier.
 - **Vue détail** par jeu (bannière, temps de jeu, statut, — description/genre/captures à venir).
 - **Filtres** : Tous, Mes jeux, Famille, Récents, Favoris, Installés, et par plateforme.
 - **Thème** clair / sombre, jaquettes réelles (CDN Steam) avec repli en dégradé généré.
@@ -69,8 +66,8 @@ src/
 ├── types.ts                 # Game, GameDto, Platform, LibraryFilter…
 ├── data/                    # games.ts (fetchGames + fusion des doublons + mock), platforms.ts
 ├── lib/                     # tauri.ts (pont commandes), covers.ts (dégradés, dates)
-├── composables/             # useLibrary (scan/filtre), useUi (mode/détail/réglages), useTheme
-└── components/              # Bureau*, Salon*, GameCard, GameDetail, Sidebar, TopBar, SettingsPanel
+├── composables/             # useLibrary (scan/filtre), useUi (sections/détail/réglages), useTheme
+└── components/              # AppShell, GameCard, GameDetail, Sidebar, TopBar, SettingsView
 ```
 
 `fetchGames()` appelle la commande `scan_library` sous Tauri, sinon renvoie des données

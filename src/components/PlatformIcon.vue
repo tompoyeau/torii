@@ -43,6 +43,9 @@ const ICONS: Record<PlatformId, string> = {
     '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" fill="var(--battlenet)"/><path d="M8.3 15.4c-1-2.9.5-6 3.5-6.6 1.9-.4 3.3.7 3.3 2.1 0 1.5-1.2 2.2-3 2.2M15.7 8.6c1 2.9-.5 6-3.5 6.6-1.9.4-3.3-.7-3.3-2.1 0-1.5 1.2-2.2 3-2.2" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
   manual:
     '<svg viewBox="0 0 24 24" fill="var(--manual)"><path d="M4 5a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Zm8 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>',
+  // Jeu repéré tout seul : un radar (ondes + point), pas une marque.
+  detected:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="var(--detected)" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="17" r="1.6" fill="var(--detected)" stroke="none"/><path d="M8.6 13.6a4.8 4.8 0 0 1 6.8 0"/><path d="M5.6 10.4a9 9 0 0 1 12.8 0"/></svg>',
 };
 
 const svg = computed(() => ICONS[props.platform]);

@@ -226,6 +226,44 @@ fn steam_metas(appids: &[String]) -> HashMap<String, IgdbMeta> {
     out
 }
 
+/// Reconnaît un titre **deviné** (nom de dossier d'un jeu détecté hors launcher) et
+/// renvoie le vrai nom IGDB avec ses métadonnées.
+///
+/// Différence avec [`name_meta`], qui exige un nom déjà exact : ici la recherche est
+/// tolérante — « Return To Moria » doit pouvoir tomber sur « The Lord of the Rings:
+/// Return to Moria ». Le garde-fou est l'**inclusion** d'un nom normalisé dans l'autre,
+/// avec un minimum de 5 caractères : sans lui, `search` renverrait toujours quelque
+/// chose et on baptiserait les jeux au hasard.
+pub fn recognize(guess: &str) -> Option<(String, IgdbMeta)> {
+    let clean = clean_title(guess);
+    let target = norm(&clean);
+    if target.len() < 5 {
+        return None;
+    }
+
+    let body = format!("search \"{clean}\"; {FIELDS} limit 10;");
+    let Some(Value::Array(arr)) = query("games", &body) else {
+        return None;
+    };
+    std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+
+    // Nom exact d'abord, puis la première inclusion (les résultats de `search` sont
+    // déjà classés par pertinence).
+    let mut fallback: Option<&Value> = None;
+    for g in &arr {
+        let Some(name) = g["name"].as_str() else { continue };
+        let key = norm(name);
+        if key == target {
+            return Some((name.to_string(), parse_meta(g)));
+        }
+        if fallback.is_none() && (key.contains(&target) || target.contains(&key)) {
+            fallback = Some(g);
+        }
+    }
+    let g = fallback?;
+    Some((g["name"].as_str()?.to_string(), parse_meta(g)))
+}
+
 /// Métadonnées d'un jeu non-Steam par son titre : match exact puis repli `search`.
 fn name_meta(title: &str) -> Option<IgdbMeta> {
     let clean = clean_title(title);

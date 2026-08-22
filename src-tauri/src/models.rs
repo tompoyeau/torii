@@ -33,7 +33,7 @@ pub struct GameDto {
     /// Jaquette portrait (grille) si disponible localement / via CDN.
     #[serde(default)]
     pub cover_url: Option<String>,
-    /// Visuel paysage (hero, tuiles Salon, bannière détail).
+    /// Visuel paysage (hero, bannière de la fiche).
     #[serde(default)]
     pub hero_url: Option<String>,
     /// Cible de lancement : appid Steam, AppName Epic, chemin d'exécutable…

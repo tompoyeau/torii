@@ -4,6 +4,12 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.16.0
+- **Tes amis voient enfin les jeux qui ne viennent d'aucun launcher.** Genshin Impact, Dofus, un jeu du Game Pass, un jeu installé à la main : jusqu'ici Torii ne les voyait pas, donc personne ne savait que tu y jouais. Ils sont maintenant repérés tout seuls, ajoutés à ta bibliothèque sous « Hors launcher », avec leur vrai titre et leur jaquette — et ils comptent dans « Récemment joué » comme les autres.
+- Torii ne devine pas au hasard : il s'appuie sur la liste de jeux que **Windows tient déjà** pour sa barre de jeu. Un navigateur ou un traitement de texte ne risque donc pas d'être annoncé à tes amis. Si un titre tombe quand même à côté, il se corrige depuis la fiche du jeu, et « Retirer de la bibliothèque » l'écarte pour de bon.
+- **Nouvel écran d'ouverture** : la porte se construit — les piliers montent, les traverses s'ouvrent, le linteau se pose.
+- **Le mode Salon a été retiré.** Personne ne s'en servait, et il tirait sa propre navigation, ses propres écrans et ses propres réglages derrière lui. Torii n'a plus qu'une interface, et le réglage « Mode au démarrage » a disparu des Paramètres.
+
 ## 0.15.0
 - **Création de compte repensée** : tout se passe dans une fenêtre unique — adresse, code reçu par e-mail, puis pseudo. Le pseudo n'est plus une suggestion qu'on pouvait sauter : ton compte est créé avec celui que tu choisis, et pas avec un nom déduit de ton adresse e-mail.
 - **Rien n'est créé tant que tu n'as pas fini.** Si tu fermes Torii au milieu de l'inscription, aucun compte n'est enregistré et ton adresse reste libre.

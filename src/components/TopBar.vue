@@ -8,7 +8,6 @@ import { useFriendList } from "../composables/useFriendList";
 import { useTorii } from "../composables/useTorii";
 import { steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
-import ModeSwitch from "./ModeSwitch.vue";
 
 const { section, query, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
 const { toggle: toggleTheme } = useTheme();
@@ -54,7 +53,6 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
       <span>Ajouter</span>
     </button>
-    <ModeSwitch />
     <button class="icon-btn friends-btn" :class="{ active: section === 'friends' }" title="Amis" @click="showFriends">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
       <span v-if="friendsOnline" class="friends-badge">{{ friendsOnline }}</span>

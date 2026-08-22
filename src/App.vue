@@ -3,10 +3,9 @@ import { onBeforeUnmount, onMounted } from "vue";
 import { useUi } from "./composables/useUi";
 import { useStore } from "./composables/useStore";
 import { useLibrary } from "./composables/useLibrary";
-import { onGameExited, onGameLaunched } from "./lib/tauri";
+import { onGameDetected, onGameExited, onGameLaunched } from "./lib/tauri";
 import { startWishlistNotifier } from "./composables/useWishlistNotifier";
-import BureauView from "./components/BureauView.vue";
-import SalonView from "./components/SalonView.vue";
+import AppShell from "./components/AppShell.vue";
 import GameDetail from "./components/GameDetail.vue";
 import StoreGameDetail from "./components/StoreGameDetail.vue";
 import SettingsView from "./components/SettingsView.vue";
@@ -17,14 +16,15 @@ import UpdateBanner from "./components/UpdateBanner.vue";
 import Toast from "./components/Toast.vue";
 import SplashScreen from "./components/SplashScreen.vue";
 
-const { mode, addGameOpen, closeAddGame, goBack, openGame } = useUi();
-const { notePlayed } = useLibrary();
+const { addGameOpen, closeAddGame, goBack, openGame } = useUi();
+const { notePlayed, noteDetected } = useLibrary();
 const { selectedGameId: storeProductId, closeProduct } = useStore();
 
 // Suivi de session : à la fermeture d'un jeu, on ouvre sa fiche (la fenêtre a déjà
 // été restaurée au premier plan côté Rust).
 let unlistenGameExit: (() => void) | null = null;
 let unlistenGameLaunch: (() => void) | null = null;
+let unlistenGameDetected: (() => void) | null = null;
 
 /**
  * Navigation « précédent » : ferme d'abord les surcouches ouvertes (fiche produit
@@ -77,6 +77,9 @@ onMounted(async () => {
   // Une partie détectée (même lancée depuis Steam ou le bureau) remonte aussitôt dans
   // « Récemment joué », sans attendre une resynchronisation.
   unlistenGameLaunch = await onGameLaunched((id, at) => notePlayed(id, at));
+  // Un jeu repéré hors launcher (Genshin, Dofus, Game Pass…) entre dans la
+  // bibliothèque à chaud : sans sa carte, « Récemment joué » n'aurait rien à dater.
+  unlistenGameDetected = await onGameDetected((game) => noteDetected(game));
   startWishlistNotifier();
 });
 onBeforeUnmount(() => {
@@ -85,13 +88,13 @@ onBeforeUnmount(() => {
   window.removeEventListener("contextmenu", onContextMenu);
   if (unlistenGameExit) unlistenGameExit();
   if (unlistenGameLaunch) unlistenGameLaunch();
+  if (unlistenGameDetected) unlistenGameDetected();
 });
 </script>
 
 <template>
   <div class="app">
-    <BureauView v-if="mode === 'bureau'" />
-    <SalonView v-else />
+    <AppShell />
     <GameDetail />
     <StoreGameDetail />
     <SettingsView />

@@ -1,3 +1,4 @@
+pub mod detected;
 pub mod epic;
 pub mod gog;
 pub mod id_set;
@@ -40,6 +41,10 @@ pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
         }
         // 3. Jeux ajoutés manuellement.
         for game in manual::scan(dir) {
+            map.insert(game.id.clone(), game);
+        }
+        // 4. Jeux détectés hors launcher (surveillant de process).
+        for game in detected::scan(dir) {
             map.insert(game.id.clone(), game);
         }
     }

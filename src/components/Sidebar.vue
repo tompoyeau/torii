@@ -62,6 +62,7 @@ const platforms: { id: PlatformId; label: string }[] = [
   { id: "ea", label: "EA" },
   { id: "battlenet", label: "Battle.net" },
   { id: "manual", label: "Manuel" },
+  { id: "detected", label: "Hors launcher" },
 ];
 
 </script>

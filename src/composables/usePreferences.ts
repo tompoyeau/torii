@@ -1,5 +1,5 @@
 import { reactive, watch } from "vue";
-import type { AppMode, SortKey } from "../types";
+import type { SortKey } from "../types";
 
 /** Densité de la grille de bibliothèque (taille des jaquettes). */
 export type Density = "compact" | "normal" | "large";
@@ -7,8 +7,6 @@ export type Density = "compact" | "normal" | "large";
 export type DefaultFilter = "all" | "recent" | "favorite" | "installed";
 
 interface Prefs {
-  /** Mode ouvert au démarrage (Bureau ou Salon). */
-  defaultMode: AppMode;
   /** Filtre de bibliothèque sélectionné au démarrage. */
   defaultFilter: DefaultFilter;
   /** Tri de bibliothèque par défaut. */
@@ -29,7 +27,6 @@ interface Prefs {
 }
 
 const DEFAULTS: Prefs = {
-  defaultMode: "bureau",
   defaultFilter: "all",
   defaultSort: "recent",
   listView: false,

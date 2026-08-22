@@ -1,17 +1,15 @@
 import { nextTick, reactive, toRefs, watch } from "vue";
-import type { AppMode, LibraryFilter, SortKey } from "../types";
+import type { LibraryFilter, SortKey } from "../types";
 import { initialPrefs } from "./usePreferences";
 
-/** Section principale de la vue Bureau : bibliothèque, boutique, amis… */
-type BureauSection = "library" | "store" | "friends" | "common" | "wishlist";
+/** Section affichée dans la zone principale : bibliothèque, boutique, amis… */
+type MainSection = "library" | "store" | "friends" | "common" | "wishlist";
 
 /** Catégorie affichée dans la pop-in Paramètres. */
 export type SettingsCategory = "general" | "hidden" | "stores" | "accounts" | "torii" | "about";
 
 interface UiState {
-  mode: AppMode;
-  /** Section affichée dans le mode Bureau (bibliothèque vs boutique). */
-  section: BureauSection;
+  section: MainSection;
   filter: LibraryFilter;
   query: string;
   sort: SortKey;
@@ -33,8 +31,7 @@ interface UiState {
 }
 
 const state = reactive<UiState>({
-  // Amorçage depuis les préférences persistées (mode/filtre/tri/vue par défaut).
-  mode: initialPrefs.defaultMode,
+  // Amorçage depuis les préférences persistées (filtre/tri/vue par défaut).
   section: "library",
   filter: initialPrefs.defaultFilter,
   query: "",
@@ -53,7 +50,7 @@ const state = reactive<UiState>({
 // On mémorise un instantané des états de navigation à chaque changement, afin de
 // pouvoir revenir en arrière (section, filtre, fiche jeu ouverte, pop-in Paramètres).
 interface NavSnap {
-  section: BureauSection;
+  section: MainSection;
   filter: LibraryFilter;
   selectedGameId: string | null;
   settingsOpen: boolean;
@@ -102,10 +99,6 @@ function goBack(): boolean {
 export function useUi() {
   return {
     ...toRefs(state),
-    setMode: (mode: AppMode) => {
-      state.mode = mode;
-      window.scrollTo({ top: 0 });
-    },
     // Choisir un filtre ramène toujours à la bibliothèque (quitte la boutique).
     setFilter: (filter: LibraryFilter) => {
       state.filter = filter;

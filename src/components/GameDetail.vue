@@ -149,8 +149,11 @@ async function onToggleMuted() {
   uninstallMenuOpen.value = false;
 }
 
-/** Un jeu manuel n'est référencé que par Torii : « désinstaller » = le retirer d'ici. */
-const isManual = computed(() => game.value?.platform === "manual");
+/** Un jeu que Torii est seul à connaître (ajouté à la main ou repéré hors launcher) :
+ *  « désinstaller » = le retirer d'ici, et sa fiche se corrige à la main. */
+const isManual = computed(() =>
+  ["manual", "detected"].includes(game.value?.platform ?? ""),
+);
 
 /** Édite les informations saisies à la main (titre, exécutable, dossier, jaquette). */
 function onEdit() {

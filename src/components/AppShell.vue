@@ -90,7 +90,7 @@ function title(f: LibraryFilter): string {
 </script>
 
 <template>
-  <div class="bureau">
+  <div class="shell">
     <Sidebar />
     <main class="main">
       <TopBar />
@@ -166,7 +166,7 @@ function title(f: LibraryFilter): string {
 </template>
 
 <style scoped>
-.bureau { display: grid; grid-template-columns: 262px 1fr; }
+.shell { display: grid; grid-template-columns: 262px 1fr; }
 .main { min-width: 0; padding: 0 34px 60px; }
 .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
 .sec-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
@@ -232,7 +232,7 @@ function title(f: LibraryFilter): string {
 .empty { padding: 60px 0; text-align: center; color: var(--text-faint); font-size: 14px; }
 
 @media (max-width: 820px) {
-  .bureau { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: 1fr; }
   .main { padding: 0 18px 40px; }
 }
 </style>

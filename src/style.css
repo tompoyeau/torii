@@ -18,6 +18,8 @@
   --epic: #dcdce2;
   --gog: #a483ff;
   --manual: #56d6a6;
+  /* Jeux repérés hors launcher : ambre, distinct des couleurs de marque. */
+  --detected: #f0b73f;
   --riot: #ff4655;
   --ubisoft: #2aa3ee;
   --ea: #ff5568;
@@ -38,7 +40,7 @@
     --border: rgba(23, 17, 33, 0.1); --border-strong: rgba(23, 17, 33, 0.16);
     --text: #1a1626; --text-dim: #5f596d; --text-faint: #948da3;
     --accent: #ec4b30; --accent-hover: #d63d24; --accent-ink: #fff; --accent-soft: rgba(236, 75, 48, 0.1);
-    --steam: #1668bd; --epic: #2a2a32; --gog: #7b45f0; --manual: #148a63; --riot: #d6342f; --ubisoft: #1580c8; --ea: #cf2f43; --battlenet: #0077c8;
+    --steam: #1668bd; --epic: #2a2a32; --gog: #7b45f0; --manual: #148a63; --detected: #b57d09; --riot: #d6342f; --ubisoft: #1580c8; --ea: #cf2f43; --battlenet: #0077c8;
     --shadow-card: 0 18px 38px -20px rgba(40, 20, 60, 0.28);
     --shadow-hero: 0 40px 80px -40px rgba(40, 20, 60, 0.34);
   }
@@ -52,7 +54,7 @@
   --border: rgba(255, 255, 255, 0.08); --border-strong: rgba(255, 255, 255, 0.14);
   --text: #ece9f3; --text-dim: #a39daf; --text-faint: #6f6980;
   --accent: #ff6b57; --accent-hover: #ff8069; --accent-ink: #1a0f0c; --accent-soft: rgba(255, 107, 87, 0.14);
-  --steam: #6cc0f4; --epic: #dcdce2; --gog: #a483ff; --manual: #56d6a6; --riot: #ff4655; --ubisoft: #2aa3ee; --ea: #ff5568; --battlenet: #3bb3ff;
+  --steam: #6cc0f4; --epic: #dcdce2; --gog: #a483ff; --manual: #56d6a6; --detected: #f0b73f; --riot: #ff4655; --ubisoft: #2aa3ee; --ea: #ff5568; --battlenet: #3bb3ff;
   --shadow-card: 0 18px 40px -18px rgba(0, 0, 0, 0.7);
   --shadow-hero: 0 40px 90px -40px rgba(0, 0, 0, 0.85);
 }
@@ -65,7 +67,7 @@
   --border: rgba(23, 17, 33, 0.1); --border-strong: rgba(23, 17, 33, 0.16);
   --text: #1a1626; --text-dim: #5f596d; --text-faint: #948da3;
   --accent: #ec4b30; --accent-hover: #d63d24; --accent-ink: #fff; --accent-soft: rgba(236, 75, 48, 0.1);
-  --steam: #1668bd; --epic: #2a2a32; --gog: #7b45f0; --manual: #148a63; --riot: #d6342f; --ubisoft: #1580c8; --ea: #cf2f43; --battlenet: #0077c8;
+  --steam: #1668bd; --epic: #2a2a32; --gog: #7b45f0; --manual: #148a63; --detected: #b57d09; --riot: #d6342f; --ubisoft: #1580c8; --ea: #cf2f43; --battlenet: #0077c8;
   --shadow-card: 0 18px 38px -20px rgba(40, 20, 60, 0.28);
   --shadow-hero: 0 40px 80px -40px rgba(40, 20, 60, 0.34);
 }
@@ -140,7 +142,7 @@ button { font-family: inherit; cursor: pointer; }
 .btn-ghost svg { width: 16px; height: 16px; }
 .btn-ghost.solid { background: rgba(255, 255, 255, 0.14); }
 
-/* --- segmented Bureau / Salon --- */
+/* --- segmented : petits choix exclusifs (préférences, filtres) --- */
 .segmented {
   display: inline-flex; background: var(--surface); border: 1px solid var(--border);
   border-radius: 11px; padding: 3px; gap: 2px;

@@ -173,10 +173,6 @@ const CATEGORIES = [
 ] as const;
 
 // --- Choix pour les préférences (segmented) --------------------------------
-const MODES = [
-  { key: "bureau", label: "Bureau" },
-  { key: "salon", label: "Salon" },
-] as const;
 const START_FILTERS = [
   { key: "all", label: "Tous" },
   { key: "favorite", label: "Favoris" },
@@ -398,18 +394,6 @@ function unhide(id: string) {
                 >
                   {{ t.label }}
                 </button>
-              </div>
-            </div>
-
-            <div class="divider" />
-
-            <div class="pref">
-              <div class="row-text">
-                <span class="row-title">Mode au démarrage</span>
-                <span class="row-sub">Interface ouverte au lancement de Torii.</span>
-              </div>
-              <div class="segmented">
-                <button v-for="m in MODES" :key="m.key" class="seg" :class="{ on: prefs.defaultMode === m.key }" @click="prefs.defaultMode = m.key">{{ m.label }}</button>
               </div>
             </div>
 

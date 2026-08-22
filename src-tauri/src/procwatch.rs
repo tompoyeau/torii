@@ -15,8 +15,9 @@
 //! — en régime de croisière, zéro ou un. Mesuré à **0,42 ms par tick**, soit 28× moins
 //! que l'approche précédente, et moins de 0,01 % d'un cœur au rythme retenu.
 
+use crate::journal;
 use crate::models::GameDto;
-use crate::platforms::playhistory;
+use crate::platforms::{detected, playhistory};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -116,6 +117,72 @@ fn match_id(targets: &[Target], exe: &str) -> Option<String> {
         .map(|t| t.id.clone())
 }
 
+/// Adopte un exécutable inconnu de la bibliothèque si Windows le classe comme jeu
+/// (cf. [`crate::platforms::detected`]) : il devient une cible surveillée sur-le-champ.
+///
+/// Renvoie `(id du jeu, jeu à enregistrer)` — le second est `None` quand la cible
+/// existait déjà (deuxième exécutable d'un jeu déjà découvert, lancé hors de son dossier).
+fn adopt(
+    state: &mut WatchState,
+    config_dir: Option<&std::path::Path>,
+    exe: &str,
+) -> Option<(String, Option<GameDto>)> {
+    let dir = config_dir?;
+    let game = detected::identify(exe)?;
+    if detected::is_ignored(dir, exe) {
+        return None;
+    }
+    if let Some(target) = state.targets.iter().find(|t| t.id == game.id) {
+        return Some((target.id.clone(), None));
+    }
+    state.targets.push(Target {
+        id: game.id.clone(),
+        title: game.title.clone(),
+        roots: vec![normalize(
+            game.install_dir.as_deref().unwrap_or(&game.launch_target),
+        )],
+    });
+    Some((game.id.clone(), Some(game)))
+}
+
+/// Demande à IGDB le vrai nom du jeu découvert (et sa jaquette), puis corrige l'entrée
+/// enregistrée, la présence en cours et l'affichage. Tourne sur son propre fil : la
+/// requête réseau n'a rien à faire dans la boucle de surveillance.
+fn resolve_title(app: &tauri::AppHandle, config_dir: std::path::PathBuf, game: GameDto) {
+    let Some((name, meta)) = crate::metadata::igdb::recognize(&game.title) else {
+        return;
+    };
+    let Some(updated) = detected::refine(&config_dir, &game.id, |g| {
+        g.title = name.clone();
+        g.cover_url = g.cover_url.take().or_else(|| meta.cover_url.clone());
+        g.hero_url = g.hero_url.take().or_else(|| meta.hero_url.clone());
+        g.genre = g.genre.take().or_else(|| meta.genre.clone());
+        g.description = g.description.take().or_else(|| meta.description.clone());
+        g.developer = g.developer.take().or_else(|| meta.developer.clone());
+        g.year = g.year.or(meta.year.map(|y| y as i32));
+        if g.screenshots.is_empty() {
+            g.screenshots = meta.screenshots.clone();
+        }
+    }) else {
+        return;
+    };
+
+    // La partie en cours est peut-être déjà diffusée sous le titre deviné : on renomme
+    // aussi la cible, sinon les amis garderaient « Genshin Impact Game » jusqu'à la
+    // prochaine ouverture de Torii.
+    if let Ok(mut state) = app.state::<Watch>().0.lock() {
+        if let Some(target) = state.targets.iter_mut().find(|t| t.id == updated.id) {
+            target.title = updated.title.clone();
+        }
+    }
+    journal::write(
+        &config_dir,
+        "INFO",
+        &format!("jeu détecté reconnu par IGDB : « {} » → « {} »", game.title, updated.title),
+    );
+    let _ = app.emit("game-detected", updated);
+}
+
 /// Partie en cours : `(id, titre, depuis)`. Utilisé par le battement de cœur de la
 /// présence. `None` si aucun jeu ne tourne — ou si plusieurs tournent, auquel cas on
 /// prend celui commencé en dernier (c'est celui devant lequel la personne est).
@@ -174,6 +241,7 @@ pub fn spawn(app: tauri::AppHandle) {
 /// Un passage : repère les process apparus et disparus, en déduit les parties.
 /// Renvoie le délai avant le prochain passage.
 fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
+    let config_dir = app.path().app_config_dir().ok();
     let state_handle = app.state::<Watch>();
     let Ok(mut state) = state_handle.0.lock() else {
         return POLL_IDLE;
@@ -188,9 +256,24 @@ fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
 
     // 1) Process apparus depuis le dernier passage → est-ce un jeu connu ?
     let mut launched: Vec<(String, Option<i64>)> = Vec::new();
+    let mut discovered: Vec<GameDto> = Vec::new();
     for pid in alive.difference(seen) {
         let Some(exe) = exe_path(*pid) else { continue };
-        let Some(id) = match_id(&state.targets, &exe) else { continue };
+        let id = match match_id(&state.targets, &exe) {
+            Some(id) => id,
+            // Inconnu de la bibliothèque : Windows sait peut-être, lui, que c'est un
+            // jeu (cf. `platforms::detected`). Si oui, il rejoint les cibles séance
+            // tenante — la présence et « Récemment joué » suivent sans attendre un scan.
+            None => match adopt(&mut state, config_dir.as_deref(), &exe) {
+                Some((id, game)) => {
+                    if let Some(game) = game {
+                        discovered.push(game);
+                    }
+                    id
+                }
+                None => continue,
+            },
+        };
         let first = !state.running.contains_key(&id);
         let started = started_at(*pid).unwrap_or_else(|| now_unix());
         let entry = state.running.entry(id.clone()).or_default();
@@ -228,6 +311,25 @@ fn tick(app: &tauri::AppHandle, seen: &mut HashSet<u32>) -> Duration {
     let armed_id = state.armed.as_ref().map(|(id, _)| id.clone());
     let in_game = !state.running.is_empty();
     drop(state); // aucun verrou tenu pendant les écritures disque et les émissions
+
+    // Jeux découverts à l'instant : on les inscrit sur le disque (ils feront partie de
+    // la bibliothèque au prochain scan), on prévient le front, et on demande à IGDB de
+    // corriger le titre deviné — en arrière-plan, pour ne pas retarder la surveillance.
+    for game in discovered {
+        if let Some(dir) = config_dir.clone() {
+            if !crate::platforms::detected::remember(&dir, &game) {
+                continue;
+            }
+            journal::write(
+                &dir,
+                "INFO",
+                &format!("jeu détecté hors launcher : « {} » ({})", game.title, game.launch_target),
+            );
+            let _ = app.emit("game-detected", game.clone());
+            let app = app.clone();
+            std::thread::spawn(move || resolve_title(&app, dir, game));
+        }
+    }
 
     for (id, started) in launched {
         let at = match app.path().app_config_dir() {

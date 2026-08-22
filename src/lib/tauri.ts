@@ -147,6 +147,20 @@ export async function onGameLaunched(
   }
 }
 
+/**
+ * S'abonne aux jeux **découverts hors launcher** par le surveillant de process.
+ * Émis deux fois pour un même jeu : à la détection (titre deviné d'après le dossier),
+ * puis quand IGDB a reconnu le vrai titre et fourni la jaquette.
+ */
+export async function onGameDetected(cb: (game: GameDto) => void): Promise<() => void> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<GameDto>("game-detected", (e) => cb(e.payload));
+  } catch {
+    return () => {};
+  }
+}
+
 export async function onGameExited(cb: (gameId: string) => void): Promise<() => void> {
   try {
     const { listen } = await import("@tauri-apps/api/event");

@@ -8,7 +8,7 @@ function titleKey(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-const PLATFORM_ORDER: Record<PlatformId, number> = { steam: 0, gog: 1, epic: 2, riot: 3, ubisoft: 4, ea: 5, battlenet: 6, manual: 7 };
+const PLATFORM_ORDER: Record<PlatformId, number> = { steam: 0, gog: 1, epic: 2, riot: 3, ubisoft: 4, ea: 5, battlenet: 6, manual: 7, detected: 8 };
 
 /**
  * Fusionne les doublons cross-plateforme : un même jeu possédé sur plusieurs
@@ -95,6 +95,7 @@ const MOCK_GAMES: Game[] = [
   { id: "emberwild", title: "Emberwild", platform: "gog", genre: "RPG", cover: "linear-gradient(150deg,#4b1010,#ffb347)", hoursPlayed: 64, lastPlayed: "il y a 1 sem", developer: "Ironquill", year: 2020, sizeGb: 40, achievements: { unlocked: 29, total: 55 }, installed: false, favorite: false, recent: false, description: DESCRIPTION },
   { id: "signal-lost", title: "Signal Lost", platform: "manual", genre: "Thriller", cover: "linear-gradient(150deg,#1f1c2c,#928dab)", hoursPlayed: 9, lastPlayed: "il y a 5 j", developer: "Static Room", year: 2023, sizeGb: 12, achievements: { unlocked: 7, total: 22 }, installed: true, favorite: false, recent: false, description: DESCRIPTION },
   { id: "aurora-drift", title: "Aurora Drift", platform: "steam", genre: "Ambient", cover: "linear-gradient(150deg,#12005e,#9d50ff)", hoursPlayed: 33, lastPlayed: "aujourd'hui", developer: "Polar Bloom", year: 2024, sizeGb: 15, achievements: { unlocked: 19, total: 26 }, installed: true, favorite: true, recent: true, description: DESCRIPTION },
+  { id: "detected:sable-drift", title: "Sable Drift", platform: "detected", genre: "Action", cover: "linear-gradient(150deg,#2b1d0e,#f0b73f)", hoursPlayed: 6, lastPlayed: "hier", developer: "Dune Atelier", year: 2025, sizeGb: 21, installed: true, favorite: false, recent: true, description: DESCRIPTION },
   { id: "rustbound", title: "Rustbound", platform: "epic", genre: "Craft", cover: "linear-gradient(150deg,#3d1c00,#d38312)", hoursPlayed: 47, lastPlayed: "il y a 4 j", developer: "Cogwork", year: 2022, sizeGb: 34, achievements: { unlocked: 26, total: 48 }, installed: false, favorite: false, recent: false, description: DESCRIPTION },
 ];
 

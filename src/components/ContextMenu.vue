@@ -36,7 +36,12 @@ watch(
 );
 
 const game = computed(() => ctx.game);
-const isManual = computed(() => game.value?.platform === "manual");
+// Jeux que Torii est seul à connaître : ajoutés à la main, ou repérés hors launcher.
+// Pour les deux, « désinstaller » n'a pas de sens (on les retire d'ici) et leur fiche
+// se corrige à la main — le titre d'un jeu détecté est deviné, il peut tomber à côté.
+const isManual = computed(() =>
+  ["manual", "detected"].includes(game.value?.platform ?? ""),
+);
 
 function onPlay() {
   if (game.value) launchOrInstall(game.value);
@@ -54,7 +59,7 @@ async function onUninstall() {
   if (!game.value) return;
   const g = game.value;
   closeContext();
-  if (g.platform === "manual") await removeManual(g.id);
+  if (isManual.value) await removeManual(g.id);
   else await uninstallGame(g);
 }
 function onDetail() {
