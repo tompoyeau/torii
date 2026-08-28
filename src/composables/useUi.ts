@@ -3,7 +3,7 @@ import type { LibraryFilter, SortKey } from "../types";
 import { initialPrefs } from "./usePreferences";
 
 /** Section affichée dans la zone principale : bibliothèque, boutique, amis… */
-type MainSection = "library" | "store" | "friends" | "common" | "wishlist";
+type MainSection = "library" | "store" | "friends" | "common" | "wishlist" | "friendLibrary";
 
 /** Catégorie affichée dans la pop-in Paramètres. */
 export type SettingsCategory = "general" | "hidden" | "stores" | "accounts" | "torii" | "about";
@@ -28,11 +28,14 @@ interface UiState {
   editGameId: string | null;
   /** id du jeu ouvert dans la vue détail, ou null. */
   selectedGameId: string | null;
+  /** Compte Torii dont on consulte la bibliothèque (section `friendLibrary`), ou null. */
+  friendLibraryId: string | null;
 }
 
 const state = reactive<UiState>({
   // Amorçage depuis les préférences persistées (filtre/tri/vue par défaut).
   section: "library",
+  friendLibraryId: null,
   filter: initialPrefs.defaultFilter,
   query: "",
   sort: initialPrefs.defaultSort,
@@ -55,6 +58,9 @@ interface NavSnap {
   selectedGameId: string | null;
   settingsOpen: boolean;
   settingsCategory: SettingsCategory;
+  /** ⚠️ Sans lui, revenir depuis la bibliothèque d'un ami rejouerait celle du dernier
+      ami consulté : la section serait restaurée, mais pas de qui il s'agit. */
+  friendLibraryId: string | null;
 }
 function snap(): NavSnap {
   return {
@@ -63,13 +69,17 @@ function snap(): NavSnap {
     selectedGameId: state.selectedGameId,
     settingsOpen: state.settingsOpen,
     settingsCategory: state.settingsCategory,
+    friendLibraryId: state.friendLibraryId,
   };
 }
 const navStack: NavSnap[] = [];
 let restoring = false;
 let lastSnap = snap();
 watch(
-  () => [state.section, state.filter, state.selectedGameId, state.settingsOpen, state.settingsCategory],
+  () => [
+    state.section, state.filter, state.selectedGameId, state.settingsOpen,
+    state.settingsCategory, state.friendLibraryId,
+  ],
   () => {
     if (restoring) {
       lastSnap = snap();
@@ -90,6 +100,7 @@ function goBack(): boolean {
   state.selectedGameId = prev.selectedGameId;
   state.settingsOpen = prev.settingsOpen;
   state.settingsCategory = prev.settingsCategory;
+  state.friendLibraryId = prev.friendLibraryId;
   void nextTick(() => {
     restoring = false;
   });
@@ -114,6 +125,13 @@ export function useUi() {
     },
     showCommon: () => {
       state.section = "common";
+      window.scrollTo({ top: 0 });
+    },
+    /** Ouvre la bibliothèque partagée d'un ami (section à part entière, pas une modale :
+        elle se parcourt et se filtre comme la sienne). */
+    showFriendLibrary: (accountId: string) => {
+      state.friendLibraryId = accountId;
+      state.section = "friendLibrary";
       window.scrollTo({ top: 0 });
     },
     showWishlist: () => {

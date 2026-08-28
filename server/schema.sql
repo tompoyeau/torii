@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   steam_id           TEXT,
   -- 🔑 La suggestion par Steam n'a lieu QUE si les deux personnes l'ont activée.
   steam_discoverable INTEGER NOT NULL DEFAULT 0,
+  -- Les amis peuvent-ils consulter ma bibliothèque ? Éteint par défaut, comme le partage
+  -- de présence. ⚠️ À ne pas confondre avec le fait de SYNCHRONISER : synchroniser sert à
+  -- retrouver sa bibliothèque sur son propre mobile et ne dépend pas de ce drapeau ; ce
+  -- drapeau n'ouvre que la lecture par les amis (voir src/library.js).
+  share_library      INTEGER NOT NULL DEFAULT 0,
   created_at         INTEGER NOT NULL
 );
 -- 🔑 UNIQUE, et pas seulement un index de recherche. Deux comptes Torii portant le même
@@ -88,8 +93,28 @@ CREATE TABLE IF NOT EXISTS presence (
   expires_at INTEGER NOT NULL
 );
 
--- À VENIR (application mobile) : synchronisation de la bibliothèque, PC → serveur →
--- mobile. Volontairement absente pour l'instant — c'est une donnée durable et
--- volumineuse, à l'opposé de la présence, et elle demandera sa propre migration
--- (table `libraries` versionnée par appareil source, pour que deux PC ne s'effacent
--- pas mutuellement).
+-- Index des bibliothèques synchronisées. 🔑 La liste des jeux n'est PAS ici : elle vit
+-- dans R2, un objet JSON par appareil (`lib/<compte>/<appareil>.json`). Une ligne par jeu
+-- et par personne, c'est ~1 000 écritures par resynchronisation contre 100 000 par jour
+-- offertes — le service s'arrêterait à une centaine de joueurs. Cette table ne garde donc
+-- que de quoi savoir, SANS rien télécharger, si une bibliothèque a changé.
+--
+-- ⚠️ Première donnée durable du service : la promesse « aucun historique » ne concerne
+-- que la présence. Ici on sait ce que les gens possèdent — jamais ce qu'ils jouent.
+--
+-- Une ligne par APPAREIL : deux PC n'ont pas la même bibliothèque, et s'ils écrivaient au
+-- même endroit le dernier passé effacerait l'autre indéfiniment.
+CREATE TABLE IF NOT EXISTS libraries (
+  account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  device_id   TEXT NOT NULL,
+  device_name TEXT NOT NULL,
+  -- Empreinte opaque calculée par le client : elle sert d'ETag à la lecture (304 sans
+  -- lecture R2 ni transfert) et évite de renvoyer une bibliothèque qui n'a pas bougé.
+  digest      TEXT NOT NULL,
+  game_count  INTEGER NOT NULL,
+  size_bytes  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  PRIMARY KEY (account_id, device_id)
+);
+-- Pas d'index supplémentaire : la clé primaire commence par `account_id`, donc « les
+-- appareils de cette personne » est déjà une recherche par préfixe.

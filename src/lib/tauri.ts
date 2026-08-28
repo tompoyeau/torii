@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, ToriiAccount, ToriiCircle, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -30,7 +30,7 @@ let cachedInvoke: Invoke | undefined;
  * présence de ce global est donc le seul moyen fiable de distinguer « hors Tauri »
  * d'une commande qui a vraiment échoué.
  */
-function hasTauriRuntime(): boolean {
+export function hasTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
@@ -321,6 +321,7 @@ export async function toriiSetProfile(patch: {
   displayName?: string;
   steamId?: string | null;
   steamDiscoverable?: boolean;
+  shareLibrary?: boolean;
 }): Promise<ToriiAccount> {
   return await social<ToriiAccount>("torii_set_profile", patch);
 }
@@ -363,6 +364,7 @@ export async function toriiPrefs(): Promise<SocialPrefs> {
     awayAfterMinutes: 10,
     notifyFriendLaunch: true,
     steamAutoLinked: false,
+    syncLibrary: false,
   });
 }
 
@@ -377,6 +379,42 @@ export async function toriiMutedGames(): Promise<string[]> {
 
 export async function toriiMuteGame(id: string, muted: boolean): Promise<string[]> {
   return await social<string[]>("torii_mute_game", { id, muted });
+}
+
+// --- Bibliothèques synchronisées ------------------------------------------------
+
+/**
+ * Envoie la bibliothèque maintenant. `force` réenvoie même si rien n'a changé.
+ *
+ * ⚠️ Ne lève pas quand rien ne part : `skipped` dit pourquoi (`off` = synchronisation
+ * éteinte, `deconnecte` = pas de compte Torii, `inchange` = déjà à jour). Seul un envoi
+ * qui échoue vraiment remonte une erreur.
+ */
+export async function librarySync(force = false): Promise<SyncResult> {
+  return await social<SyncResult>("library_sync", { force });
+}
+
+/** Index : mes appareils, et ceux des amis qui partagent. Ne télécharge aucun jeu. */
+export async function libraryIndex(): Promise<LibraryIndex> {
+  return await call<LibraryIndex>("library_index", undefined, { mine: [], friends: [] });
+}
+
+/** La bibliothèque d'un appareil (le mien, ou celui d'un ami qui partage). */
+export async function libraryOf(accountId: string, deviceId: string): Promise<LibrarySnapshot> {
+  return await social<LibrarySnapshot>("library_of", { accountId, deviceId });
+}
+
+/** Oublie un appareil côté serveur (sa bibliothèque est effacée). */
+export async function libraryForgetDevice(deviceId: string): Promise<void> {
+  await social<void>("library_forget_device", { deviceId });
+}
+
+/**
+ * Active ou coupe la synchronisation. 🔑 La couper **efface** ce qui est déjà sur le
+ * serveur : une bibliothèque qu'on a cessé de tenir à jour tromperait les amis.
+ */
+export async function librarySetSync(enabled: boolean): Promise<SyncResult> {
+  return await social<SyncResult>("library_set_sync", { enabled });
 }
 
 /**

@@ -43,6 +43,10 @@ pub struct Account {
     pub steam_id: Option<String>,
     #[serde(default)]
     pub steam_discoverable: bool,
+    /// Mes amis peuvent-ils consulter ma bibliothèque ? Ne dit rien de la
+    /// synchronisation elle-même, qui est une préférence locale (cf. `libsync`).
+    #[serde(default)]
+    pub share_library: bool,
 }
 
 /// Un ami et sa présence. `status` vaut `in-game`, `online`, `away` ou `offline` —
@@ -122,14 +126,14 @@ fn api_error(err: ureq::Error) -> String {
 }
 
 /// Jeton de session stocké, ou une erreur explicite si personne n'est connecté.
-fn token(config_dir: &Path) -> Result<String, String> {
+pub(crate) fn token(config_dir: &Path) -> Result<String, String> {
     secrets::load(config_dir)
         .torii_token
         .ok_or_else(|| "Non connecté à Torii.".to_string())
 }
 
 /// Requête authentifiée. `body` absent = GET.
-fn call<T: for<'de> Deserialize<'de>>(
+pub(crate) fn call<T: for<'de> Deserialize<'de>>(
     config_dir: &Path,
     method: &str,
     path: &str,
@@ -293,6 +297,7 @@ pub fn set_profile(
     display_name: Option<String>,
     steam_id: Option<String>,
     steam_discoverable: Option<bool>,
+    share_library: Option<bool>,
 ) -> Result<Account, String> {
     #[derive(Deserialize)]
     struct Wrapper {
@@ -316,6 +321,11 @@ pub fn set_profile(
     }
     if let Some(v) = steam_discoverable {
         patch.insert("steamDiscoverable".into(), v.into());
+    }
+    // Éteindre le partage ne supprime rien côté serveur : la bibliothèque reste lisible
+    // par ses propres appareils. C'est `libsync::forget_all` qui efface, et lui seul.
+    if let Some(v) = share_library {
+        patch.insert("shareLibrary".into(), v.into());
     }
     let w: Wrapper = call(config_dir, "PATCH", "/v1/me", Some(patch.into()))?;
     Ok(w.account)
@@ -449,6 +459,27 @@ pub struct SocialPrefs {
     /// indiscernables — on rallumerait à chaque démarrage ce que la personne vient
     /// d'éteindre. Un défaut se propose ; il ne se réimpose pas.
     pub steam_auto_linked: bool,
+    /// Envoyer sa bibliothèque au service Torii (pour la retrouver sur son mobile, et
+    /// la montrer à ses amis si le partage est activé côté serveur).
+    ///
+    /// 🔑 Faux par défaut, comme le partage de présence : ce que quelqu'un possède ne
+    /// quitte pas sa machine parce qu'il a installé une mise à jour.
+    pub sync_library: bool,
+    /// Identifiant stable de CET appareil, créé au premier envoi. C'est lui qui empêche
+    /// deux PC d'écraser mutuellement leur bibliothèque sur le serveur.
+    pub device_id: Option<String>,
+    /// Dernier envoi réussi. L'empreinte évite de réécrire un objet identique à chaque
+    /// démarrage ; le compte l'accompagne, sans quoi changer de compte laisserait le
+    /// nouveau vide pour toujours.
+    pub last_library_sync: Option<LastLibrarySync>,
+}
+
+/// Trace du dernier envoi de bibliothèque (cf. `SocialPrefs::last_library_sync`).
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LastLibrarySync {
+    pub account_id: String,
+    pub digest: String,
 }
 
 impl Default for SocialPrefs {
@@ -459,6 +490,9 @@ impl Default for SocialPrefs {
             away_after_minutes: 10,
             notify_friend_launch: true,
             steam_auto_linked: false,
+            sync_library: false,
+            device_id: None,
+            last_library_sync: None,
         }
     }
 }
@@ -669,7 +703,7 @@ fn presence_for(
 }
 
 /// Nom de la machine, pour distinguer les sessions dans la liste des appareils.
-fn whoami_host() -> String {
+pub(crate) fn whoami_host() -> String {
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_else(|_| "Windows".into())

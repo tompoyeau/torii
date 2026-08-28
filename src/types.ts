@@ -266,6 +266,12 @@ export interface ToriiAccount {
   steamId?: string | null;
   /** Autorise les amis Steam à nous retrouver (les deux côtés doivent l'activer). */
   steamDiscoverable: boolean;
+  /**
+   * Mes amis peuvent-ils consulter ma bibliothèque ? ⚠️ Distinct de la synchronisation
+   * (`SocialPrefs.syncLibrary`) : on peut envoyer sa bibliothèque pour la retrouver sur
+   * son mobile sans la montrer à personne.
+   */
+  shareLibrary: boolean;
 }
 
 /**
@@ -333,6 +339,60 @@ export interface SocialPrefs {
   notifyFriendLaunch: boolean;
   /** Le rapprochement Steam ↔ Torii a déjà été proposé : on ne repasse jamais derrière. */
   steamAutoLinked: boolean;
+  /**
+   * Envoyer sa bibliothèque au service Torii. Faux par défaut : ce qu'on possède ne
+   * quitte pas la machine tant qu'on ne l'a pas demandé.
+   */
+  syncLibrary: boolean;
+  /** Identifiant de CET appareil sur le serveur (créé au premier envoi). */
+  deviceId?: string | null;
+  /** Dernier envoi réussi : compte visé et empreinte du contenu. */
+  lastLibrarySync?: { accountId: string; digest: string } | null;
+}
+
+/** Un jeu tel qu'il voyage entre appareils : de quoi l'afficher et le croiser, rien de plus. */
+export interface LibGame {
+  /** Clé cross-launcher, la même que celle de la présence (`igdb:…` ou `title:…`). */
+  key: string;
+  title: string;
+  /** Tous les launchers où la personne le possède. */
+  platforms: string[];
+  cover?: string | null;
+}
+
+/** Une ligne d'index : un appareil, à moi ou à un ami qui partage sa bibliothèque. */
+export interface LibraryEntry {
+  accountId: string;
+  displayName: string;
+  deviceId: string;
+  deviceName: string;
+  digest?: string | null;
+  gameCount: number;
+  sizeBytes: number;
+  updatedAt: number;
+}
+
+export interface LibraryIndex {
+  mine: LibraryEntry[];
+  friends: LibraryEntry[];
+}
+
+/** La bibliothèque d'un appareil, telle que le serveur la rend. */
+export interface LibrarySnapshot {
+  version: number;
+  deviceId: string;
+  deviceName: string;
+  updatedAt: number;
+  games: LibGame[];
+}
+
+/** Ce qu'a donné une tentative de synchronisation. */
+export interface SyncResult {
+  uploaded: boolean;
+  gameCount: number;
+  digest: string;
+  /** Pourquoi rien n'est parti : `off`, `deconnecte` ou `inchange`. */
+  skipped?: "off" | "deconnecte" | "inchange" | null;
 }
 
 /** Un jeu de la wishlist Steam enrichi de prix (commande Rust `steam_wishlist`). */

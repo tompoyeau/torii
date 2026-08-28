@@ -82,9 +82,12 @@ const selCount = computed(() => selected.value.size);
       </button>
     </div>
 
-    <!-- Steam non connecté -->
-    <div v-if="loaded && !steamConnected" class="empty">
-      <p>Connecte ton compte Steam pour voir les jeux que tu partages avec tes amis.</p>
+    <!-- Aucune source : ni Steam, ni bibliothèque Torii partagée. ⚠️ La condition porte
+         sur `readable` et pas seulement sur Steam : depuis que les amis peuvent partager
+         leur bibliothèque Torii, cette vue a du sens même sans compte Steam. -->
+    <div v-if="loaded && !steamConnected && !readable.length" class="empty">
+      <p>Connecte ton compte Steam, ou attends qu'un ami partage sa bibliothèque Torii,
+        pour voir les jeux que vous avez en commun.</p>
       <button class="btn-connect" @click="openSettings()">Ouvrir les réglages</button>
     </div>
 
@@ -98,7 +101,10 @@ const selCount = computed(() => selected.value.size);
     <!-- Aucun ami lisible -->
     <div v-else-if="loaded && !readable.length" class="empty">
       <p>Impossible de lire la bibliothèque de tes amis.</p>
-      <p class="dim">Leurs profils Steam sont peut-être privés (« Détails des jeux »).</p>
+      <p class="dim">
+        Leurs profils Steam sont peut-être privés (« Détails des jeux »), et personne n'a
+        encore partagé sa bibliothèque Torii.
+      </p>
     </div>
 
     <template v-else>
@@ -120,6 +126,9 @@ const selCount = computed(() => selected.value.size);
             <span v-else class="av-fb">{{ initials(f.name) }}</span>
           </span>
           <span class="fname">{{ f.name }}</span>
+          <!-- Ami connu par sa bibliothèque Torii seule : le dire, sinon on se demande
+               d'où sort quelqu'un qui n'est pas dans sa liste d'amis Steam. -->
+          <span v-if="f.steamId.startsWith('torii:')" class="fsrc">Torii</span>
           <span class="fcount">{{ f.commonCount }}</span>
         </button>
         <span v-if="privateCount" class="priv" :title="`${privateCount} ami(s) au profil privé`">
@@ -185,6 +194,11 @@ const selCount = computed(() => selected.value.size);
 .fchip.on { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); color: var(--text); }
 .fchip .all { padding: 0 6px; font-weight: 600; }
 .fchip .av { width: 24px; height: 24px; flex: none; border-radius: 50%; overflow: hidden; }
+.fsrc {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.03em; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-radius: 99px; padding: 1px 6px;
+}
 .fchip .av img, .fchip .av-fb { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; }
 .fchip .av-fb { background: linear-gradient(140deg, #6b6f7a, #3a3d47); color: #fff; font-size: 10px; font-weight: 700; font-family: var(--mono); }
 .fchip .fname { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

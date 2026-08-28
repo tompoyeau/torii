@@ -16,6 +16,12 @@ quoi, maintenant »). Base **D1** (SQLite).
 - **Aucun historique de jeu.** La présence porte sa date de péremption et n'est jamais
   archivée. On ne peut pas reconstituer qui a joué à quoi la semaine dernière — c'est
   volontaire, et c'est ce qui rend cette base peu intéressante à voler.
+- **Ce qu'on possède, en revanche, peut être conservé** — et c'est la seule donnée durable
+  du service. Une bibliothèque synchronisée dit ce que quelqu'un **possède**, jamais ce
+  qu'il joue ni quand. Rien n'est envoyé tant que la synchronisation n'est pas activée, et
+  aucun ami ne peut la lire tant que le partage ne l'est pas non plus (deux réglages
+  distincts, voir plus bas). Tout s'efface d'un appel, et la suppression du compte emporte
+  les objets R2 avant les lignes qui y mènent.
 - **Pas d'annuaire.** On ajoute un ami par **code d'ami**, jamais par e-mail : sinon
   tester une liste d'adresses suffirait à savoir qui utilise Torii. Les suggestions par
   SteamID exigent que **les deux** personnes se soient rendues découvrables.
@@ -54,10 +60,38 @@ npx wrangler secret put PEPPER
 > ⚠️ **La changer déconnecte tout le monde** et invalide les codes en cours : toutes les
 > empreintes stockées deviennent incomparables. C'est une valeur qu'on pose une fois.
 
-### 3. Déployer
+### 3. Créer le bucket des bibliothèques
+
+Les bibliothèques synchronisées vivent dans **R2** (un objet JSON par appareil), pas en D1
+— voir *Bibliothèques synchronisées* plus bas pour le pourquoi.
+
+```bash
+npx wrangler r2 bucket create torii-libraries
+```
+
+> ⚠️ **Ne lui donne aucun accès public.** Pas de domaine `r2.dev`, pas de domaine
+> personnalisé : le Worker est l'unique porte, c'est lui qui vérifie le jeton, l'amitié et
+> le partage. Un bucket public rendrait toutes les bibliothèques lisibles par qui devine
+> une URL.
+>
+> ℹ️ Activer R2 sur un compte Cloudflare demande de renseigner un moyen de paiement, même
+> pour rester dans l'offre gratuite (10 Go-mois de stockage, 1 M d'écritures et 10 M de
+> lectures par mois, trafic sortant gratuit). Rien n'est facturé tant qu'on reste dessous.
+
+### 4. Déployer
 
 ```bash
 npx wrangler deploy
+```
+
+### Faire évoluer une base déjà déployée
+
+`schema.sql` décrit la base **telle qu'on la créerait aujourd'hui** ; il ne modifie pas une
+base existante (tout y est en `IF NOT EXISTS`). Les changements de schéma vivent donc aussi
+dans `migrations/`, à appliquer une fois :
+
+```bash
+npx wrangler d1 execute torii --remote --file=migrations/0001_libraries.sql
 ```
 
 ## L'envoi des e-mails
@@ -157,6 +191,11 @@ Les routes privées attendent `Authorization: Bearer <jeton>`.
 | `POST /v1/friends/suggestions` | `{ steamIds }` → ceux qui sont sur Torii **et** découvrables. |
 | `PUT /v1/presence` | Publie son état **et renvoie le cercle complet**. |
 | `DELETE /v1/presence` | Disparaître immédiatement (mode invisible). |
+| `PUT /v1/library` | Dépose la bibliothèque d'un appareil (`{ deviceId, deviceName, digest, games }`). |
+| `GET /v1/library` | Index : mes appareils, et ceux des amis qui partagent. Aucune lecture R2. |
+| `GET /v1/library/{compte}/{appareil}` | La bibliothèque elle-même. Gère `If-None-Match` → `304`. |
+| `DELETE /v1/library/{appareil}` | Oublie un appareil (objet R2 compris). |
+| `DELETE /v1/library` | Cesser de synchroniser : tout part. |
 
 ### Pourquoi `PUT /v1/presence` renvoie les amis
 
@@ -175,8 +214,46 @@ plan payant).
 | `away` | Torii est ouvert mais la machine est inactive. |
 | `offline` | **Aucune présence reçue depuis 90 s** — donc Torii fermé, PC éteint ou hors ligne. Ça ne veut pas dire « ne joue pas ». |
 
-## À venir
+## Bibliothèques synchronisées
 
-La synchronisation de bibliothèque (pour l'application mobile) n'existe pas encore. C'est
-une donnée durable et volumineuse, à l'opposé de la présence : elle aura sa propre table,
-versionnée par appareil source, pour que deux PC ne s'effacent pas mutuellement.
+### Pourquoi R2, et pas une table de jeux
+
+Une ligne par jeu et par personne, c'est ~1 000 lignes écrites à chaque resynchronisation.
+Le plan gratuit D1 en offre **100 000 par jour** : une centaine de joueurs et le service
+s'arrête, pour 5 Go de stockage. Dans R2, la même bibliothèque est **un seul objet**
+(~120 Ko, une opération), les 10 Go gratuits en absorbent des dizaines de milliers, et le
+trafic sortant — celui que le mobile consommera — ne coûte rien.
+
+D1 garde en échange un **index minuscule** (table `libraries`) : une ligne par appareil,
+avec l'empreinte, la date et le nombre de jeux. C'est ce qui permet de savoir **sans rien
+télécharger** si une bibliothèque a changé. Ce que R2 ne sait pas faire — chercher — se
+fait côté client, comme `useFriendsCommon` croise déjà les jeux Steam.
+
+### Un objet par appareil
+
+Clé R2 : `lib/<compte>/<appareil>.json`. Deux PC n'ont pas la même bibliothèque (launchers
+connectés, jeux installés) ; s'ils écrivaient au même endroit, le dernier passé effacerait
+l'autre indéfiniment. « La bibliothèque de quelqu'un » est donc l'**union de ses appareils**,
+faite côté client. Cinq appareils par compte au maximum.
+
+### Synchroniser ≠ partager
+
+| Réglage | Où il vit | Ce qu'il ouvre |
+|---|---|---|
+| **Synchroniser** | côté client (`social_prefs.json`) | Envoyer sa bibliothèque au serveur, pour la retrouver sur ses **propres** appareils (le mobile). Rien ne part tant que c'est éteint. |
+| **Partager** | côté serveur (`accounts.share_library`, `PATCH /v1/me`) | Autoriser ses **amis acceptés** à la consulter. Éteint, elle reste lisible par soi seul. |
+
+Éteindre le partage ne supprime rien ; `DELETE /v1/library` si.
+
+### Ce qui est stocké
+
+Par jeu : la clé cross-launcher (`igdb:1942`, sinon `title:<titre normalisé>` — la même que
+la présence), le titre, les plateformes, la jaquette. **Rien d'autre** : le serveur
+normalise et tronque tout ce qu'il reçoit, et jette les champs qu'il ne connaît pas. Sans
+ça, une route authentifiée qui écrit dans R2 devient un hébergement de fichiers gratuit.
+
+### Économie de requêtes
+
+L'empreinte fournie par le client sert d'**ETag**. Un client à jour envoie `If-None-Match`
+et repart avec un `304` : ni lecture R2, ni transfert. Combiné à l'index (qui dit ce qui a
+bougé avant même de demander), une bibliothèque stable ne coûte pratiquement rien.

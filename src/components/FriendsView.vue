@@ -2,12 +2,15 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useFriends } from "../composables/useFriends";
 import { useFriendList, type UnifiedFriend } from "../composables/useFriendList";
+import type { ToriiStatus } from "../types";
 import { useLibrary } from "../composables/useLibrary";
 import { useTorii } from "../composables/useTorii";
 import { useUi } from "../composables/useUi";
+import { useFriendLibrary } from "../composables/useFriendLibrary";
 import { showToast } from "../composables/useToast";
 import { openExternal } from "../lib/tauri";
 import ToriiPanel from "./ToriiPanel.vue";
+import LibraryInvite from "./LibraryInvite.vue";
 
 const { loaded, steamConnected, refresh } = useFriends();
 const { inGame, online, offline, activeCount, loading } = useFriendList();
@@ -16,13 +19,31 @@ const {
   refresh: refreshTorii, invite, respond, setPresenceMode, removeFriend,
 } = useTorii();
 const { launchOrInstall } = useLibrary();
-const { openSettings, openGame } = useUi();
+const { openSettings, openGame, showFriendLibrary } = useUi();
+const { hasLibrary, devicesOf, refreshIndex } = useFriendLibrary();
+
+/**
+ * Cet ami partage-t-il sa bibliothèque ? Le bouton n'apparaît que là où il mène quelque
+ * part : proposer « voir sa bibliothèque » pour tomber sur un écran vide serait pire que
+ * de ne rien proposer du tout.
+ */
+function canSeeLibrary(f: UnifiedFriend): boolean {
+  return hasLibrary(f.toriiId);
+}
+
+function libraryHint(f: UnifiedFriend): string {
+  const total = devicesOf(f.toriiId ?? "").reduce((n, d) => n + d.gameCount, 0);
+  return `Voir les ${total} jeux que ${f.name} possède, tous launchers confondus.`;
+}
 
 /** La présence Torii arrive seule (battement de cœur) ; seul Steam doit être sondé. */
 let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => {
   void refresh();
   void refreshTorii();
+  // Un ami a pu activer le partage depuis le démarrage : on relit l'index en arrivant
+  // ici, plutôt que de le sonder en boucle pour une donnée qui bouge une fois par mois.
+  void refreshIndex();
   timer = setInterval(() => void refresh(), 60_000);
 });
 onBeforeUnmount(() => clearInterval(timer));
@@ -78,6 +99,9 @@ function stateLabel(f: UnifiedFriend): string {
  * infobulle : c'est une nuance utile, pas une information de premier plan.
  */
 function offlineHint(f: UnifiedFriend): string {
+  if (f.source === "both") {
+    return "Hors ligne sur Steam et Torii fermé : elle joue peut-être sans qu'on le voie.";
+  }
   return f.source === "torii"
     ? "Cette personne n'a pas Torii ouvert : elle joue peut-être sans qu'on le voie."
     : "Hors ligne sur Steam.";
@@ -89,23 +113,55 @@ function offlineHint(f: UnifiedFriend): string {
  * que ses jeux Steam ; un ami Torii montre tous ses launchers, mais seulement quand il a
  * l'application ouverte. J'avais réduit ça à un ⛩ sans explication — illisible.
  */
-const SOURCES = {
-  torii: {
-    court: "Torii",
-    aide: "Ami Torii : tu vois ses jeux quel que soit son launcher, tant qu'il a Torii ouvert.",
-  },
-  steam: {
-    court: "Steam",
-    aide: "Ami Steam : tu vois ses jeux Steam, même s'il n'a pas Torii. Cette liste vient de Steam et se gère depuis Steam.",
-  },
-  both: {
-    court: "Torii + Steam",
-    aide: "Ami des deux côtés : Torii pour tous ses launchers, Steam quand Torii est fermé.",
-  },
-} as const;
+/**
+ * Pastilles de source, **une par canal**, qui disent à la fois d'où vient la relation ET
+ * si la personne y est connectée en ce moment.
+ *
+ * 🔑 Une seule pastille « Torii + Steam » ne suffisait pas : quelqu'un d'ami des deux
+ * côtés peut être en ligne sur Steam avec Torii fermé — auquel cas Torii ne voit rien de
+ * ce qu'il joue — et l'inverse est tout aussi courant. La pastille éteinte le dit.
+ */
+function etatSource(canal: "steam" | "torii", etat: ToriiStatus | null) {
+  const ou = canal === "steam" ? "sur Steam" : "sur Torii";
+  switch (etat) {
+    case "in-game":
+      return { live: true, phrase: `En jeu, vu ${ou}` };
+    case "online":
+      return { live: true, phrase: `En ligne ${ou}` };
+    case "away":
+      return { live: true, phrase: `Absent ${ou}` };
+    default:
+      return {
+        live: false,
+        phrase: canal === "steam"
+          ? "Hors ligne sur Steam"
+          : "Torii fermé : ce qu'il joue hors Steam reste invisible",
+      };
+  }
+}
 
-function source(f: UnifiedFriend) {
-  return SOURCES[f.source];
+/** Les canaux par lesquels on connaît cette personne, avec leur état courant. */
+function sources(f: UnifiedFriend) {
+  const liste: { key: "steam" | "torii"; label: string; live: boolean; title: string }[] = [];
+  if (f.toriiState !== null) {
+    const e = etatSource("torii", f.toriiState);
+    liste.push({
+      key: "torii",
+      label: "Torii",
+      live: e.live,
+      title: `${e.phrase}. Ami Torii : tu vois ses jeux quel que soit son launcher, tant qu'il a Torii ouvert.`,
+    });
+  }
+  if (f.steamState !== null) {
+    const e = etatSource("steam", f.steamState);
+    liste.push({
+      key: "steam",
+      label: "Steam",
+      live: e.live,
+      title: `${e.phrase}. Ami Steam : cette liste vient de Steam et se gère depuis Steam.`,
+    });
+  }
+  return liste;
 }
 
 const failed = ref(new Set<string>());
@@ -316,6 +372,8 @@ onBeforeUnmount(() => {
 
     <!-- Connexion Torii : proposée seulement tant qu'il n'y a pas de compte -->
     <ToriiPanel v-if="!toriiConnected" />
+    <!-- Connecté mais bibliothèque jamais partagée : on le propose ici, une fois. -->
+    <LibraryInvite v-else />
 
     <!-- Demandes reçues -->
     <section v-if="circle.incoming.length" class="requests">
@@ -360,10 +418,23 @@ onBeforeUnmount(() => {
                      manquante plutôt que comme une différence de source. -->
                 <span class="who-when">
                   en ce moment
-                  <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
+                  <span
+                    v-for="s in sources(f)"
+                    :key="s.key"
+                    class="src"
+                    :class="[s.key, { off: !s.live }]"
+                    :title="s.title"
+                  >{{ s.label }}</span>
                 </span>
               </span>
             </button>
+            <button
+              v-if="canSeeLibrary(f) && confirmKey !== f.key"
+              class="icon-lib card-lib"
+              :title="libraryHint(f)"
+              :aria-label="libraryHint(f)"
+              @click.stop="showFriendLibrary(f.toriiId!)"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.5" y="4" width="6" height="16" rx="1.4" /><rect x="11.5" y="4" width="6" height="16" rx="1.4" /><path d="M19.5 6.6l1.9 15.2" /></svg></button>
             <button
               v-if="canRemove(f) && confirmKey !== f.key"
               class="icon-remove card-remove"
@@ -400,20 +471,35 @@ onBeforeUnmount(() => {
                 <span class="dot" :class="f.state" />
               </span>
               <span class="row-name">{{ f.name }}</span>
-              <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
+              <span
+                v-for="s in sources(f)"
+                :key="s.key"
+                class="src"
+                :class="[s.key, { off: !s.live }]"
+                :title="s.title"
+              >{{ s.label }}</span>
               <span class="row-state" :class="f.state">{{ stateLabel(f) }}</span>
             </button>
             <div v-if="confirmKey === f.key" class="confirm" @click.stop>
               <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
               <button class="c-no" @click="confirmKey = null">Annuler</button>
             </div>
-            <button
-              v-else-if="canRemove(f)"
-              class="icon-remove"
-              :title="removeHint(f)"
-              :aria-label="removeHint(f)"
-              @click.stop="confirmKey = f.key"
-            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+            <template v-else>
+              <button
+                v-if="canSeeLibrary(f)"
+                class="icon-lib"
+                :title="libraryHint(f)"
+                :aria-label="libraryHint(f)"
+                @click.stop="showFriendLibrary(f.toriiId!)"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.5" y="4" width="6" height="16" rx="1.4" /><rect x="11.5" y="4" width="6" height="16" rx="1.4" /><path d="M19.5 6.6l1.9 15.2" /></svg></button>
+              <button
+                v-if="canRemove(f)"
+                class="icon-remove"
+                :title="removeHint(f)"
+                :aria-label="removeHint(f)"
+                @click.stop="confirmKey = f.key"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+            </template>
           </div>
         </div>
       </section>
@@ -433,20 +519,35 @@ onBeforeUnmount(() => {
                 <span class="dot offline" />
               </span>
               <span class="row-name">{{ f.name }}</span>
-              <span class="src" :class="f.source" :title="source(f).aide">{{ source(f).court }}</span>
+              <span
+                v-for="s in sources(f)"
+                :key="s.key"
+                class="src"
+                :class="[s.key, { off: !s.live }]"
+                :title="s.title"
+              >{{ s.label }}</span>
               <span class="row-state">{{ f.source === "torii" ? "Torii fermé" : "Hors ligne" }}</span>
             </button>
             <div v-if="confirmKey === f.key" class="confirm" @click.stop>
               <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
               <button class="c-no" @click="confirmKey = null">Annuler</button>
             </div>
-            <button
-              v-else-if="canRemove(f)"
-              class="icon-remove"
-              :title="removeHint(f)"
-              :aria-label="removeHint(f)"
-              @click.stop="confirmKey = f.key"
-            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+            <template v-else>
+              <button
+                v-if="canSeeLibrary(f)"
+                class="icon-lib"
+                :title="libraryHint(f)"
+                :aria-label="libraryHint(f)"
+                @click.stop="showFriendLibrary(f.toriiId!)"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.5" y="4" width="6" height="16" rx="1.4" /><rect x="11.5" y="4" width="6" height="16" rx="1.4" /><path d="M19.5 6.6l1.9 15.2" /></svg></button>
+              <button
+                v-if="canRemove(f)"
+                class="icon-remove"
+                :title="removeHint(f)"
+                :aria-label="removeHint(f)"
+                @click.stop="confirmKey = f.key"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
+            </template>
           </div>
         </div>
       </section>
@@ -659,6 +760,19 @@ onBeforeUnmount(() => {
 .icon-remove svg { width: 15px; height: 15px; }
 .card-remove { position: absolute; top: 10px; right: 10px; z-index: 1; }
 
+/* Accès à la bibliothèque d'un ami : même gabarit que la corbeille (apparaît au survol),
+   mais en couleur d'accent — c'est une action qu'on propose, pas une qu'on redoute. */
+.icon-lib {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px;
+  border-radius: 9px; cursor: pointer; color: var(--text-faint);
+  background: none; border: 1px solid transparent; opacity: 0; transition: opacity 0.12s;
+}
+.row-shell:hover .icon-lib, .card:hover .icon-lib, .icon-lib:focus-visible { opacity: 1; }
+.icon-lib:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.icon-lib svg { width: 15px; height: 15px; }
+/* Sur une carte « en jeu », elle se range à gauche de la corbeille. */
+.card-lib { position: absolute; top: 10px; right: 44px; z-index: 1; }
+
 .confirm { display: flex; align-items: center; gap: 6px; flex: none; }
 .card-confirm { margin-top: auto; }
 .c-text { font-size: 12.5px; color: var(--text-dim); margin-right: auto; }
@@ -696,11 +810,9 @@ onBeforeUnmount(() => {
 }
 .src.torii { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, transparent); }
 .src.steam { color: var(--steam); border-color: color-mix(in srgb, var(--steam) 32%, transparent); }
-.src.both {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
-  background: color-mix(in srgb, var(--steam) 12%, var(--surface-2));
-}
+/* Canal connu mais personne pas connectée dessus : la pastille reste lisible (la
+   relation existe toujours) tout en cessant d'affirmer une présence. */
+.src.off { color: var(--text-faint); border-color: transparent; opacity: 0.65; }
 .who-when { display: flex; align-items: center; gap: 7px; }
 
 /* ── Avatars ─────────────────────────────────────────── */

@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod metadata;
 pub mod journal;
+pub mod libsync;
 pub mod models;
 pub mod procwatch;
 pub mod social;
@@ -1134,6 +1135,22 @@ async fn scan_library(app: tauri::AppHandle) -> Vec<GameDto> {
     }
     // Un jeu installé depuis le dernier scan devient détectable immédiatement.
     procwatch::set_targets(&app, &games);
+
+    // La bibliothèque vient d'être recalculée : si la synchronisation est active et que
+    // quelque chose a bougé, on la dépose. En tâche de fond et sans jamais faire échouer
+    // le scan — personne n'a demandé un aller-retour réseau en ouvrant l'application, et
+    // `sync` ne renvoie une erreur que si l'envoi lui-même a échoué (éteint ou déconnecté
+    // sont des situations normales, pas des pannes).
+    if let Ok(dir) = app.path().app_config_dir() {
+        let a_deposer = games.clone();
+        std::thread::spawn(move || match libsync::sync(&dir, &a_deposer, false) {
+            Ok(r) if r.uploaded => {
+                journal::write(&dir, "INFO", &format!("bibliothèque synchronisée ({} jeux)", r.game_count));
+            }
+            Err(e) => journal::write(&dir, "ERREUR", &format!("synchronisation de la bibliothèque : {e}")),
+            _ => {}
+        });
+    }
     games
 }
 
@@ -1400,13 +1417,15 @@ async fn torii_set_profile(
     display_name: Option<String>,
     steam_id: Option<String>,
     steam_discoverable: Option<bool>,
+    share_library: Option<bool>,
 ) -> Result<social::Account, String> {
     let dir = social_dir(&app)?;
     Ok(offload!(social::set_profile(
         &dir,
         display_name,
         steam_id,
-        steam_discoverable
+        steam_discoverable,
+        share_library
     ))?)
 }
 
@@ -1477,6 +1496,77 @@ fn torii_set_prefs(
     let dir = social_dir(&app)?;
     social::save_prefs(&dir, &prefs)?;
     Ok(prefs)
+}
+
+/// Envoie la bibliothèque maintenant (bouton « Synchroniser »). `force` réenvoie même
+/// si rien n'a changé — utile quand le serveur a perdu l'objet ou qu'on veut vérifier.
+#[tauri::command]
+async fn library_sync(app: tauri::AppHandle, force: bool) -> Result<libsync::SyncResult, String> {
+    let dir = social_dir(&app)?;
+    let games = app
+        .state::<LastScan>()
+        .0
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default();
+    // Aucun scan en mémoire (envoi demandé avant le premier scan) : on repart du cache
+    // disque plutôt que de refuser — c'est exactement ce que le front affiche.
+    let games = if games.is_empty() {
+        platforms::library_cache::load(&dir)
+    } else {
+        games
+    };
+    Ok(offload!(libsync::sync(&dir, &games, force))?)
+}
+
+/// Index des bibliothèques : mes appareils, et ceux des amis qui partagent.
+#[tauri::command]
+async fn library_index(app: tauri::AppHandle) -> Result<libsync::LibraryIndex, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(libsync::index(&dir))?)
+}
+
+/// La bibliothèque d'un appareil (le mien, ou celui d'un ami qui partage).
+#[tauri::command]
+async fn library_of(
+    app: tauri::AppHandle,
+    account_id: String,
+    device_id: String,
+) -> Result<libsync::Snapshot, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(libsync::fetch(&dir, &account_id, &device_id))?)
+}
+
+/// Oublie un appareil côté serveur (objet R2 compris).
+#[tauri::command]
+async fn library_forget_device(app: tauri::AppHandle, device_id: String) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(libsync::forget_device(&dir, &device_id))?)
+}
+
+/// Active ou coupe la synchronisation. 🔑 La couper **efface** ce qui est déjà sur le
+/// serveur : laisser derrière soi une bibliothèque qu'on a cessé de tenir à jour serait
+/// pire que de ne rien envoyer — les amis verraient un état figé sans le savoir.
+#[tauri::command]
+async fn library_set_sync(app: tauri::AppHandle, enabled: bool) -> Result<libsync::SyncResult, String> {
+    let dir = social_dir(&app)?;
+    let mut prefs = social::load_prefs(&dir);
+    prefs.sync_library = enabled;
+    social::save_prefs(&dir, &prefs)?;
+
+    if !enabled {
+        // Best-effort : hors ligne, l'option s'éteint quand même côté client (plus rien
+        // ne partira), et le serveur sera nettoyé au prochain passage réussi.
+        let dir2 = dir.clone();
+        let _ = offload!(libsync::forget_all(&dir2));
+        return Ok(libsync::SyncResult {
+            uploaded: false,
+            game_count: 0,
+            digest: String::new(),
+            skipped: Some("off".into()),
+        });
+    }
+    library_sync(app, true).await
 }
 
 /// Jeux qu'on ne diffuse jamais aux amis (applications permanentes, jeux privés).
@@ -1770,6 +1860,11 @@ pub fn run() {
             torii_set_prefs,
             torii_muted_games,
             torii_mute_game,
+            library_sync,
+            library_index,
+            library_of,
+            library_forget_device,
+            library_set_sync,
             notify_user
         ])
         .run(tauri::generate_context!())

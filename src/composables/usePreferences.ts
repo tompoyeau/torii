@@ -24,6 +24,12 @@ interface Prefs {
   returnOnGameExit: boolean;
   /** Notifier quand un jeu de la wishlist passe en promo ou atteint son plus bas historique. */
   wishlistNotifications: boolean;
+  /**
+   * L'invitation à partager sa bibliothèque a été écartée. 🔑 Une proposition se fait une
+   * fois : la reproposer à chaque ouverture de la vue Amis transformerait une suggestion
+   * en harcèlement — même principe que `steamAutoLinked` côté Rust.
+   */
+  libraryInviteDismissed: boolean;
 }
 
 const DEFAULTS: Prefs = {
@@ -34,6 +40,7 @@ const DEFAULTS: Prefs = {
   reduceMotion: false,
   returnOnGameExit: false,
   wishlistNotifications: false,
+  libraryInviteDismissed: false,
 };
 
 const KEY = "ludo-prefs";

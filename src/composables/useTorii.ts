@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import {
   getSettings,
+  libraryForgetDevice, libraryIndex as fetchLibraryIndex, librarySetSync, librarySync,
   onToriiCircle, toriiCircle, toriiInvite, toriiInviteAccount, toriiLogout, toriiMe,
   toriiMutedGames, toriiMuteGame, toriiPrefs, toriiRemoveFriend, toriiRequestCode,
   toriiDeleteAccount, toriiRespond, toriiRotateCode, toriiSetPrefs, toriiSetProfile,
@@ -8,7 +9,7 @@ import {
   toriiSuggestions, toriiVerify,
 } from "../lib/tauri";
 import type { ToriiPerson } from "../types";
-import type { PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
+import type { LibraryIndex, PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
 
 /**
  * État du réseau Torii (compte, amis, présence, réglages de partage).
@@ -27,6 +28,7 @@ const prefs = ref<SocialPrefs>({
   awayAfterMinutes: 10,
   notifyFriendLaunch: true,
   steamAutoLinked: false,
+  syncLibrary: false,
 });
 const mutedGames = ref<string[]>([]);
 /** Amis Steam qui se trouvent avoir un compte Torii découvrable. */
@@ -61,6 +63,11 @@ async function start() {
   if (account.value) {
     void reconcilierSteam();
     void refresh();
+    // 🔑 L'index des bibliothèques est chargé ici et pas seulement à l'ouverture des
+    // Réglages : c'est lui qui dit quels amis partagent, donc sur quelles fiches proposer
+    // « voir sa bibliothèque ». Sans ça, le bouton n'apparaissait qu'après un détour par
+    // les Réglages — c'est-à-dire jamais.
+    void refreshLibraryIndex().catch(() => {});
   }
   unlisten = await onToriiCircle((next) => {
     circle.value = next;
@@ -246,6 +253,60 @@ function isMuted(gameId: string): boolean {
   return mutedGames.value.includes(gameId);
 }
 
+/* ── Bibliothèque synchronisée ─────────────────────────────────────────────── */
+
+/**
+ * Index des bibliothèques : mes appareils, et ceux des amis qui partagent. Ne contient
+ * aucun jeu — juste de quoi savoir ce qui existe et quand ça a bougé.
+ */
+const libraryIndex = ref<LibraryIndex>({ mine: [], friends: [] });
+const librarySyncing = ref(false);
+
+async function refreshLibraryIndex() {
+  libraryIndex.value = await fetchLibraryIndex();
+}
+
+/**
+ * Active ou coupe l'envoi de sa bibliothèque.
+ *
+ * 🔑 La couper **efface** ce qui est déjà sur le serveur (côté Rust) : une bibliothèque
+ * figée que les amis continueraient de voir serait pire que pas de bibliothèque du tout.
+ */
+async function setLibrarySync(enabled: boolean) {
+  librarySyncing.value = true;
+  try {
+    await librarySetSync(enabled);
+    prefs.value = await toriiPrefs();
+    await refreshLibraryIndex();
+  } finally {
+    librarySyncing.value = false;
+  }
+}
+
+/** Renvoie la bibliothèque même si rien n'a changé (bouton « Synchroniser maintenant »). */
+async function syncLibraryNow() {
+  librarySyncing.value = true;
+  try {
+    const res = await librarySync(true);
+    prefs.value = await toriiPrefs();
+    await refreshLibraryIndex();
+    return res;
+  } finally {
+    librarySyncing.value = false;
+  }
+}
+
+/** Autorise (ou non) les amis à consulter ma bibliothèque. Ne change rien à l'envoi. */
+async function setShareLibrary(enabled: boolean) {
+  account.value = await toriiSetProfile({ shareLibrary: enabled });
+}
+
+/** Oublie un autre appareil (un ancien PC dont la bibliothèque traîne encore). */
+async function forgetDevice(deviceId: string) {
+  await libraryForgetDevice(deviceId);
+  await refreshLibraryIndex();
+}
+
 /* ── Amis ──────────────────────────────────────────────────────────────────── */
 
 /**
@@ -332,6 +393,13 @@ export function useTorii() {
     setSteamLink,
     reconcilierSteam,
     setPrefs,
+    libraryIndex,
+    librarySyncing,
+    refreshLibraryIndex,
+    setLibrarySync,
+    setShareLibrary,
+    syncLibraryNow,
+    forgetDevice,
     setPresenceMode,
     setMuted,
     isMuted,

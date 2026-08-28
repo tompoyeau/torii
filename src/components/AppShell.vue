@@ -11,6 +11,7 @@ import GameCard from "./GameCard.vue";
 import StoreView from "./StoreView.vue";
 import FriendsView from "./FriendsView.vue";
 import CommonView from "./CommonView.vue";
+import FriendLibraryView from "./FriendLibraryView.vue";
 import WishlistView from "./WishlistView.vue";
 
 const { filtered, games } = useLibrary();
@@ -98,6 +99,7 @@ function title(f: LibraryFilter): string {
       <StoreView v-if="section === 'store'" />
       <FriendsView v-else-if="section === 'friends'" />
       <CommonView v-else-if="section === 'common'" />
+      <FriendLibraryView v-else-if="section === 'friendLibrary'" />
       <WishlistView v-else-if="section === 'wishlist'" />
       <template v-else>
       <HeroFeatured />

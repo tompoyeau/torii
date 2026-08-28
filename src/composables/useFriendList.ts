@@ -29,6 +29,16 @@ export interface UnifiedFriend {
   /** Début de la partie (Unix) — connu seulement via Torii. */
   since: number | null;
   source: "steam" | "torii" | "both";
+  /**
+   * État **par source**, `null` quand la personne n'est pas amie de ce côté.
+   *
+   * 🔑 `state` (au-dessus) est l'agrégat — le plus « présent » des deux — et sert au
+   * classement. Mais il efface d'où vient la présence : quelqu'un d'ami des deux côtés,
+   * en ligne sur Steam et Torii fermé, était affiché « en ligne » sans qu'on puisse
+   * savoir que Torii ne voit rien de ce qu'il joue. Ces deux champs le disent.
+   */
+  steamState: ToriiStatus | null;
+  toriiState: ToriiStatus | null;
   /** Page de profil Steam, quand la personne vient de là. */
   profileUrl: string | null;
   /** Identifiant Torii, pour retirer l'ami ou répondre à sa demande. */
@@ -76,6 +86,8 @@ function fromSteam(f: Friend): UnifiedFriend {
     name: f.name,
     avatarUrl: f.avatarUrl,
     state: normalizeSteamState(f.state),
+    steamState: normalizeSteamState(f.state),
+    toriiState: null,
     gameName: f.gameName ?? null,
     since: null,
     source: "steam",
@@ -91,6 +103,8 @@ function fromTorii(f: ToriiFriend): UnifiedFriend {
     name: f.displayName,
     avatarUrl: "",
     state: f.status,
+    steamState: null,
+    toriiState: f.status,
     gameName: f.gameTitle ?? null,
     since: f.since ?? null,
     source: "torii",
@@ -110,6 +124,10 @@ function merge(steam: UnifiedFriend, torii: UnifiedFriend): UnifiedFriend {
   return {
     ...best,
     key: torii.key,
+    // Les deux états sont conservés tels quels : c'est ce qui permet de dire « en ligne
+    // sur Steam, Torii fermé » plutôt qu'un « en ligne » qui ne dit pas où.
+    steamState: steam.steamState,
+    toriiState: torii.toriiState,
     // Le nom Steam est celui que les gens reconnaissent ; l'avatar n'existe que là.
     name: steam.name || torii.name,
     avatarUrl: steam.avatarUrl,

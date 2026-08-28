@@ -25,7 +25,59 @@ const {
   setPrefs: setToriiPrefs, setPresenceMode, setMuted, setSteamLink, logout: toriiLogout,
   deleteAccount: toriiDeleteAccount,
   findSteamFriends, inviteAccount, rotateCode, setDisplayName,
+  libraryIndex: toriiLibrary, librarySyncing, refreshLibraryIndex,
+  setLibrarySync, setShareLibrary, syncLibraryNow, forgetDevice,
 } = useTorii();
+
+/* ── Bibliothèque synchronisée ─────────────────────────────────────────────── */
+
+/** Dernier refus du serveur sur la synchronisation, affiché sous les interrupteurs. */
+const libraryError = ref<string | null>(null);
+
+/** Cet appareil tel que le serveur le connaît. Null tant que rien n'est parti. */
+const myDevice = computed(
+  () => toriiLibrary.value.mine.find((d) => d.deviceId === toriiPrefs.value.deviceId) ?? null,
+);
+/** Les autres PC du même compte : un ancien portable dont la bibliothèque traîne encore. */
+const otherDevices = computed(
+  () => toriiLibrary.value.mine.filter((d) => d.deviceId !== toriiPrefs.value.deviceId),
+);
+
+/** « il y a 3 min » — un horodatage brut ne dit rien à quelqu'un qui vérifie un envoi. */
+function sinceLabel(timestamp: number): string {
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
+  if (s < 90) return "à l'instant";
+  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
+  return `il y a ${Math.round(s / 86400)} j`;
+}
+
+async function withLibrary(action: () => Promise<unknown>) {
+  libraryError.value = null;
+  try {
+    await action();
+  } catch (e) {
+    libraryError.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+const onToggleLibrarySync = () =>
+  withLibrary(async () => {
+    const on = !toriiPrefs.value.syncLibrary;
+    await setLibrarySync(on);
+    showToast(on ? "Bibliothèque synchronisée." : "Synchronisation coupée, bibliothèque effacée du serveur.");
+  });
+
+const onToggleShareLibrary = () =>
+  withLibrary(() => setShareLibrary(!toriiAccount.value?.shareLibrary));
+
+const onSyncLibraryNow = () =>
+  withLibrary(async () => {
+    const res = await syncLibraryNow();
+    showToast(res.uploaded ? `Bibliothèque envoyée (${res.gameCount} jeux).` : "Rien à envoyer.");
+  });
+
+const onForgetDevice = (deviceId: string) => withLibrary(() => forgetDevice(deviceId));
 
 /** Pseudo en cours d'édition (non enregistré tant qu'on ne valide pas). */
 const pseudoDraft = ref("");
@@ -232,6 +284,8 @@ const autostartBusy = ref(false);
 const startMinimized = ref(false);
 const closeToTray = ref(false);
 async function refreshSystemPrefs() {
+  // L'index des bibliothèques suit le même chemin : il a pu changer depuis un autre PC.
+  if (toriiConnected.value) void refreshLibraryIndex().catch(() => {});
   // Relu à chaque ouverture : quelqu'un qui vient de connecter Steam ne doit pas avoir
   // à redémarrer Torii pour que « visible par mes amis Steam » devienne cliquable.
   mySteamId.value = (await getSettings())?.steamId ?? null;
@@ -691,6 +745,88 @@ function unhide(id: string) {
 
               <div class="divider" />
 
+              <h3 class="sub-title">Ma bibliothèque</h3>
+              <p class="pane-hint">
+                Ce que tu possèdes, déposé sur le serveur pour le retrouver sur tes autres
+                appareils — et le montrer à tes amis, quel que soit le launcher. Les jeux
+                masqués et ceux marqués « ne pas diffuser » n'en font jamais partie.
+              </p>
+
+              <button
+                class="pref toggle-row"
+                role="switch"
+                :aria-checked="toriiPrefs.syncLibrary"
+                :disabled="librarySyncing"
+                @click="onToggleLibrarySync"
+              >
+                <div class="row-text">
+                  <span class="row-title">Synchroniser ma bibliothèque</span>
+                  <span class="row-sub">
+                    Elle part après un scan, et seulement si elle a changé depuis la
+                    dernière fois. La couper l'efface du serveur.
+                  </span>
+                </div>
+                <span class="switch" :class="{ on: toriiPrefs.syncLibrary }"><span class="knob" /></span>
+              </button>
+
+              <button
+                class="pref toggle-row spaced"
+                role="switch"
+                :aria-checked="!!toriiAccount?.shareLibrary"
+                :disabled="!toriiPrefs.syncLibrary"
+                @click="onToggleShareLibrary"
+              >
+                <div class="row-text">
+                  <span class="row-title">Visible par mes amis Torii</span>
+                  <span class="row-sub">
+                    <template v-if="toriiPrefs.syncLibrary">
+                      Tes amis voient ce que tu possèdes, Steam ou non. Éteint, ta
+                      bibliothèque ne sert qu'à toi et à tes propres appareils.
+                    </template>
+                    <template v-else>
+                      Active d'abord la synchronisation : sans elle, il n'y a rien à montrer.
+                    </template>
+                  </span>
+                </div>
+                <span class="switch" :class="{ on: toriiAccount?.shareLibrary }"><span class="knob" /></span>
+              </button>
+
+              <p v-if="libraryError" class="row-error" role="alert">{{ libraryError }}</p>
+
+              <template v-if="toriiPrefs.syncLibrary">
+                <p class="sync-state">
+                  <template v-if="myDevice">
+                    {{ myDevice.gameCount }} jeux envoyés depuis « {{ myDevice.deviceName }} »,
+                    {{ sinceLabel(myDevice.updatedAt) }}.
+                  </template>
+                  <template v-else>Rien n'a encore été envoyé depuis cet appareil.</template>
+                </p>
+                <div class="row-actions">
+                  <button class="ghost-btn" :disabled="librarySyncing" @click="onSyncLibraryNow">
+                    {{ librarySyncing ? "Envoi…" : "Synchroniser maintenant" }}
+                  </button>
+                </div>
+
+                <template v-if="otherDevices.length">
+                  <h3 class="sub-title">Mes autres appareils</h3>
+                  <p class="pane-hint">
+                    Tes amis voient l'ensemble de tes appareils comme une seule
+                    bibliothèque. Retirer un vieux PC efface la sienne du serveur.
+                  </p>
+                  <div class="items">
+                    <div v-for="d in otherDevices" :key="d.deviceId" class="item">
+                      <div class="item-text">
+                        <span class="item-title">{{ d.deviceName }}</span>
+                        <span class="item-sub">{{ d.gameCount }} jeux · {{ sinceLabel(d.updatedAt) }}</span>
+                      </div>
+                      <button class="ghost-btn" @click="onForgetDevice(d.deviceId)">Retirer</button>
+                    </div>
+                  </div>
+                </template>
+              </template>
+
+              <div class="divider" />
+
               <button
                 class="pref toggle-row"
                 role="switch"
@@ -827,6 +963,9 @@ function unhide(id: string) {
 .spane-inner { padding: 30px 40px 32px; max-width: 760px; }
 .pane-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 20px; }
 .pane-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: -10px 0 20px; }
+/* ⚠️ PAS `.pane-hint` : celui-ci porte un `margin-top` négatif pour se glisser sous un
+   titre, et remonterait dans l'interrupteur qui précède cette ligne d'état. */
+.sync-state { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 14px 0 0; }
 
 /* Préférences */
 .pref { display: flex; align-items: center; gap: 16px; }
@@ -866,6 +1005,8 @@ function unhide(id: string) {
 }
 .toggle-row { width: 100%; text-align: left; background: none; border: none; padding: 0; cursor: pointer; }
 .toggle-row:disabled { cursor: default; opacity: 0.6; }
+/* Deux interrupteurs qui vont ensemble : groupés sans séparateur, mais pas collés. */
+.toggle-row.spaced { margin-top: 14px; }
 .divider { height: 1px; background: var(--border); margin: 18px 0; }
 
 .switch {

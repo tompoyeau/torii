@@ -15,6 +15,14 @@ binding = "DB"
 database_name = "torii"
 database_id = "31434d10-7937-4902-a05b-96e2b2328f04"  # remplacé par 
 
+# Bibliothèques synchronisées : un objet JSON par appareil (`lib/<compte>/<appareil>.json`).
+# Elles ne sont PAS en D1 — une ligne par jeu épuiserait le quota d'écritures (cf. src/library.js).
+# ⚠️ Le bucket doit rester PRIVÉ : aucun domaine public `r2.dev`, aucune règle d'accès. Le
+# Worker est la seule porte, c'est lui qui vérifie le jeton, l'amitié et le partage.
+[[r2_buckets]]
+binding = "LIBS"
+bucket_name = "torii-libraries"
+
 # Envoi des codes de connexion. Nécessite un domaine à toi, onboardé via
 # `npx wrangler email sending enable <ton-domaine>`. Tant que ce n'est pas fait,
 # laisse la ligne commentée et utilise le secret DEV_CODES=1 (cf. README).

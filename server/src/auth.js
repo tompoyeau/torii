@@ -12,6 +12,7 @@ import {
   body, clamp, fail, hash, json, looksLikeEmail, newFriendCode, newId,
   normalizeEmail, now, randomCode, randomToken, sameHash,
 } from "./lib.js";
+import { forgetAllLibraries } from "./library.js";
 
 /** Validité d'un code de connexion. Assez court pour limiter la fenêtre d'attaque. */
 const CODE_TTL = 10 * 60;
@@ -204,7 +205,8 @@ export async function verifyCode(request, env) {
   await env.DB.prepare("DELETE FROM login_codes WHERE email = ?").bind(email).run();
 
   let account = await env.DB.prepare(
-    "SELECT id, email, display_name, friend_code, steam_id, steam_discoverable FROM accounts WHERE email = ?",
+    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library
+       FROM accounts WHERE email = ?`,
   )
     .bind(email)
     .first();
@@ -236,6 +238,7 @@ export async function verifyCode(request, env) {
       friend_code: newFriendCode(),
       steam_id: null,
       steam_discoverable: 0,
+      share_library: 0,
     };
     await env.DB.prepare(
       `INSERT INTO accounts (id, email, display_name, friend_code, created_at)
@@ -276,7 +279,8 @@ export async function signup(request, env) {
   // Un laissez-passer rejoué, ou deux fenêtres ouvertes en même temps : le compte déjà
   // créé l'emporte, et on se contente d'ouvrir une session dessus. Jamais de doublon.
   let account = await env.DB.prepare(
-    "SELECT id, email, display_name, friend_code, steam_id, steam_discoverable FROM accounts WHERE email = ?",
+    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library
+       FROM accounts WHERE email = ?`,
   )
     .bind(email)
     .first();
@@ -290,6 +294,7 @@ export async function signup(request, env) {
       friend_code: newFriendCode(),
       steam_id: null,
       steam_discoverable: 0,
+      share_library: 0,
     };
     await env.DB.prepare(
       `INSERT INTO accounts (id, email, display_name, friend_code, created_at)
@@ -324,6 +329,13 @@ export async function signup(request, env) {
 export async function deleteMe(request, env, session) {
   const id = session.accountId;
   const email = session.account.email;
+
+  // 🔑 R2 d'abord, et hors de la transaction : les lignes d'index sont la seule carte qui
+  // mène aux objets. Effacer le compte avant eux laisserait des bibliothèques dans le
+  // bucket sans plus rien pour les désigner. Si R2 refuse, l'appel échoue ici et la
+  // suppression se rejoue — mieux qu'un compte effacé dont les données survivent.
+  await forgetAllLibraries(env, id);
+
   await env.DB.batch([
     env.DB.prepare("DELETE FROM presence WHERE account_id = ?").bind(id),
     // Les deux sens : une amitié est une seule ligne, orientée par qui a demandé.
@@ -355,7 +367,7 @@ export async function authenticate(request, env) {
   const tokenHash = await hash(token, env.PEPPER);
   const row = await env.DB.prepare(
     `SELECT s.token_hash, s.account_id, a.id, a.email, a.display_name, a.friend_code,
-            a.steam_id, a.steam_discoverable
+            a.steam_id, a.steam_discoverable, a.share_library
        FROM sessions s JOIN accounts a ON a.id = s.account_id
       WHERE s.token_hash = ?`,
   )
@@ -418,6 +430,13 @@ export async function updateMe(request, env, session) {
     patch.push("steam_discoverable = ?");
     values.push(data.steamDiscoverable ? 1 : 0);
   }
+  // Éteindre le partage ne supprime rien : la bibliothèque reste disponible pour les
+  // propres appareils de la personne, elle cesse seulement d'être lisible par ses amis.
+  // C'est `DELETE /v1/library` qui efface, et lui seul.
+  if ("shareLibrary" in data) {
+    patch.push("share_library = ?");
+    values.push(data.shareLibrary ? 1 : 0);
+  }
   if (!patch.length) return json({ account: publicAccount(session.account) });
 
   values.push(session.accountId);
@@ -439,7 +458,8 @@ export async function updateMe(request, env, session) {
   }
 
   const fresh = await env.DB.prepare(
-    "SELECT id, email, display_name, friend_code, steam_id, steam_discoverable FROM accounts WHERE id = ?",
+    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library
+       FROM accounts WHERE id = ?`,
   )
     .bind(session.accountId)
     .first();
@@ -455,5 +475,8 @@ export function publicAccount(row) {
     friendCode: row.friend_code,
     steamId: row.steam_id || null,
     steamDiscoverable: !!row.steam_discoverable,
+    // Mes amis peuvent-ils consulter ma bibliothèque ? Ne dit rien de la synchronisation
+    // elle-même, qui est une préférence locale du client (cf. src/library.js).
+    shareLibrary: !!row.share_library,
   };
 }

@@ -411,6 +411,154 @@ cargo run --example community        # jeux possédés + famille (via session st
 - ⚠️ Le SteamID d'un ami n'est renvoyé dans le cercle que s'il est découvrable : c'est ce
   champ qui permet à `useFriendList` de fusionner sa ligne Torii et sa ligne Steam.
 
+### Bibliothèques synchronisées — `server/src/library.js` + `libsync.rs` + vue Amis
+
+- **Charge utile dans R2, index dans D1.** Une ligne par jeu et par personne = ~1 000
+  écritures D1 par resynchronisation, contre 100 000/jour offertes : le service s'arrêterait
+  à une centaine de joueurs. Dans R2 c'est **un objet par appareil**
+  (`lib/<compte>/<appareil>.json`, ~120 Ko, 1 opération), 10 Go-mois gratuits et **trafic
+  sortant gratuit** — ce dernier point est ce qui rend le mobile viable.
+- La table `libraries` ne garde que l'**index** (empreinte, date, nombre de jeux) : savoir
+  si une bibliothèque a changé **sans la télécharger**. R2 ne sait pas chercher, donc le
+  croisement « qui possède ce jeu » se fait côté client, comme `useFriendsCommon` le fait
+  déjà pour Steam.
+- 🔑 **Un objet par APPAREIL, jamais par compte** : deux PC n'ont pas la même bibliothèque,
+  et au même endroit le dernier passé effacerait l'autre indéfiniment. « La bibliothèque de
+  quelqu'un » = l'union de ses appareils, faite côté client. Plafond de 5 appareils.
+- 🔑 **Synchroniser ≠ partager.** *Synchroniser* est une préférence **client** (envoyer sa
+  bibliothèque, pour la retrouver sur son propre mobile) ; *partager* est un drapeau
+  **serveur** (`accounts.share_library`, éteint par défaut) qui ouvre la lecture aux amis
+  acceptés. Sa propre bibliothèque se lit toujours, partage éteint ou non.
+- ⚠️ **Première donnée durable du service** : la promesse « aucun historique » ne couvre que
+  la présence. Ici on sait ce que les gens **possèdent** — jamais ce qu'ils jouent ni quand.
+  Le README du serveur a été réécrit en conséquence, ne pas le laisser mentir.
+- 🔑 **Le Worker est l'unique porte** : le bucket R2 est privé (aucun domaine `r2.dev`), un
+  objet n'en sort qu'après vérification jeton + amitié + partage.
+- 🔑 **Ordre des suppressions** : l'objet R2 part AVANT sa ligne d'index (l'index est la
+  seule carte qui y mène) ; à l'inverse, l'index est écrit APRÈS l'objet. `deleteMe` appelle
+  `forgetAllLibraries` **hors transaction et en premier** — un compte effacé qui laisse ses
+  bibliothèques dans le bucket, c'est une promesse rompue.
+- Le serveur **normalise et tronque** tout ce qu'il reçoit (clé, titre, plateformes,
+  jaquette HTTPS ; 5 000 jeux max) et jette les champs inconnus : une route authentifiée qui
+  écrit dans R2 est sinon un hébergement de fichiers gratuit.
+- L'empreinte cliente sert d'**ETag** → `If-None-Match` renvoie `304` sans lecture R2.
+- ⚠️ `schema.sql` ne modifie pas une base existante (tout en `IF NOT EXISTS`) : les
+  changements de schéma vivent aussi dans `server/migrations/` (`npm run migrate`).
+- Testé de bout en bout contre `wrangler dev --local` (33 vérifications : normalisation,
+  ETag/304, 404 sans amitié, 403 sans partage, plafonds, suppressions — bucket local
+  vérifié vide après coup).
+
+#### Côté client — `libsync.rs`
+
+- `partageables()` = **fonction pure et testée**, au même titre que `presence_for` : c'est
+  elle qui tient la promesse « un jeu masqué ou muet ne sort pas d'ici ». Elle regroupe
+  aussi les entrées par clé de jeu → c'est ce qui produit « je l'ai sur Steam ET sur GOG »
+  (le scan rend une entrée par launcher, l'ami veut une ligne par jeu).
+- **Empreinte FNV-1a 64 bits** (`empreinte()`), volontairement non cryptographique et sans
+  dépendance nouvelle : elle répond à « est-ce que ça a changé ? », rien d'autre. Sans
+  elle, chaque démarrage réécrirait le même objet. 🔑 Elle est mémorisée **avec l'id du
+  compte** (`SocialPrefs::last_library_sync`) : sinon, changer de compte laisserait le
+  nouveau vide pour toujours. Un `BTreeMap` + tri des plateformes rendent l'empreinte
+  indépendante de l'ordre du scan — sinon on renverrait tout à chaque fois.
+- Déclenchée **après chaque `scan_library`**, dans un fil détaché : un scan ne doit jamais
+  attendre le réseau. `sync()` ne renvoie une erreur que si l'envoi échoue vraiment —
+  « éteint » et « pas connecté » sont des situations normales (`skipped`).
+- Commandes : `library_sync(force)`, `library_index`, `library_of`, `library_forget_device`,
+  `library_set_sync(enabled)`. ⚠️ **Couper la synchronisation efface le serveur** : une
+  bibliothèque figée que les amis continueraient de voir serait pire que pas de
+  bibliothèque du tout.
+- Interface : deux interrupteurs dans Réglages → Réseau Torii (« Synchroniser ma
+  bibliothèque » = pref locale, « Visible par mes amis Torii » = `share_library` serveur,
+  désactivé tant que la synchro est éteinte), état du dernier envoi, bouton « Synchroniser
+  maintenant », liste des autres appareils avec « Retirer ». Validé en preview.
+  🔑 PIÈGE CSS : `.pane-hint` porte un `margin-top: -10px` (il est fait pour se glisser
+  **sous un titre**) — l'utiliser après une ligne d'interrupteur le fait chevaucher le
+  bouton. D'où `.sync-state` pour la ligne d'état.
+
+#### Vue « bibliothèque d'un ami » — `FriendLibraryView.vue` + `useFriendLibrary.ts`
+
+- Section à part entière (`friendLibrary` dans `useUi`), pas une modale : elle se parcourt
+  et se filtre comme la sienne. 🔑 `friendLibraryId` fait partie de l'**instantané de
+  navigation** — sans lui, le retour souris restaurait la section mais pas de qui il
+  s'agit, et rejouait la bibliothèque du dernier ami consulté.
+- `useFriendLibrary` fait l'**union des appareils** d'une personne (deux PC = deux
+  instantanés) et le croisement avec notre bibliothèque. C'est ici que ça se passe et pas
+  côté serveur : R2 ne sait pas chercher, c'est le compromis assumé du choix d'archi.
+  Cache mémoire par compte pour ne pas retélécharger à chaque aller-retour.
+- « Tu l'as aussi » repose sur `gameKeyOf`, **troisième copie** de `social::game_key()`
+  (Rust, `useFriendList`, ici). Les trois doivent rester d'accord, sinon le croisement ne
+  se déclenche jamais.
+- Filtres : Tous / Que tu n'as pas / Vous l'avez tous les deux. Le jeu qu'on possède
+  affiche NOTRE fiche (clic → détail) ; sinon une carte synthétique, comme `CommonView`.
+- Point d'entrée : bouton au survol sur les fiches et lignes d'amis, **uniquement** si la
+  personne partage (`hasLibrary`) — proposer un écran vide serait pire que rien.
+- 🔑 L'index est chargé dans `useTorii.start()` **et** à l'ouverture de la vue Amis. Il ne
+  l'était d'abord qu'à l'ouverture des Réglages : le bouton n'apparaissait donc qu'après un
+  détour par les Réglages, c'est-à-dire jamais. Attrapé en preview.
+- ⚠️ PIÈGE CSS : dimensionner `.platform-icon`, **pas** `svg` — Epic et Ubisoft rendent une
+  image, pas un SVG, et le PNG s'affichait en pleine taille.
+
+#### « En commun » alimenté par les deux sources — `useFriendsCommon.ts`
+
+- La vue croisait uniquement **mes jeux Steam × mes amis Steam** (commande Rust
+  `friends_common`). Les bibliothèques Torii s'y ajoutent comme **deuxième source**, ce qui
+  élargit la vue des deux côtés : un ami absent de Steam peut désormais apparaître, et un
+  de MES jeux GOG/Epic/manuel peut enfin être « en commun ».
+- Fusion par **clé de titre** (`keyOfTitle`, encore la même normalisation que
+  `social::game_key`) : un jeu possédé des deux côtés donne UNE carte dont les
+  propriétaires sont cumulés, jamais deux. Vérifié en preview en forçant le cas.
+- Identité des amis : un ami Torii dont le SteamID est connu ET déjà présent dans la liste
+  Steam compte sous son SteamID (une seule pastille pour une seule personne) ; sinon
+  `torii:<accountId>`, avec une pastille « Torii » pour expliquer d'où il sort. ⚠️ Un ami
+  Torii **non découvrable** qui est aussi ami Steam apparaîtra deux fois : on n'a aucun
+  moyen de savoir que c'est la même personne (même limite que `useFriendList`).
+- `commonCount` est **recalculé** sur la liste fusionnée (le backend ne connaît que Steam).
+- ⚠️ Le garde « Steam non connecté » ne bloque plus toute la vue : il ne s'affiche que si
+  `readable` est vide aussi — sinon la vue serait inaccessible à quelqu'un qui n'a pas
+  Steam mais dont les amis partagent leur bibliothèque Torii.
+- `ownersOf` (utilisé par la fiche d'un jeu) croise désormais par clé de titre et non par
+  appid, sans quoi un jeu GOG/Epic n'aurait jamais de propriétaire.
+- ⚠️ Asymétrie à connaître : le côté Steam vient du backend (qui a déjà fait
+  « mes jeux ∩ amis »), le côté Torii est filtré contre `useLibrary.games`. Un jeu que le
+  backend croit à moi mais absent du scan local (ou masqué) ne reçoit donc pas de
+  propriétaires Torii.
+
+
+#### Invitation à partager — `LibraryInvite.vue`
+
+- Le partage est éteint par défaut (et le reste après mise à jour : `sync_library` faux,
+  `share_library` à 0 en base). Conséquence assumée mais gênante : **personne ne découvre
+  la fonctionnalité**. D'où un bandeau dans la vue Amis, à l'endroit où la proposition a
+  du sens, calqué sur `ToriiPanel`.
+- 🔑 **Une proposition se fait une fois** : « Non merci » est définitif
+  (`libraryInviteDismissed` dans `ludo-prefs`), même principe que `steam_auto_linked`.
+- 🔑 Le bandeau propose les **deux usages séparément** — « Partager avec mes amis »
+  (synchro + partage) et « Seulement mes appareils » (synchro seule, pour retrouver sa
+  bibliothèque sur son mobile sans la montrer à personne). Il allumait d'abord les deux
+  d'un bloc, ce qui laissait croire qu'emporter sa bibliothèque impliquait de la partager,
+  alors que le modèle les distingue depuis le début.
+- ⚠️ CSS : `.invite` en `align-items: stretch` et `.sub` **sans `max-width`** — en
+  `flex-start` avec une colonne de 60 caractères, le texte laissait une bande vide à
+  droite alors que le bandeau, lui, va jusqu'au bord.
+- ⚠️ N'apparaît que si la synchro n'a **jamais** été activée. Quelqu'un qui synchronise
+  pour son mobile sans partager a fait un choix délibéré ; le bandeau ne le harcèle pas.
+
+
+#### Présence **par source** dans la vue Amis — `useFriendList` + `FriendsView`
+
+- `UnifiedFriend` porte `steamState` et `toriiState` (`null` = pas ami de ce côté) en plus
+  de `state`, qui reste l'agrégat servant au classement. 🔑 L'agrégat seul effaçait
+  l'essentiel : quelqu'un d'ami des deux côtés, en ligne sur Steam avec Torii fermé,
+  s'affichait « en ligne » sans qu'on puisse savoir que Torii ne voit rien de ce qu'il joue.
+- La vue rend donc **une pastille par canal** (Torii, Steam) au lieu d'une pastille
+  « Torii + Steam » : allumée = présent sur ce canal, éteinte = relation existante mais pas
+  connecté. L'infobulle donne la phrase exacte (« Torii fermé : ce qu'il joue hors Steam
+  reste invisible »). `offlineHint` distingue aussi le cas « des deux côtés ».
+- Vérifié en preview sur les trois cas : ami des deux côtés présent partout, ami des deux
+  côtés présent d'un seul (pastille Steam éteinte), ami d'une seule source.
+
+- **RESTE À FAIRE** : l'application mobile.
+
 ### Côté client — `social.rs`
 
 - Client de l'API + **battement de cœur** (30 s) qui publie la présence et reçoit le cercle

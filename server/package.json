@@ -6,7 +6,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "schema": "wrangler d1 execute torii --remote --file=schema.sql",
-    "schema:local": "wrangler d1 execute torii --local --file=schema.sql"
+    "schema:local": "wrangler d1 execute torii --local --file=schema.sql",
+    "migrate": "wrangler d1 execute torii --remote --file=migrations/0001_libraries.sql",
+    "migrate:local": "wrangler d1 execute torii --local --file=migrations/0001_libraries.sql"
   },
   "devDependencies": {
     "wrangler": "^4"

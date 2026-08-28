@@ -22,6 +22,7 @@ import {
   clearPresence, invite, listFriends, publishPresence, removeFriend, respond,
   rotateCode, suggestions,
 } from "./social.js";
+import { forgetAll, forgetLibrary, libraryIndex, readLibrary, uploadLibrary } from "./library.js";
 
 /** Routes accessibles sans jeton de session. */
 const PUBLIC = {
@@ -43,7 +44,27 @@ const PRIVATE = {
   "POST /v1/friends/suggestions": suggestions,
   "PUT /v1/presence": publishPresence,
   "DELETE /v1/presence": clearPresence,
+  "PUT /v1/library": uploadLibrary,
+  "GET /v1/library": libraryIndex,
+  "DELETE /v1/library": forgetAll,
 };
+
+/**
+ * Routes à segment variable, essayées dans l'ordre après les tables ci-dessus. Les
+ * segments capturés sont passés au gestionnaire après la session.
+ *
+ * ⚠️ Les motifs bornent ce qu'ils acceptent (`{1,40}` sur un alphabet sûr) : un
+ * identifiant de bibliothèque finit dans une clé R2, il n'a rien à faire avec un `/`.
+ */
+const DYNAMIC = [
+  { method: "DELETE", pattern: /^\/v1\/friends\/([A-Za-z0-9_-]{1,40})$/, handler: removeFriend },
+  {
+    method: "GET",
+    pattern: /^\/v1\/library\/([A-Za-z0-9_-]{1,40})\/([A-Za-z0-9_-]{1,40})$/,
+    handler: readLibrary,
+  },
+  { method: "DELETE", pattern: /^\/v1\/library\/([A-Za-z0-9_-]{1,40})$/, handler: forgetLibrary },
+];
 
 export default {
   async fetch(request, env) {
@@ -75,12 +96,13 @@ export default {
       return await run(guarded, request, env, session);
     }
 
-    // `DELETE /v1/friends/{id}` : la seule route à segment variable.
-    const friend = path.match(/^\/v1\/friends\/([A-Za-z0-9_-]{1,40})$/);
-    if (friend && request.method === "DELETE") {
+    for (const route of DYNAMIC) {
+      if (route.method !== request.method) continue;
+      const found = path.match(route.pattern);
+      if (!found) continue;
       const session = await authenticate(request, env);
       if (!session) return fail(401, "non_connecte", "Session expirée ou absente.");
-      return await run(removeFriend, request, env, session, friend[1]);
+      return await run(route.handler, request, env, session, ...found.slice(1));
     }
 
     return fail(404, "route_inconnue", "Cette route n'existe pas.");
@@ -91,9 +113,9 @@ export default {
  * Exécute un gestionnaire en transformant toute exception en 500 propre : une erreur
  * SQL ne doit jamais remonter au client (elle décrirait le schéma).
  */
-async function run(handler, request, env, session, param) {
+async function run(handler, request, env, session, ...params) {
   try {
-    return await handler(request, env, session, param);
+    return await handler(request, env, session, ...params);
   } catch (err) {
     console.error(`${request.method} ${new URL(request.url).pathname} —`, err?.stack || err);
     return fail(500, "erreur_serveur", "Une erreur est survenue côté serveur.");
