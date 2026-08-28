@@ -4,6 +4,14 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.17.0
+- **Tes amis voient enfin ce que tu possèdes, et pas seulement ce que tu joues.** Ta bibliothèque peut être déposée sur ton compte Torii : tes amis la parcourent depuis la vue Amis, avec tes jeux Steam, GOG, Epic, Ubisoft et ceux ajoutés à la main réunis dans une seule liste. Un filtre montre ce que tu as et qu'ils n'ont pas, ou ce que vous avez tous les deux.
+- **Deux réglages, pas un.** *Synchroniser* dépose ta bibliothèque pour que tu la retrouves sur tes autres appareils ; *partager* autorise en plus tes amis à la consulter. L'un va sans l'autre, et les deux sont **éteints par défaut** : après cette mise à jour, rien ne quitte ton PC tant que tu ne l'as pas demandé. Tout se coupe d'un clic, et couper efface ce qui a été envoyé.
+- **Tes jeux masqués restent masqués.** Eux et ceux marqués « ne pas diffuser » ne sont jamais envoyés, même partage activé.
+- **« En commun » ne se limite plus à Steam.** La vue croise maintenant les deux sources : un ami qui n'est pas sur Steam peut y apparaître, et un jeu GOG, Epic ou installé à la main peut enfin être « en commun ». Chaque ami y est compté une seule fois.
+- **La vue Amis dit par où chacun est connecté** : Steam, Torii, ou les deux. Une pastille éteinte signale un ami de ce côté qui n'y est pas connecté en ce moment — utile pour savoir quand Torii ne peut pas voir ce qu'il joue.
+- Sous le capot, ces bibliothèques sont ce sur quoi s'appuiera l'application mobile pour connaître la tienne.
+
 ## 0.16.1
 - **Minecraft est enfin détecté.** Il tourne dans une machine virtuelle Java, que Torii écartait par prudence : le chemin du fichier ne parle que du moteur, jamais du jeu. Torii demande maintenant son nom à Windows, qui le connaît. Même chose pour les autres jeux lancés par un moteur partagé.
 - **Un jeu tout neuf est vu dès sa première partie.** Windows n'inscrit un jeu dans sa liste qu'au moment où il le remarque, parfois quelques secondes après son lancement — Torii concluait trop vite et attendait la partie suivante. Il laisse désormais sa chance à un jeu inconnu pendant deux minutes.
