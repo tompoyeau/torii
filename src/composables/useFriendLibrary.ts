@@ -57,6 +57,8 @@ function merge(snapshots: LibGame[][]): LibGame[] {
       // jaquette si l'un des deux appareils l'avait et pas l'autre.
       for (const p of jeu.platforms) if (!deja.platforms.includes(p)) deja.platforms.push(p);
       if (!deja.cover && jeu.cover) deja.cover = jeu.cover;
+      // Même règle que côté Rust : une seule copie possédée suffit à faire du jeu le sien.
+      deja.familyShared = !!deja.familyShared && !!jeu.familyShared;
     }
   }
   return [...parCle.values()].sort((a, b) => a.title.localeCompare(b.title, "fr"));
@@ -72,7 +74,7 @@ const MOCK: LibGame[] = [
   { key: "title:emberfall", title: "Emberfall", platforms: ["epic"] },
   { key: "title:hollowknight", title: "Hollow Knight", platforms: ["gog", "steam"] },
   { key: "title:novaprotocol", title: "Nova Protocol", platforms: ["ubisoft"] },
-  { key: "title:silentharbor", title: "Silent Harbor", platforms: ["steam"] },
+  { key: "title:silentharbor", title: "Silent Harbor", platforms: ["steam"], familyShared: true },
   { key: "title:tidewalker", title: "Tidewalker", platforms: ["riot"] },
 ];
 

@@ -51,6 +51,13 @@ pub struct LibGame {
     pub platforms: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cover: Option<String>,
+    /// Vrai quand le jeu n'arrive QUE par le partage familial Steam : il est dans la
+    /// bibliothèque, il se lance, mais il appartient à quelqu'un d'autre du groupe.
+    /// 🔑 Le dire est le but même de cette liste : « ce que mon ami possède » deviendrait
+    /// faux si on comptait comme sien un jeu qui repartira le jour où sa famille le retire.
+    /// Un jeu possédé pour de bon quelque part (même sur un autre launcher) ne l'est pas.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub family_shared: bool,
 }
 
 /// Une ligne d'index : un appareil, à moi ou à un ami qui partage.
@@ -136,10 +143,16 @@ pub fn partageables(games: &[GameDto], muets: &HashSet<String>) -> Vec<LibGame> 
                 title: game.title.trim().to_string(),
                 platforms: Vec::new(),
                 cover: None,
+                // Vrai jusqu'à preuve du contraire : c'est le `&=` plus bas qui tranche,
+                // une fois toutes les sources du jeu vues.
+                family_shared: true,
             });
         if !entree.platforms.contains(&game.platform) {
             entree.platforms.push(game.platform.clone());
         }
+        // Une seule source possédée pour de bon suffit à faire du jeu le sien — y compris
+        // quand la copie familiale Steam côtoie un exemplaire acheté sur GOG.
+        entree.family_shared &= game.family_shared;
         // Un jeu installé (scan local) n'a souvent pas de jaquette là où sa jumelle
         // possédée en a une : la première trouvée gagne, peu importe laquelle des deux.
         if entree.cover.is_none() {
@@ -177,6 +190,10 @@ pub fn empreinte(games: &[LibGame]) -> String {
         avale(jeu.platforms.join(",").as_bytes());
         avale(b"\x1f");
         avale(jeu.cover.as_deref().unwrap_or("").as_bytes());
+        avale(b"\x1f");
+        // Sans lui, une bibliothèque dont seul le statut familial change ne repartirait
+        // jamais : l'empreinte doit couvrir tout ce que l'ami verra.
+        avale(if jeu.family_shared { b"f" } else { b"o" });
         avale(b"\x1e");
     }
     format!("{h:016x}")
@@ -202,6 +219,7 @@ fn appareil(config_dir: &Path, prefs: &mut social::SocialPrefs) -> String {
         title: String::new(),
         platforms: Vec::new(),
         cover: None,
+        family_shared: false,
     }]);
     let id = format!("{nanos:x}-{hote}");
     prefs.device_id = Some(id.clone());
@@ -381,6 +399,28 @@ mod tests {
         assert_eq!(liste[0].cover.as_deref(), Some("https://img/hk.jpg"));
     }
 
+    /// Un jeu qui n'arrive que par la famille Steam doit se dire comme tel, et un jeu
+    /// possédé quelque part ne doit JAMAIS l'être — c'est toute la distinction demandée :
+    /// « ce que mon ami possède » ne peut pas inclure ce qui appartient à son frère.
+    #[test]
+    fn distingue_le_partage_familial_de_la_possession() {
+        let mut famille = jeu("steam:1", "Emprunté", "steam");
+        famille.family_shared = true;
+        let mut aussi_famille = jeu("steam:2", "Mixte", "steam");
+        aussi_famille.family_shared = true;
+        // La même « Mixte » achetée sur GOG : elle est bien à lui.
+        let achete = jeu("gog:2", "Mixte", "gog");
+
+        let liste = partageables(&[famille, aussi_famille, achete], &HashSet::new());
+        let par_titre = |t: &str| liste.iter().find(|g| g.title == t).unwrap().family_shared;
+        assert!(par_titre("Emprunté"), "seule source = famille");
+        assert!(!par_titre("Mixte"), "une copie possédée suffit");
+        assert!(
+            !partageables(&[jeu("steam:3", "Acheté", "steam")], &HashSet::new())[0].family_shared,
+            "un jeu ordinaire n'est pas familial",
+        );
+    }
+
     /// Le serveur ne lit que des noms en camelCase et jette le reste : un renommage
     /// silencieux ici enverrait des bibliothèques vides sans que rien ne proteste.
     #[test]
@@ -405,6 +445,16 @@ mod tests {
         // objet plus petit est un objet moins cher à stocker et à transférer.
         let sans = partageables(&[jeu("gog:2", "Beta", "gog")], &HashSet::new());
         assert_eq!(serde_json::to_value(&sans[0]).unwrap().get("cover"), None);
+        // Même raison pour le statut familial : le cas courant est « possédé », il ne
+        // mérite pas un champ dans chacun des milliers de jeux d'une bibliothèque.
+        assert_eq!(
+            serde_json::to_value(&sans[0]).unwrap().get("familyShared"),
+            None,
+        );
+        let mut empruntee = jeu("steam:9", "Gamma", "steam");
+        empruntee.family_shared = true;
+        let famille = partageables(&[empruntee], &HashSet::new());
+        assert_eq!(serde_json::to_value(&famille[0]).unwrap()["familyShared"], true);
     }
 
     #[test]

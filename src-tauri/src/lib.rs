@@ -1605,6 +1605,72 @@ fn open_log(app: tauri::AppHandle) -> Result<(), String> {
     tauri_plugin_opener::open_path(fichier, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Domaines dont une page peut s'ouvrir **dans** Torii plutôt que dans le navigateur.
+///
+/// 🔑 Une liste blanche, et pas un simple « c'est de l'HTTPS ». Cette commande fabrique
+/// une WebView qui partage la session de l'application, cookies Steam compris : y charger
+/// une adresse quelconque venue du front reviendrait à offrir un navigateur — et une
+/// session connectée — à qui saurait glisser une URL dans une liste d'amis. Les profils
+/// d'amis Steam vivent tous sur `steamcommunity.com`, la liste n'a pas à s'allonger sans
+/// raison.
+const DOMAINES_WEB: [&str; 2] = ["steamcommunity.com", "store.steampowered.com"];
+
+/// Label unique : consulter un deuxième profil réutilise la fenêtre au lieu d'en empiler
+/// une par ami cliqué.
+const LABEL_WEB: &str = "torii-web";
+
+/// Ouvre une page dans une fenêtre Torii (et non dans le navigateur de l'utilisateur).
+///
+/// Sert aux amis **Steam sans compte Torii** : leur profil n'existe que chez Steam, et
+/// l'ouvrir dehors faisait quitter l'application pour une information qu'on venait
+/// chercher dedans. Les amis Torii, eux, ont leur page dans l'application.
+///
+/// ⚠️ Fenêtre à part et non panneau dans la fenêtre principale : une WebView imbriquée se
+/// superpose à l'interface Vue au lieu de s'y insérer, et se recale mal au redimensionnement.
+#[tauri::command]
+async fn open_web_window(app: tauri::AppHandle, url: String, title: String) -> Result<(), String> {
+    let parsed: tauri::Url = url.parse().map_err(|_| "Adresse illisible.".to_string())?;
+    if parsed.scheme() != "https" {
+        return Err("Torii n'ouvre que des adresses sécurisées.".into());
+    }
+    let hote = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+    let permis = DOMAINES_WEB
+        .iter()
+        .any(|d| hote == *d || hote.ends_with(&format!(".{d}")));
+    if !permis {
+        return Err(format!("Torii n'ouvre pas {hote} lui-même."));
+    }
+    // Le titre vient d'un pseudo, donc de quelqu'un d'autre : borné, et jamais interprété
+    // (une barre de titre n'affiche pas de HTML, mais un pseudo de 4 000 caractères
+    // déborderait quand même).
+    let titre: String = title.chars().take(80).collect();
+
+    let inner = app.clone();
+    app.run_on_main_thread(move || {
+        // Déjà ouverte : on la renvoie sur la nouvelle adresse. La détruire pour la
+        // reconstruire ferait clignoter une fenêtre blanche à chaque profil consulté.
+        if let Some(win) = inner.get_webview_window(LABEL_WEB) {
+            let _ = win.navigate(parsed);
+            let _ = win.set_title(&titre);
+            let _ = win.show();
+            let _ = win.set_focus();
+            return;
+        }
+        let _ = tauri::WebviewWindowBuilder::new(
+            &inner,
+            LABEL_WEB,
+            tauri::WebviewUrl::External(parsed),
+        )
+        .title(&titre)
+        .inner_size(1100.0, 800.0)
+        // Steam ouvre des popups (captures, boutique) : sans ça le clic ne ferait rien,
+        // même raison que pour les fenêtres de connexion.
+        .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Allow)
+        .build();
+    })
+    .map_err(|e| e.to_string())
+}
+
 /// Préférences liées à la fenêtre, lues côté Rust (au démarrage et à la fermeture)
 /// donc persistées dans un fichier plutôt qu'en localStorage.
 #[derive(Serialize, serde::Deserialize, Clone, Copy)]
@@ -1842,6 +1908,7 @@ pub fn run() {
             start_game_watch,
             log_front_error,
             open_log,
+            open_web_window,
             torii_request_code,
             torii_verify,
             torii_signup,

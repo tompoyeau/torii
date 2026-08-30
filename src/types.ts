@@ -55,6 +55,10 @@ export interface GameMeta {
   screenshots?: string[];
   appType?: string | null;
   sizeGb?: number | null;
+  /** Métadonnées issues d'une source interrogée **en français** et identifiée de façon
+      certaine (appid Steam, id produit GOG). Autorise le remplacement de la description
+      d'IGDB, qui n'existe qu'en anglais. */
+  localized?: boolean;
 }
 
 /** État des connexions de comptes (commande Rust `get_settings`). */
@@ -358,6 +362,9 @@ export interface LibGame {
   /** Tous les launchers où la personne le possède. */
   platforms: string[];
   cover?: string | null;
+  /** Le jeu vient du **partage familial Steam** : la personne y a accès, mais il ne lui
+      appartient pas. Absent = possédé, le cas courant. */
+  familyShared?: boolean;
 }
 
 /** Une ligne d'index : un appareil, à moi ou à un ami qui partage sa bibliothèque. */

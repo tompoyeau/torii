@@ -88,6 +88,15 @@ pub struct GameMeta {
     /// Taille de téléchargement en Go (jeux possédés non installés ; GOG).
     #[serde(default)]
     pub size_gb: Option<f64>,
+    /// Ces métadonnées viennent d'une source interrogée **en français** ET identifiée de
+    /// façon certaine (appid Steam, id produit GOG).
+    ///
+    /// 🔑 C'est ce qui autorise le front à remplacer la description d'IGDB, qui n'existe
+    /// qu'en anglais. Faux pour le repli « recherche Steam par titre » : ce rapprochement
+    /// peut se tromper de jeu, et écraser une bonne description anglaise par la mauvaise
+    /// description française serait un net recul.
+    #[serde(default)]
+    pub localized: bool,
 }
 
 fn yes() -> bool {

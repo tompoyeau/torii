@@ -92,11 +92,23 @@ export function useFriendsCommon() {
    * enfin être « en commun » — ce qu'aucun autre launcher ne sait dire.
    */
 
-  /** Mes jeux indexés par clé de titre (toutes plateformes, masqués exclus). */
+  /**
+   * Mes jeux indexés par clé de titre (toutes plateformes, masqués exclus).
+   *
+   * 🔑 **Les jeux du partage familial Steam en sont exclus** : je ne les possède pas, j'y
+   * accède. « En commun » veut dire « vous le possédez tous les deux » — c'est ce qui rend
+   * la vue utile pour se dire « on y joue ? ». Les compter comme miens produisait des
+   * lignes qu'on ne savait pas lire : impossible de deviner, en les regardant, qui possède
+   * vraiment quoi ni s'il y avait assez de licences pour jouer ensemble.
+   *
+   * ⚠️ Le croisement Steam (`friends_games`) est déjà propre des deux côtés : il passe par
+   * `GetOwnedGames`, qui ne rend que le possédé. Seule cette source-ci pouvait faire
+   * entrer du familial.
+   */
   const myByKey = computed(() => {
     const m = new Map<string, Game>();
     for (const g of myGames.value) {
-      if (g.hidden) continue;
+      if (g.hidden || g.familyShared) continue;
       const k = keyOfTitle(g.title);
       if (!m.has(k)) m.set(k, g);
     }
@@ -137,7 +149,9 @@ export function useFriendsCommon() {
       if (!liste) continue; // pas encore téléchargée
       const owner = ownerIdOf(accountId);
       for (const jeu of liste) {
-        if (!myByKey.value.has(jeu.key)) continue;
+        // Même règle de son côté : un jeu qu'il emprunte à SA famille Steam n'est pas à
+        // lui, il n'a donc rien à faire dans « ce que vous possédez tous les deux ».
+        if (jeu.familyShared || !myByKey.value.has(jeu.key)) continue;
         const deja = m.get(jeu.key);
         if (deja) {
           if (!deja.includes(owner)) deja.push(owner);

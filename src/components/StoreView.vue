@@ -272,13 +272,7 @@ function onCoverError(url: string | null) {
 .bar .ctx { font-size: 14px; font-weight: 600; color: var(--text); }
 .bar .ctx .n { font-family: var(--mono); color: var(--text-faint); font-weight: 400; }
 .bar .spacer { flex: 1; }
-.chip {
-  padding: 6px 13px; border-radius: 99px; font-size: 12.5px; color: var(--text-dim);
-  background: var(--surface); border: 1px solid var(--border); transition: all 0.15s;
-}
-.chip:hover { color: var(--text); border-color: var(--border-strong); }
-.chip.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
-/* Bouton « Au hasard » : accentué et distinct des puces de tri. */
+/* Base `.chip` dans style.css. Bouton « Au hasard » : accentué et distinct des puces de tri. */
 .chip.random {
   display: inline-flex; align-items: center; gap: 6px; font-weight: 600;
   color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border));

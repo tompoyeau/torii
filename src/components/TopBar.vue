@@ -10,6 +10,17 @@ import { steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
 
 const { section, query, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
+
+/**
+ * Sections où la recherche du bandeau n'a rien à faire.
+ *
+ * 🔑 Elle filtre **TA** bibliothèque : sur un écran qui n'affiche pas tes jeux, y taper ne
+ * produit rien de visible, ce qui se lit comme une panne. La Boutique était déjà écartée
+ * pour cette raison (elle a sa propre barre) ; la bibliothèque d'un ami a la sienne aussi,
+ * et sa page profil ne montre rien qui se filtre.
+ */
+const SANS_RECHERCHE = ["store", "friendLibrary", "friendProfile"];
+const chercheDansLaBiblio = computed(() => !SANS_RECHERCHE.includes(section.value));
 const { toggle: toggleTheme } = useTheme();
 const { account: toriiAccount, connected: toriiConnected } = useTorii();
 const { loading, reload } = useLibrary();
@@ -41,7 +52,7 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 
 <template>
   <div class="topbar">
-    <label v-if="section !== 'store'" class="search">
+    <label v-if="chercheDansLaBiblio" class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
       <input v-model="query" type="text" placeholder="Rechercher dans la bibliothèque…" autocomplete="off" />
     </label>

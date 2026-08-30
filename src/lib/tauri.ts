@@ -604,6 +604,26 @@ export async function openExternal(url: string): Promise<void> {
   }
 }
 
+/**
+ * Ouvre une page **dans une fenêtre Torii** au lieu du navigateur de l'utilisateur.
+ * Sert au profil d'un ami Steam sans compte Torii : l'information qu'on vient chercher
+ * dans l'application ne devrait pas obliger à en sortir.
+ *
+ * Renvoie `false` si Torii ne peut pas (hors Tauri) ou ne veut pas (domaine hors de sa
+ * liste blanche) — l'appelant retombe alors sur `openExternal`, plutôt que de laisser un
+ * clic sans effet.
+ */
+export async function openWebWindow(url: string, title: string): Promise<boolean> {
+  if (!hasTauriRuntime()) return false;
+  try {
+    await callOrThrow<void>("open_web_window", { url, title });
+    return true;
+  } catch (err) {
+    console.error("[torii] échec de open_web_window", err);
+    return false;
+  }
+}
+
 // --- Wishlist -------------------------------------------------------------------
 
 /** Wishlist unifiée (Steam native ∪ Torii) enrichie de prix. `null` hors Tauri (→ mock). */

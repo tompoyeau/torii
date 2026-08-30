@@ -55,7 +55,22 @@ async function ensureEnriched(id: string) {
     // Résout les titres provisoires « App <id> » des jeux possédés.
     title: cur.title.startsWith("App ") && meta.name ? meta.name : cur.title,
     genre: cur.genre ?? meta.genre ?? undefined,
-    description: cur.description ?? meta.description ?? undefined,
+    /**
+     * 🔑 Seule exception à la règle « ne pas écraser ce qui est déjà là » : une
+     * description **française** l'emporte sur celle d'IGDB, qui n'existe qu'en anglais.
+     *
+     * Sans ça, franciser les sources n'aurait presque rien changé à l'écran : IGDB
+     * remplit les descriptions **en masse au chargement**, donc `cur.description` était
+     * déjà pris quand cet enrichissement à la demande arrive, et sa version française
+     * partait à la poubelle.
+     *
+     * `meta.localized` restreint le remplacement aux sources identifiées par un
+     * identifiant sûr (appid Steam, id produit GOG). Le repli « recherche Steam par
+     * titre » (Epic, manuel) ne l'a pas : il peut se tromper de jeu, et une description
+     * française du mauvais jeu serait pire qu'une bonne description anglaise.
+     */
+    description:
+      (meta.localized ? meta.description : null) ?? cur.description ?? meta.description ?? undefined,
     developer: cur.developer ?? meta.developer ?? undefined,
     year: cur.year ?? meta.year ?? undefined,
     coverUrl: cur.coverUrl ?? meta.coverUrl ?? undefined,

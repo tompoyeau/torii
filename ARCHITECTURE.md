@@ -87,6 +87,18 @@ cargo run --example community        # jeux possédés + famille (via session st
   et Wishlist l'utilisent ; chaque vue n'ajoute que ce qui lui est propre. Ne pas redéclarer
   `.cover`/`.cover-title` en scoped dans une vue : les trois grilles avaient divergé comme ça
   (rayon 12 vs 16, pas d'ombre, survol deux fois plus court, titre absent de la jaquette).
+- 🔑 **Une classe partagée entre plusieurs vues vit dans `style.css`, jamais dans un
+  `<style scoped>`.** `.chip` (puces de tri, filtres, « rafraîchir ») n'était déclarée que
+  dans AppShell et StoreView : elle s'affichait donc en **bouton Windows brut** dans la
+  bibliothèque d'un ami, dans « En commun » et dans la Wishlist, qui n'en déclaraient que
+  les variantes (`.chip.refresh`). Un scoped ne porte QUE sur les éléments du composant —
+  un enfant n'en hérite pas.
+- 🔑 **`.cover-card` porte `width: 100%`, et ce n'est pas redondant.** La carte est un
+  `<button>`, donc elle se dimensionne sur son contenu. Posée directement dans la grille
+  elle est étirée par elle (bibliothèque, Boutique, Wishlist : rien ne se voyait) ;
+  enveloppée dans un `<div>` — `FriendLibraryView` et `CommonView` mettent chaque carte
+  dans une `.cell` pour lui accoler leurs pastilles — elle retombait sur la largeur de son
+  texte, et chaque jaquette prenait la taille de sa ligne « Steam · 12 h · Non installé ».
 
 - **Une commande Tauri qui touche au réseau ou au disque DOIT être `async` + `spawn_blocking`.**
   Une commande synchrone s'exécute sur le **thread principal** (`body_blocking` dans
@@ -339,6 +351,66 @@ cargo run --example community        # jeux possédés + famille (via session st
   `~"x"` sans wildcards ne matche pas (`~ *"x"*` = contains) ; `="x"` = exact sensible à la casse. Ratés : Overwatch 2
   (absent d'IGDB en jeu de base) + ~7 % niche. Proxy URL en dur (`PROXY_URL`). Recherche Steam-par-titre pour jaquettes RETIRÉE.
 
+## Tout en français, au possible
+
+Les prix étaient déjà en euros (ITAD interrogé en `country=FR`), mais tout le reste
+arrivait en anglais. Source par source, ce qui est francisable et ce qui ne l'est pas :
+
+- **Steam** (`steam_store.rs`) : `l=french&cc=fr` sur `appdetails` ET `storesearch`.
+  Description, genres et date de sortie deviennent français. 🔑 Le champ `name`, lui,
+  n'est **pas** localisé par Steam (vérifié) — aucun risque de renommer la bibliothèque.
+  ⚠️ La date devient « 24 févr. 2017 » : `parse_year` cherche 4 chiffres en 19xx/20xx, il
+  s'en moque.
+- **GOG** (`gog_store.rs`) : `?locale=fr-FR` sur l'API v2 → description et tags français.
+  `globalReleaseDate` reste une date ISO.
+- **Instant Gaming** : 🔑 **le chemin de recherche change avec la langue** —
+  `/fr/rechercher/` et `/en/search/`. Mesuré : `/fr/search/` et `/fr/recherche/` répondent
+  404 ; l'adresse française se lit dans le formulaire de la page d'accueil FR. On cherche
+  en français **puis en anglais** : IG traduit certains titres (« Shadow of the Erdtree »
+  → « L'ombre de l'Arbre-monde ») et le rapprochement par titre exact échouerait, ce qui
+  ferait DISPARAÎTRE des offres. 🔑 L'URL d'un résultat venu du repli est francisée par
+  simple remplacement `/en/` → `/fr/` : IG redirige (301) le slug anglais vers son
+  équivalent français. Le suffixe « - PC (Steam) » et le marqueur `addtocart` sont
+  identiques sur les deux sites, le parseur et le test de stock ne bougent pas.
+- **IGDB** : ⚠️ **ne localise RIEN** — ni les résumés, ni les genres. Les descriptions IGDB
+  restent donc en anglais. Les **genres**, eux, sont traduits par une table
+  (`genre_fr`) : leur vocabulaire est **fermé** (23 entrées relevées sur `/genres`), donc
+  la table est exhaustive et testée. 🔑 Elle s'applique **en sortie** (`traduire_lot`) et
+  non à l'écriture : le cache garde les libellés d'origine, donc compléter la table plus
+  tard ne coûte pas un retéléchargement de toute la bibliothèque.
+
+- **Boutique** (`store::game`) : la fiche produit est enrichie par IGDB, donc son **genre**
+  est déjà français (table `genre_fr`) mais sa description ne l'était pas. Quand le jeu
+  porte un appid, on repasse par `metadata::enrich_one` pour prendre la description
+  française de Steam. 🔑 C'est le **même cache disque que la bibliothèque** : un jeu déjà
+  possédé ne coûte aucune requête, et consulter une fiche de la vitrine réchauffe le cache
+  pour plus tard. ⚠️ Le **genre** n'y est volontairement pas remplacé — celui d'IGDB sert
+  de clé au filtre par catégorie, et prendre celui de Steam ferait dire deux choses
+  différentes au même jeu selon l'écran. ⚠️ Conséquence assumée : ouvrir la fiche d'un jeu
+  Steam encore inconnu déclenche aussi l'appel taille (`api.steamcmd.net`), comme dans la
+  bibliothèque.
+- Le reste de la Boutique n'a rien à traduire : titres de jeux, noms de boutiques et studios
+  sont des noms propres.
+
+### 🔑 Le piège : IGDB gagnait toujours
+
+Franciser les sources n'aurait presque rien changé à l'écran. IGDB remplit les
+descriptions **en masse au chargement**, et `useLibrary.ensureEnriched` ne remplaçait
+jamais une valeur déjà là (`cur.description ?? meta.description`) : la version française,
+arrivée plus tard à l'ouverture de la fiche, partait à la poubelle.
+
+D'où `GameMeta.localized` : vrai quand les métadonnées viennent d'une source interrogée en
+français **et** identifiée par un identifiant sûr (appid Steam, id produit GOG). Dans ce
+cas seulement, la description remplace celle d'IGDB.
+
+⚠️ Le repli « recherche Steam par titre » (Epic, manuel) est explicitement remis à
+`localized = false` dans `metadata::fetch` : son contenu est bien français, mais le **jeu
+est deviné**. Une description française du mauvais jeu est pire qu'une bonne description
+anglaise.
+
+⚠️ `metadata_cache_v3` → **v4** : les entrées existantes contiennent des descriptions et
+des genres anglais. Sans le bump, personne ne verrait le changement.
+
 ## Détection des parties — `procwatch.rs` (fait)
 
 - Un **seul fil** surveille les process et date « Récemment joué », **y compris pour les
@@ -524,6 +596,31 @@ cargo run --example community        # jeux possédés + famille (via session st
   propriétaires Torii.
 
 
+#### « En commun » : le partage familial n'est pas de la possession
+
+Une copie familiale Steam n'appartient pas à celui qui l'emprunte, et c'est **une** licence
+— elle ne se joue qu'à une personne à la fois. Comptés comme possédés, ces jeux
+produisaient des lignes illisibles : impossible de savoir, en les regardant, qui possède
+vraiment quoi, ni si deux personnes d'une même famille pourraient y jouer ensemble.
+
+🔑 **La règle est donc : « en commun » = possédé des deux côtés.** Les jeux du partage
+familial sont exclus de la vue, des deux côtés, dans `useFriendsCommon` :
+`myByKey` saute `g.familyShared`, et `toriiOwnersByKey` saute `jeu.familyShared`.
+
+- ⚠️ Le croisement Steam (`friends_games::fetch_live`) était **déjà** propre : il passe par
+  `GetOwnedGames` pour moi comme pour mes amis, et cet endpoint ne rend que le possédé.
+  Seule la source Torii pouvait faire entrer du familial — inutile d'aller filtrer côté
+  Rust.
+- Ces jeux restent **visibles ailleurs**, là où c'est leur place : dans la bibliothèque
+  d'un ami (avec la pastille « Famille Steam ») et dans la sienne propre, sous le filtre
+  « Famille » de la barre latérale. C'est « ce qu'il peut jouer » ; « En commun », c'est
+  « ce que vous possédez ».
+- 💭 Une première version affichait au contraire ces jeux avec des pastilles de provenance
+  et un avertissement « une seule licence », en conservant les membres du groupe familial
+  pour savoir si l'ami puisait au même pot. Abandonné : beaucoup de machinerie, un
+  avertissement subtil à lire, et une dépendance à un endpoint Steam non documenté — pour
+  un résultat moins clair que de simplement ne pas les compter.
+
 #### Invitation à partager — `LibraryInvite.vue`
 
 - Le partage est éteint par défaut (et le reste après mise à jour : `sync_library` faux,
@@ -556,6 +653,87 @@ cargo run --example community        # jeux possédés + famille (via session st
   reste invisible »). `offlineHint` distingue aussi le cas « des deux côtés ».
 - Vérifié en preview sur les trois cas : ami des deux côtés présent partout, ami des deux
   côtés présent d'un seul (pastille Steam éteinte), ami d'une seule source.
+
+#### Partage familial Steam : accès n'est pas possession
+
+- `LibGame.familyShared` dit qu'un jeu n'arrive QUE par le groupe familial Steam. Sans lui,
+  « ce que mon ami possède » comptait comme sien un jeu qui appartient à son frère et qui
+  repartira le jour où celui-ci le retire du partage.
+- 🔑 **Une seule source possédée suffit à faire du jeu le sien** : `partageables()` amorce
+  le drapeau à vrai puis fait un `&=` sur chaque source de la même clé (le `merge()` des
+  appareils côté front applique la même règle avec `&&`). Un jeu emprunté sur Steam mais
+  acheté sur GOG est bien à lui.
+- ⚠️ Il entre dans `empreinte()`. Sans ça, une bibliothèque dont seul le statut familial
+  change ne repartirait jamais. Conséquence attendue : au premier scan après cette version,
+  toutes les bibliothèques sont réenvoyées une fois.
+- Le serveur ne retient `familyShared` que **strictement égal à `true`** : la route écrit
+  dans R2, un client ne doit pas pouvoir y glisser une chaîne. Absent = possédé, donc
+  l'immense majorité des lignes n'a pas ce champ. ⚠️ Le drapeau vient du client de l'ami :
+  tant qu'il n'est pas à jour, ses jeux familiaux restent indistincts.
+
+#### Page profil d'un ami — `FriendProfileView.vue`
+
+- Cliquer sur quelqu'un ouvrait sa **page Steam dans le navigateur** : on quittait Torii
+  pour une page qui ne connaît que Steam, ne dit rien de ses jeux GOG/Epic et n'a aucun
+  bouton « voir sa bibliothèque ». Tout le monde a désormais sa page dans l'application
+  (section `friendProfile`).
+- 🔑 `friendProfileKey` porte la **clé unifiée** (`UnifiedFriend.key` : `torii:<id>` ou
+  `steam:<id>`), **pas** un identifiant de compte Torii. C'est ce qui permet à un ami Steam
+  sans compte Torii d'avoir lui aussi une page. Un ami qui a un compte Torii a toujours la
+  clé `torii:<toriiId>` (la fusion des deux sources garde la clé Torii) — d'où le
+  `` `torii:${friendLibraryId}` `` du retour de `FriendLibraryView`.
+- 🔑 **La page d'un ami Steam est presque vide, et c'est le propos** : elle dit ce que Torii
+  ne peut pas savoir de lui **et pourquoi**, et propose le geste qui y remédie (ton code
+  d'ami, copiable sur place). Le renvoyer vers Steam sans explication se lisait comme une
+  panne.
+- ⚠️ **Ne jamais écrire « il n'a pas de compte Torii »** : on n'en sait rien. `toriiId`
+  absent veut seulement dire qu'il n'est pas dans TES amis Torii — il peut très bien
+  utiliser Torii sans que vous y soyez liés. Les deux écrans vides s'en tiennent à ce qui
+  est vérifiable (« pas dans tes amis Torii », « le partage est éteint »).
+- ⚠️ `friendProfileKey` fait partie de l'**instantané de navigation**, exactement comme
+  `friendLibraryId` : sans lui, le retour souris restaurerait la section mais pas de qui
+  il s'agit.
+- **Hiérarchie Amis → Profil → Bibliothèque.** Le retour de `FriendLibraryView` pointe donc
+  sur le profil (« Profil »), pas sur la liste. Les **boutons bibliothèque et corbeille des
+  lignes d'amis ont été retirés** : tout ce qui concerne une personne se fait sur sa page,
+  la liste ne fait que mener à elle.
+- **Retirer un ami vit derrière l'écrou** de la page profil, avec une **modale** de
+  confirmation (et non plus la confirmation en place des lignes) : le geste est
+  indéfaisable — il faudra une nouvelle demande acceptée des deux côtés. L'écrou n'apparaît
+  que s'il a quelque chose dedans, donc jamais pour un ami Steam pur.
+- 🔑 La page **relit l'index des bibliothèques** à l'ouverture. Tout son contenu en dépend
+  (partage-t-il, combien de jeux) et l'index n'est chargé qu'au démarrage et à l'ouverture
+  de la vue Amis — même piège que celui qui avait rendu le bouton « voir sa bibliothèque »
+  invisible en pratique.
+- 🔑 **L'aperçu tient sur UNE rangée, en CSS pur** (`.strip`) : première rangée explicite,
+  rangées suivantes en `grid-auto-rows: 0` et `overflow: hidden`. `row-gap: 0` est
+  indispensable — sinon les rangées invisibles laissent quand même leurs gouttières, soit
+  une bande vide sous la ligne. Le nombre de tuiles visibles suit la largeur tout seul,
+  sans mesure JS ; le `slice(0, 16)` ne sert qu'à ne pas construire 464 tuiles cachées.
+- La présence par canal vit dans `lib/friendPresence.ts` (`sourcesOf`, `offlineHintOf`),
+  partagée avec `FriendsView` : deux écrans qui décriraient différemment la même personne
+  se liraient comme une contradiction.
+
+#### Profil Steam : fenêtre Torii, et pourquoi pas intégré — `open_web_window`
+
+- 🔑 **Une page Steam ne PEUT PAS être intégrée dans l'interface.** Mesuré :
+  `steamcommunity.com` sert `X-Frame-Options: SAMEORIGIN` et
+  `frame-ancestors 'self' https://steamloopback.host https://store.steampowered.com/`.
+  C'est un refus de Steam, pas une limite de Tauri — inutile de réessayer en iframe. La
+  seule voie technique restante serait une WebView enfant native (multiwebview Tauri 2,
+  derrière la feature `unstable`), qui flotte **au-dessus** de l'interface Vue, ne défile
+  pas avec la page et doit être repositionnée à la main à chaque redimensionnement.
+- Le profil s'ouvre donc dans une **fenêtre Torii** (label `torii-web`, réutilisée d'un
+  profil à l'autre) au lieu du navigateur — sortir de l'application pour une information
+  qu'on venait y chercher, c'était la perdre au passage.
+- 🔑 **Liste blanche de domaines** (`DOMAINES_WEB`), pas un simple « c'est de l'HTTPS » :
+  la WebView partage la session de l'application, cookies Steam compris. Y charger une
+  adresse quelconque venue du front reviendrait à offrir un navigateur — et une session
+  connectée — à qui saurait glisser une URL dans une liste d'amis.
+- Le front retombe sur `openExternal` si le natif refuse (hors Tauri, domaine hors liste) :
+  un clic sans effet serait pire que le navigateur.
+- ⚠️ `on_window_event` ne s'applique qu'au label `main`, donc fermer cette fenêtre ne
+  déclenche ni la règle du tray ni `exit(0)`.
 
 - **RESTE À FAIRE** : l'application mobile.
 

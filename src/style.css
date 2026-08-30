@@ -155,6 +155,20 @@ button { font-family: inherit; cursor: pointer; }
 .segmented button svg { width: 15px; height: 15px; }
 .segmented button.on { background: var(--accent-soft); color: var(--accent); }
 
+/* --- chip : petite puce cliquable (tri, filtres, retour, rafraîchir) -------
+   ⚠️ Elle vit ICI et pas dans un composant. Elle a longtemps été déclarée dans le
+   `<style scoped>` d'AppShell et de StoreView, donc invisible partout ailleurs : les
+   filtres de la bibliothèque d'un ami et les boutons « rafraîchir » d'« En commun » et
+   de la Wishlist s'affichaient en boutons Windows bruts. Un composant qui ajoute une
+   variante (`.chip.toggle`, `.chip.random`, `.chip.refresh`) la déclare chez lui ; la
+   base, elle, est commune. */
+.chip {
+  padding: 6px 13px; border-radius: 99px; font-size: 12.5px; color: var(--text-dim);
+  background: var(--surface); border: 1px solid var(--border); transition: all 0.15s;
+}
+.chip:hover { color: var(--text); border-color: var(--border-strong); }
+.chip.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+
 /* --- Carte à jaquette : bibliothèque, Boutique, Wishlist -------------------
    Les trois grilles montrent la même chose — une jaquette portrait avec le titre
    incrusté — et divergeaient (rayon, ombre, survol, taille du titre). Le fond de
@@ -164,6 +178,13 @@ button { font-family: inherit; cursor: pointer; }
 .cover-card {
   background: none; border: none; padding: 0; text-align: left; color: inherit;
   display: flex; flex-direction: column; gap: 11px; cursor: pointer; min-width: 0;
+  /* 🔑 `width: 100%` n'est PAS redondant : la carte est un `<button>`, et un bouton se
+     dimensionne sur son contenu. Posé directement dans une grille il est étiré par elle
+     (c'est le cas de la bibliothèque, d'où l'illusion que tout allait bien) ; enveloppé
+     dans un `<div>` — la bibliothèque d'un ami met chaque carte dans une `.cell` pour
+     lui accoler ses pastilles — il retombait sur la largeur de son texte, et chaque
+     jaquette prenait la taille de sa ligne « Steam · 12 h · Non installé ». */
+  width: 100%;
 }
 .cover-card .cover {
   position: relative; aspect-ratio: 3 / 4; border-radius: var(--radius); overflow: hidden;

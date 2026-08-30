@@ -12,6 +12,12 @@
 
 use serde::Serialize;
 
+/// Recherches Instant Gaming. ⚠️ Le **chemin change avec la langue** : `/fr/rechercher/`
+/// et `/en/search/`. Mesuré — `/fr/search/` et `/fr/recherche/` répondent 404, l'adresse
+/// française se lit dans le formulaire de la page d'accueil FR.
+const RECHERCHE_FR: &str = "https://www.instant-gaming.com/fr/rechercher/";
+const RECHERCHE_EN: &str = "https://www.instant-gaming.com/en/search/";
+
 const BROWSER_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
@@ -89,11 +95,28 @@ pub fn price(title: &str) -> Option<IgOffer> {
     if want.len() < 3 {
         return None;
     }
-    let url = format!(
-        "https://www.instant-gaming.com/en/search/?q={}&ajax=true",
-        urlencode(title)
-    );
-    let body = ureq::get(&url)
+    // Le site FRANÇAIS d'abord : c'est là qu'on veut envoyer l'utilisateur, et les prix y
+    // sont déjà en euros. Repli sur l'anglais quand IG a traduit le titre du jeu et que le
+    // rapprochement échoue (« Shadow of the Erdtree » y devient « L'ombre de l'Arbre-monde »)
+    // — sans ce repli, franciser les liens ferait DISPARAÎTRE des offres.
+    let mut offer = cherche(RECHERCHE_FR, title, &want)
+        .or_else(|| cherche(RECHERCHE_EN, title, &want))?;
+    // 🔑 Le slug anglais placé sous `/fr/` est redirigé (301) par IG vers son équivalent
+    // français : on francise donc l'URL d'un résultat venu du repli sans avoir à connaître
+    // son slug FR. Mesuré sur `/fr/4824-buy-elden-ring-pc-steam/`.
+    offer.url = offer
+        .url
+        .replace("instant-gaming.com/en/", "instant-gaming.com/fr/");
+    // Le fragment de recherche n'indique jamais le stock : on va lire la page produit.
+    // Rupture = page sans bouton « add to cart » (IG affiche alors `nostock` / « Out of stock »).
+    // ⚠️ Ce marqueur est le même sur la page française (vérifié).
+    offer.available = is_available(&offer.url);
+    Some(offer)
+}
+
+/// Interroge une des recherches IG et en tire la meilleure offre exacte.
+fn cherche(base: &str, title: &str, want: &str) -> Option<IgOffer> {
+    let body = ureq::get(&format!("{base}?q={}&ajax=true", urlencode(title)))
         .set("User-Agent", BROWSER_UA)
         .set("X-Requested-With", "XMLHttpRequest")
         .timeout(std::time::Duration::from_secs(12))
@@ -101,11 +124,7 @@ pub fn price(title: &str) -> Option<IgOffer> {
         .ok()?
         .into_string()
         .ok()?;
-    let mut offer = parse(&body, &want)?;
-    // Le fragment de recherche n'indique jamais le stock : on va lire la page produit.
-    // Rupture = page sans bouton « add to cart » (IG affiche alors `nostock` / « Out of stock »).
-    offer.available = is_available(&offer.url);
-    Some(offer)
+    parse(&body, want)
 }
 
 /// Vérifie la disponibilité d'un jeu sur sa page produit IG. En rupture, IG retire le

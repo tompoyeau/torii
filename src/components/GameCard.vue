@@ -6,7 +6,21 @@ import { useLibrary } from "../composables/useLibrary";
 import { useContextMenu } from "../composables/useContextMenu";
 import PlatformIcon from "./PlatformIcon.vue";
 
-const props = defineProps<{ game: Game }>();
+const props = withDefaults(
+  defineProps<{
+    game: Game;
+    /**
+     * Actions personnelles sur la carte (favori, masquer, menu contextuel).
+     *
+     * 🔑 À couper dans la bibliothèque **d'un ami** : ces gestes touchent TA bibliothèque,
+     * et les proposer sur les jeux de quelqu'un d'autre laisse croire qu'on agit sur les
+     * siens. Pour les jeux qu'on possède aussi, ils marcheraient — mais rien à l'écran ne
+     * dit lesquels, ce qui est pire qu'un bouton absent.
+     */
+    actions?: boolean;
+  }>(),
+  { actions: true },
+);
 defineEmits<{ (e: "open"): void }>();
 
 const { setHidden, setFavorite } = useLibrary();
@@ -43,7 +57,11 @@ function toggleFavorite() {
 </script>
 
 <template>
-  <button class="card cover-card" @click="$emit('open')" @contextmenu="openContext($event, game)">
+  <button
+    class="card cover-card"
+    @click="$emit('open')"
+    @contextmenu="actions && openContext($event, game)"
+  >
     <div class="cover" :class="{ uninstalled: !game.installed }" :style="{ background: game.cover }">
       <img
         v-if="coverSrc"
@@ -55,7 +73,7 @@ function toggleFavorite() {
         @error="onCoverError"
       />
       <span class="cover-plat"><PlatformIcon :platform="game.platform" /></span>
-      <div class="cover-actions">
+      <div v-if="actions" class="cover-actions">
         <button
           class="cover-act fav"
           :class="{ on: game.favorite }"

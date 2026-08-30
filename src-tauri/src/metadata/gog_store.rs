@@ -14,7 +14,12 @@ fn get_json(url: &str) -> Option<Value> {
 /// Métadonnées d'un jeu GOG via l'API v2 publique (celle de GOG Galaxy).
 /// Un seul appel fournit description, captures, développeur, année et genre.
 pub fn product(product_id: &str) -> Option<GameMeta> {
-    let root = get_json(&format!("https://api.gog.com/v2/games/{product_id}"))?;
+    // 🔑 `locale=fr-FR` : GOG rend alors la description ET les tags en français
+    // (« Jeu de rôle », « Aventure »). `globalReleaseDate` reste une date ISO, donc
+    // `parse_year` n'est pas concerné.
+    let root = get_json(&format!(
+        "https://api.gog.com/v2/games/{product_id}?locale=fr-FR"
+    ))?;
     let emb = &root["_embedded"];
 
     let description = root["description"]
@@ -74,6 +79,8 @@ pub fn product(product_id: &str) -> Option<GameMeta> {
         screenshots,
         app_type: Some("game".into()),
         size_gb,
+        // Interrogé en français, et par id produit : aucun doute sur le jeu visé.
+        localized: true,
     })
 }
 

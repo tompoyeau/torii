@@ -11,6 +11,7 @@ import GameCard from "./GameCard.vue";
 import StoreView from "./StoreView.vue";
 import FriendsView from "./FriendsView.vue";
 import CommonView from "./CommonView.vue";
+import FriendProfileView from "./FriendProfileView.vue";
 import FriendLibraryView from "./FriendLibraryView.vue";
 import WishlistView from "./WishlistView.vue";
 
@@ -99,6 +100,7 @@ function title(f: LibraryFilter): string {
       <StoreView v-if="section === 'store'" />
       <FriendsView v-else-if="section === 'friends'" />
       <CommonView v-else-if="section === 'common'" />
+      <FriendProfileView v-else-if="section === 'friendProfile'" />
       <FriendLibraryView v-else-if="section === 'friendLibrary'" />
       <WishlistView v-else-if="section === 'wishlist'" />
       <template v-else>
@@ -174,12 +176,7 @@ function title(f: LibraryFilter): string {
 .sec-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
 .sec-head .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .sec-head .spacer { flex: 1; }
-.chip {
-  padding: 6px 13px; border-radius: 99px; font-size: 12.5px; color: var(--text-dim);
-  background: var(--surface); border: 1px solid var(--border); transition: all 0.15s;
-}
-.chip:hover { color: var(--text); border-color: var(--border-strong); }
-.chip.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+/* Base `.chip` dans style.css (partagée avec la Boutique, les Amis, la Wishlist). */
 .chip.toggle { display: inline-flex; align-items: center; gap: 6px; }
 .chip.toggle svg { width: 14px; height: 14px; }
 

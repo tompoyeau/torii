@@ -2,13 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useFriends } from "../composables/useFriends";
 import { useFriendList, type UnifiedFriend } from "../composables/useFriendList";
-import type { ToriiStatus } from "../types";
+import { offlineHintOf, sourcesOf } from "../lib/friendPresence";
 import { useLibrary } from "../composables/useLibrary";
 import { useTorii } from "../composables/useTorii";
 import { useUi } from "../composables/useUi";
 import { useFriendLibrary } from "../composables/useFriendLibrary";
 import { showToast } from "../composables/useToast";
-import { openExternal } from "../lib/tauri";
 import ToriiPanel from "./ToriiPanel.vue";
 import LibraryInvite from "./LibraryInvite.vue";
 
@@ -16,25 +15,11 @@ const { loaded, steamConnected, refresh } = useFriends();
 const { inGame, online, offline, activeCount, loading } = useFriendList();
 const {
   account, circle, connected: toriiConnected, presenceMode,
-  refresh: refreshTorii, invite, respond, setPresenceMode, removeFriend,
+  refresh: refreshTorii, invite, respond, setPresenceMode,
 } = useTorii();
 const { launchOrInstall } = useLibrary();
-const { openSettings, openGame, showFriendLibrary } = useUi();
-const { hasLibrary, devicesOf, refreshIndex } = useFriendLibrary();
-
-/**
- * Cet ami partage-t-il sa bibliothèque ? Le bouton n'apparaît que là où il mène quelque
- * part : proposer « voir sa bibliothèque » pour tomber sur un écran vide serait pire que
- * de ne rien proposer du tout.
- */
-function canSeeLibrary(f: UnifiedFriend): boolean {
-  return hasLibrary(f.toriiId);
-}
-
-function libraryHint(f: UnifiedFriend): string {
-  const total = devicesOf(f.toriiId ?? "").reduce((n, d) => n + d.gameCount, 0);
-  return `Voir les ${total} jeux que ${f.name} possède, tous launchers confondus.`;
-}
+const { openSettings, openGame, showFriendProfile } = useUi();
+const { refreshIndex } = useFriendLibrary();
 
 /** La présence Torii arrive seule (battement de cœur) ; seul Steam doit être sondé. */
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -98,71 +83,15 @@ function stateLabel(f: UnifiedFriend): string {
  * qu'il n'a pas l'application ouverte — pas qu'il ne joue pas. On ne l'affiche qu'en
  * infobulle : c'est une nuance utile, pas une information de premier plan.
  */
-function offlineHint(f: UnifiedFriend): string {
-  if (f.source === "both") {
-    return "Hors ligne sur Steam et Torii fermé : elle joue peut-être sans qu'on le voie.";
-  }
-  return f.source === "torii"
-    ? "Cette personne n'a pas Torii ouvert : elle joue peut-être sans qu'on le voie."
-    : "Hors ligne sur Steam.";
-}
+const offlineHint = offlineHintOf;
 
 /**
- * D'où vient cette ligne. Ce n'est pas de la décoration : les deux sources ne savent pas
- * la même chose, et ça change ce qu'on peut attendre de la ligne. Un ami Steam ne montre
- * que ses jeux Steam ; un ami Torii montre tous ses launchers, mais seulement quand il a
- * l'application ouverte. J'avais réduit ça à un ⛩ sans explication — illisible.
+ * Pastilles de source, **une par canal** (`lib/friendPresence.ts`), qui disent à la fois
+ * d'où vient la relation ET si la personne y est connectée en ce moment. Partagées avec
+ * la page profil : deux écrans qui décriraient différemment la même personne se liraient
+ * comme une contradiction.
  */
-/**
- * Pastilles de source, **une par canal**, qui disent à la fois d'où vient la relation ET
- * si la personne y est connectée en ce moment.
- *
- * 🔑 Une seule pastille « Torii + Steam » ne suffisait pas : quelqu'un d'ami des deux
- * côtés peut être en ligne sur Steam avec Torii fermé — auquel cas Torii ne voit rien de
- * ce qu'il joue — et l'inverse est tout aussi courant. La pastille éteinte le dit.
- */
-function etatSource(canal: "steam" | "torii", etat: ToriiStatus | null) {
-  const ou = canal === "steam" ? "sur Steam" : "sur Torii";
-  switch (etat) {
-    case "in-game":
-      return { live: true, phrase: `En jeu, vu ${ou}` };
-    case "online":
-      return { live: true, phrase: `En ligne ${ou}` };
-    case "away":
-      return { live: true, phrase: `Absent ${ou}` };
-    default:
-      return {
-        live: false,
-        phrase: canal === "steam"
-          ? "Hors ligne sur Steam"
-          : "Torii fermé : ce qu'il joue hors Steam reste invisible",
-      };
-  }
-}
-
-/** Les canaux par lesquels on connaît cette personne, avec leur état courant. */
-function sources(f: UnifiedFriend) {
-  const liste: { key: "steam" | "torii"; label: string; live: boolean; title: string }[] = [];
-  if (f.toriiState !== null) {
-    const e = etatSource("torii", f.toriiState);
-    liste.push({
-      key: "torii",
-      label: "Torii",
-      live: e.live,
-      title: `${e.phrase}. Ami Torii : tu vois ses jeux quel que soit son launcher, tant qu'il a Torii ouvert.`,
-    });
-  }
-  if (f.steamState !== null) {
-    const e = etatSource("steam", f.steamState);
-    liste.push({
-      key: "steam",
-      label: "Steam",
-      live: e.live,
-      title: `${e.phrase}. Ami Steam : cette liste vient de Steam et se gère depuis Steam.`,
-    });
-  }
-  return liste;
-}
+const sources = sourcesOf;
 
 const failed = ref(new Set<string>());
 function avatar(f: UnifiedFriend): string | null {
@@ -175,8 +104,16 @@ function initials(name: string): string {
   return name.trim().slice(0, 2).toUpperCase();
 }
 
+/**
+ * Cliquer sur quelqu'un mène à **sa page dans Torii**, qu'il ait un compte ou non.
+ *
+ * C'est là que vivent sa bibliothèque, sa présence par canal et le retrait d'ami — tout
+ * ce qu'une page Steam ne dira jamais. Et pour un ami Steam sans compte Torii, la page est
+ * presque vide **exprès** : elle dit ce que Torii ne peut pas savoir de lui, et pourquoi.
+ * Le renvoyer vers Steam sans explication laissait croire à une panne.
+ */
 function openProfile(f: UnifiedFriend) {
-  if (f.profileUrl && f.profileUrl !== "#") openExternal(f.profileUrl);
+  showFriendProfile(f.key);
 }
 
 /** Le même jeu, chez moi : je le lance s'il est installé, sinon j'ouvre sa fiche. */
@@ -185,56 +122,6 @@ function onSameGame(f: UnifiedFriend) {
   if (!g) return;
   if (g.installed) launchOrInstall(g);
   else openGame(g.id);
-}
-
-/* ── Retirer un ami ────────────────────────────────────────────────────────── */
-
-/**
- * Seuls les amis **Torii** se retirent d'ici. Une liste d'amis Steam appartient à Steam :
- * Torii la lit, il ne la modifie pas. Sans identifiant Torii, pas de bouton — plutôt
- * qu'un bouton qui échouerait.
- */
-function canRemove(f: UnifiedFriend): boolean {
-  return !!f.toriiId;
-}
-
-/**
- * Ce que le clic va vraiment faire. Deux conséquences que personne ne devine :
- * le lien est supprimé **des deux côtés** (tu disparais aussi de sa liste), et pour un
- * ami des deux bords, seul le lien Torii saute — Steam n'y est pour rien.
- */
-function removeHint(f: UnifiedFriend): string {
-  const base = `Retirer ${f.name} de tes amis Torii. Vous disparaîtrez de la liste l'un de l'autre.`;
-  return f.source === "both"
-    ? `${base} Vous resterez amis sur Steam, et tu continueras de le voir par là.`
-    : base;
-}
-
-/**
- * Confirmation en place, dans la ligne elle-même. Retirer quelqu'un est irréversible
- * (il faudra une nouvelle demande, acceptée des deux côtés) : ça ne doit pas tenir à un
- * clic mal visé. Pas de fenêtre modale pour autant — elle ferait perdre de vue QUI on
- * s'apprête à retirer.
- */
-const confirmKey = ref<string | null>(null);
-const removing = ref<string | null>(null);
-
-async function onRemove(f: UnifiedFriend) {
-  if (!f.toriiId || removing.value) return;
-  removing.value = f.key;
-  try {
-    await removeFriend(f.toriiId);
-    showToast(
-      f.source === "both"
-        ? `${f.name} a été retiré de tes amis Torii. Vous restez amis sur Steam.`
-        : `${f.name} a été retiré de tes amis, des deux côtés.`,
-    );
-  } catch (e) {
-    showToast(`Retrait impossible : ${e instanceof Error ? e.message : String(e)}`);
-  } finally {
-    removing.value = null;
-    confirmKey.value = null;
-  }
 }
 
 /** Les gens joignables tout de suite : en jeu ou disponibles. */
@@ -274,12 +161,10 @@ async function choosePresence(mode: (typeof MODES)[number]["key"]) {
 /** Ferme le menu au clic ailleurs et à Échap, comme les autres menus de l'app. */
 function onDocClick() {
   presenceOpen.value = false;
-  confirmKey.value = null;
 }
 function onEsc(e: KeyboardEvent) {
   if (e.key !== "Escape") return;
   presenceOpen.value = false;
-  confirmKey.value = null;
 }
 onMounted(() => {
   document.addEventListener("click", onDocClick);
@@ -428,30 +313,11 @@ onBeforeUnmount(() => {
                 </span>
               </span>
             </button>
-            <button
-              v-if="canSeeLibrary(f) && confirmKey !== f.key"
-              class="icon-lib card-lib"
-              :title="libraryHint(f)"
-              :aria-label="libraryHint(f)"
-              @click.stop="showFriendLibrary(f.toriiId!)"
-            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.5" y="4" width="6" height="16" rx="1.4" /><rect x="11.5" y="4" width="6" height="16" rx="1.4" /><path d="M19.5 6.6l1.9 15.2" /></svg></button>
-            <button
-              v-if="canRemove(f) && confirmKey !== f.key"
-              class="icon-remove card-remove"
-              :title="removeHint(f)"
-              :aria-label="removeHint(f)"
-              @click.stop="confirmKey = f.key"
-            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
             <div class="card-game">
               <span class="game-name">{{ f.gameName ?? "Un jeu" }}</span>
               <span v-if="f.ownedGame" class="game-same">Tu l'as aussi</span>
             </div>
-            <div v-if="confirmKey === f.key" class="confirm card-confirm" @click.stop>
-              <span class="c-text">Le retirer ?</span>
-              <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
-              <button class="c-no" @click="confirmKey = null">Annuler</button>
-            </div>
-            <button v-else-if="f.ownedGame" class="btn-play" @click="onSameGame(f)">
+            <button v-if="f.ownedGame" class="btn-play" @click="onSameGame(f)">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
               {{ f.ownedGame.installed ? "Jouer" : "Voir la fiche" }}
             </button>
@@ -480,26 +346,6 @@ onBeforeUnmount(() => {
               >{{ s.label }}</span>
               <span class="row-state" :class="f.state">{{ stateLabel(f) }}</span>
             </button>
-            <div v-if="confirmKey === f.key" class="confirm" @click.stop>
-              <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
-              <button class="c-no" @click="confirmKey = null">Annuler</button>
-            </div>
-            <template v-else>
-              <button
-                v-if="canSeeLibrary(f)"
-                class="icon-lib"
-                :title="libraryHint(f)"
-                :aria-label="libraryHint(f)"
-                @click.stop="showFriendLibrary(f.toriiId!)"
-              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.5" y="4" width="6" height="16" rx="1.4" /><rect x="11.5" y="4" width="6" height="16" rx="1.4" /><path d="M19.5 6.6l1.9 15.2" /></svg></button>
-              <button
-                v-if="canRemove(f)"
-                class="icon-remove"
-                :title="removeHint(f)"
-                :aria-label="removeHint(f)"
-                @click.stop="confirmKey = f.key"
-              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
-            </template>
           </div>
         </div>
       </section>
@@ -528,26 +374,6 @@ onBeforeUnmount(() => {
               >{{ s.label }}</span>
               <span class="row-state">{{ f.source === "torii" ? "Torii fermé" : "Hors ligne" }}</span>
             </button>
-            <div v-if="confirmKey === f.key" class="confirm" @click.stop>
-              <button class="c-yes" :disabled="removing === f.key" @click="onRemove(f)">Retirer</button>
-              <button class="c-no" @click="confirmKey = null">Annuler</button>
-            </div>
-            <template v-else>
-              <button
-                v-if="canSeeLibrary(f)"
-                class="icon-lib"
-                :title="libraryHint(f)"
-                :aria-label="libraryHint(f)"
-                @click.stop="showFriendLibrary(f.toriiId!)"
-              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.5" y="4" width="6" height="16" rx="1.4" /><rect x="11.5" y="4" width="6" height="16" rx="1.4" /><path d="M19.5 6.6l1.9 15.2" /></svg></button>
-              <button
-                v-if="canRemove(f)"
-                class="icon-remove"
-                :title="removeHint(f)"
-                :aria-label="removeHint(f)"
-                @click.stop="confirmKey = f.key"
-              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg></button>
-            </template>
           </div>
         </div>
       </section>

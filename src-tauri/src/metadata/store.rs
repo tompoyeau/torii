@@ -439,7 +439,35 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
         }
     }
 
-    // 6. Repli visuel via le CDN Steam si appid connu.
+    // 6. Description en FRANÇAIS quand le jeu est identifié sur Steam.
+    //
+    // 🔑 IGDB, qui vient de fournir la fiche, ne localise rien : sa description est en
+    // anglais, toujours. Pour un jeu portant un appid, `enrich_one` sait aller chercher la
+    // version française — et il **partage le cache disque de la bibliothèque**, donc un jeu
+    // déjà possédé ne coûte aucune requête, et consulter une fiche de la vitrine réchauffe
+    // le cache pour le jour où on l'achètera.
+    //
+    // Le **genre** n'est volontairement PAS remplacé : celui d'IGDB est déjà traduit
+    // (`igdb::genre_fr`) et c'est lui qui sert de clé au filtre par catégorie de la
+    // bibliothèque. Prendre celui de Steam ici ferait dire deux choses différentes au même
+    // jeu selon l'écran.
+    if let Some(appid) = &steam_app_id {
+        let meta = super::enrich_one(
+            &GameDto {
+                id: format!("steam:{appid}"),
+                platform: "steam".into(),
+                launch_target: appid.clone(),
+                title: title.clone(),
+                ..Default::default()
+            },
+            config_dir,
+        );
+        if meta.localized && meta.description.is_some() {
+            out.description = meta.description;
+        }
+    }
+
+    // 7. Repli visuel via le CDN Steam si appid connu.
     if let Some(appid) = &steam_app_id {
         let cdn = "https://cdn.cloudflare.steamstatic.com/steam/apps";
         if out.hero_url.is_none() {

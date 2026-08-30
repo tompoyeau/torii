@@ -93,6 +93,58 @@ fn clean_genre(name: &str) -> String {
     name.to_string()
 }
 
+/// Traduction des genres IGDB, qui n'existent **qu'en anglais** (l'API ne localise ni les
+/// genres ni les résumés).
+///
+/// 🔑 Une table exhaustive et pas une heuristique : le vocabulaire des genres IGDB est
+/// **fermé** — 23 entrées, relevées sur son endpoint `/genres` — donc il se traduit
+/// intégralement et ne dérivera pas. Un genre inconnu (nouvelle entrée chez IGDB) ressort
+/// tel quel plutôt que de disparaître : mieux vaut un libellé anglais qu'un jeu sans
+/// catégorie.
+///
+/// ⚠️ Ces libellés servent aussi de **clé au filtre par catégorie**, qui regroupe par
+/// chaîne exacte : mélanger anglais et français y ferait deux entrées pour un même genre.
+fn genre_fr(g: &str) -> &str {
+    match g {
+        "Adventure" => "Aventure",
+        "Card & Board Game" => "Cartes et plateau",
+        "Fighting" => "Combat",
+        "Hack and slash/Beat 'em up" => "Beat'em up",
+        "Indie" => "Indépendant",
+        "Music" => "Musique",
+        "Pinball" => "Flipper",
+        "Platform" => "Plateforme",
+        "Point-and-click" => "Pointer-cliquer",
+        "Puzzle" => "Réflexion",
+        "Quiz/Trivia" => "Quiz",
+        "Racing" => "Course",
+        "RTS" => "Stratégie temps réel",
+        "RPG" => "Jeu de rôle",
+        "Shooter" => "Tir",
+        "Simulator" => "Simulation",
+        "Strategy" => "Stratégie",
+        "Tactical" => "Tactique",
+        "TBS" => "Stratégie au tour par tour",
+        "Visual Novel" => "Roman visuel",
+        // Arcade, MOBA, Sport : identiques en français.
+        autre => autre,
+    }
+}
+
+/// Francise les genres d'un lot avant de le rendre au front.
+///
+/// 🔑 En **sortie** et pas au moment de l'écriture en cache : le cache garde les libellés
+/// IGDB d'origine, donc corriger ou compléter la table plus tard ne coûtera pas un
+/// retéléchargement de toute la bibliothèque (plusieurs minutes pour les jeux non-Steam,
+/// interrogés un par un et throttlés).
+fn traduire_lot(lot: &mut [(String, IgdbMeta)]) {
+    for (_, meta) in lot.iter_mut() {
+        if let Some(genres) = meta.genre.as_deref() {
+            meta.genre = Some(genres.split(", ").map(genre_fr).collect::<Vec<_>>().join(", "));
+        }
+    }
+}
+
 /// Année à partir d'un timestamp Unix (approximation suffisante pour un affichage).
 fn unix_to_year(ts: i64) -> i64 {
     1970 + ts / 31_556_952 // secondes dans une année moyenne
@@ -332,6 +384,7 @@ pub fn fill_metadata(
 
     // Lot immédiat des métas déjà connues (2e lancement = tout ici).
     if !cached_batch.is_empty() {
+        traduire_lot(&mut cached_batch);
         emit(&cached_batch);
         out.extend(cached_batch);
     }
@@ -350,6 +403,7 @@ pub fn fill_metadata(
             }
         }
         if !batch.is_empty() {
+            traduire_lot(&mut batch);
             emit(&batch);
             out.extend(batch);
         }
@@ -365,11 +419,13 @@ pub fn fill_metadata(
             batch.push((g.id.clone(), meta));
         }
         if batch.len() >= NONSTEAM_BATCH {
+            traduire_lot(&mut batch);
             emit(&batch);
             out.extend(batch.drain(..));
         }
     }
     if !batch.is_empty() {
+        traduire_lot(&mut batch);
         emit(&batch);
         out.extend(batch);
     }
@@ -378,4 +434,55 @@ pub fn fill_metadata(
         save_cache(config_dir, &cache);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// La table des genres doit couvrir TOUT le vocabulaire IGDB (relevé sur `/genres`),
+    /// une fois passé par `clean_genre` qui abrège les sigles entre parenthèses. Un genre
+    /// oublié ici s'afficherait en anglais au milieu des autres — et compterait comme une
+    /// catégorie distincte dans le filtre.
+    #[test]
+    fn tous_les_genres_igdb_sont_traduits() {
+        // Les trois derniers sont identiques en français, c'est voulu.
+        let identiques = ["Arcade", "MOBA", "Sport"];
+        for brut in [
+            "Adventure", "Arcade", "Card & Board Game", "Fighting",
+            "Hack and slash/Beat 'em up", "Indie", "MOBA", "Music", "Pinball", "Platform",
+            "Point-and-click", "Puzzle", "Quiz/Trivia", "Racing", "Real Time Strategy (RTS)",
+            "Role-playing (RPG)", "Shooter", "Simulator", "Sport", "Strategy", "Tactical",
+            "Turn-based strategy (TBS)", "Visual Novel",
+        ] {
+            let court = clean_genre(brut);
+            let fr = genre_fr(&court);
+            if !identiques.contains(&brut) {
+                assert_ne!(fr, court, "genre non traduit : {brut}");
+            }
+        }
+    }
+
+    /// Un genre qu'IGDB ajouterait demain doit ressortir tel quel, pas disparaître.
+    #[test]
+    fn un_genre_inconnu_traverse_sans_dommage() {
+        let mut lot = vec![(
+            "steam:1".to_string(),
+            IgdbMeta { genre: Some("Roguelike".into()), ..Default::default() },
+        )];
+        traduire_lot(&mut lot);
+        assert_eq!(lot[0].1.genre.as_deref(), Some("Roguelike"));
+    }
+
+    #[test]
+    fn traduit_les_genres_d_un_lot() {
+        let mut lot = vec![(
+            "steam:2".to_string(),
+            IgdbMeta { genre: Some("Role-playing (RPG)".into()), ..Default::default() },
+        )];
+        // `parse_meta` abrège avant de stocker : on simule la valeur telle qu'elle est en cache.
+        lot[0].1.genre = Some(clean_genre("Role-playing (RPG)"));
+        traduire_lot(&mut lot);
+        assert_eq!(lot[0].1.genre.as_deref(), Some("Jeu de rôle"));
+    }
 }

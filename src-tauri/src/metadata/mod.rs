@@ -13,8 +13,9 @@ type Cache = HashMap<String, GameMeta>;
 fn cache_file(config_dir: &Path) -> PathBuf {
     // Suffixe versionné : à incrémenter quand le schéma `GameMeta` évolue OU la recherche
     // s'améliore, pour ignorer les anciennes entrées. v2 = ajout `size_gb` ; v3 = recherche
-    // avec repli sans numéro final (résout OW2 & co).
-    config_dir.join("metadata_cache_v3.json")
+    // avec repli sans numéro final (résout OW2 & co) ; v4 = sources interrogées en français
+    // (les entrées v3 contiennent des descriptions et des genres anglais).
+    config_dir.join("metadata_cache_v4.json")
 }
 
 fn load_cache(config_dir: &Path) -> Cache {
@@ -63,7 +64,12 @@ fn fetch(game: &GameDto) -> Option<GameMeta> {
         // Epic / manuel : on tente une correspondance par titre sur Steam.
         _ => {
             let appid = steam_store::search_appid(&game.title)?;
-            steam_store::appdetails(&appid)
+            let mut meta = steam_store::appdetails(&appid)?;
+            // ⚠️ Le contenu est bien en français, mais le JEU est deviné : on retire le
+            // drapeau pour que le front ne remplace PAS la description d'IGDB. Une
+            // description française du mauvais jeu est pire qu'une bonne en anglais.
+            meta.localized = false;
+            Some(meta)
         }
     }
 }

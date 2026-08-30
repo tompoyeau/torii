@@ -9,6 +9,7 @@
 import { computed, ref, watch } from "vue";
 import { useFriendLibrary } from "../composables/useFriendLibrary";
 import { useFriendList } from "../composables/useFriendList";
+import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { gradientFor } from "../lib/covers";
 import { platformName } from "../data/platforms";
@@ -16,7 +17,7 @@ import GameCard from "./GameCard.vue";
 import PlatformIcon from "./PlatformIcon.vue";
 import type { Game, LibGame, PlatformId } from "../types";
 
-const { friendLibraryId, showFriends, openGame } = useUi();
+const { friendLibraryId, showFriendProfile, showStore, openGame } = useUi();
 const { games, loading, error, loadedId, devicesOf, load, mine, commonCount } = useFriendLibrary();
 const { inGame, online, offline } = useFriendList();
 
@@ -81,10 +82,25 @@ function cardFor(g: LibGame): Game {
   } as Game;
 }
 
-/** Cliquer n'a de sens que sur un jeu qu'on possède : ça ouvre sa fiche. */
-function onOpen(g: LibGame) {
+/**
+ * Un jeu qu'on possède ouvre SA fiche ; un jeu qu'on n'a pas ouvre son **comparatif de
+ * prix**, par-dessus la bibliothèque de l'ami.
+ *
+ * 🔑 C'est la seule suite qui a du sens ici : on parcourt la bibliothèque de quelqu'un
+ * précisément pour trouver ce qu'on n'a pas, et jusqu'ici le clic ne faisait rien du tout.
+ * Repli identique à `GameDetail.viewInStore` : sans correspondance exacte, `openForTitle`
+ * bascule en recherche, et il faut alors montrer la Boutique où sont les résultats.
+ *
+ * `useStore()` est appelé ici et pas au montage de la vue : l'instancier charge la vitrine,
+ * et ouvrir la bibliothèque d'un ami n'est pas une raison d'aller chercher des promotions.
+ */
+async function onOpen(g: LibGame) {
   const found = mine(g);
-  if (found) openGame(found.id);
+  if (found) {
+    openGame(found.id);
+    return;
+  }
+  if (!(await useStore().openForTitle(g.title))) showStore();
 }
 
 function platformsLabel(g: LibGame): string {
@@ -103,30 +119,48 @@ function sinceLabel(timestamp: number): string {
 const updatedAt = computed(() =>
   devices.value.reduce((max, d) => Math.max(max, d.updatedAt), 0),
 );
+
+/**
+ * Jeux empruntés au groupe familial Steam. Le dire dans l'en-tête évite de laisser croire
+ * qu'un compteur de 464 jeux décrit 464 achats : une partie appartient à quelqu'un d'autre
+ * et peut disparaître du jour au lendemain.
+ */
+const familyCount = computed(() => games.value.filter((g) => g.familyShared).length);
 </script>
 
 <template>
   <div class="friend-lib">
     <div class="sec-head">
-      <button class="chip back" title="Retour aux amis" @click="showFriends()">
+      <!-- Retour au PROFIL et non à la liste : depuis qu'une personne a sa page dans
+           Torii, c'est elle le parent de sa bibliothèque. Revenir aux amis d'un bond
+           sauterait un étage et perdrait la personne qu'on était en train de regarder. -->
+      <button
+        class="chip back"
+        :title="`Retour au profil de ${friendName}`"
+        @click="showFriendProfile(`torii:${friendLibraryId}`)"
+      >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 6l-6 6 6 6" />
         </svg>
-        Amis
+        Profil
       </button>
       <h2>Bibliothèque de {{ friendName }}</h2>
       <span v-if="games.length" class="n">{{ games.length }} jeu{{ games.length > 1 ? "x" : "" }}</span>
-      <span class="spacer" />
-      <input v-model="query" class="search" type="search" placeholder="Rechercher…" />
     </div>
 
     <p v-if="devices.length" class="sub">
       {{ commonCount }} en commun avec toi ·
+      <template v-if="familyCount">
+        {{ familyCount }} via le partage familial Steam ·
+      </template>
       {{ devices.length }} appareil{{ devices.length > 1 ? "s" : "" }} ·
       mis à jour {{ sinceLabel(updatedAt) }}
     </p>
 
+    <!-- Recherche et filtres sur la même ligne : ils font le même travail — restreindre
+         la liste — et les séparer donnait deux barres d'outils pour une seule intention. -->
     <div v-if="games.length" class="filters">
+      <input v-model="query" class="search" type="search" placeholder="Rechercher…" />
       <button
         v-for="f in FILTRES"
         :key="f.key"
@@ -149,10 +183,20 @@ const updatedAt = computed(() =>
 
     <div v-else class="grid">
       <div v-for="g in shown" :key="g.key" class="cell">
-        <GameCard :game="cardFor(g)" @open="onOpen(g)" />
+        <!-- `:actions="false"` : ni étoile, ni œil barré, ni clic droit. On est chez
+             quelqu'un d'autre — ces gestes touchent NOTRE bibliothèque et n'ont rien à
+             faire sur ses jaquettes. -->
+        <GameCard :game="cardFor(g)" :actions="false" @open="onOpen(g)" />
         <div class="note">
           <span class="plats" :title="platformsLabel(g)">
             <PlatformIcon v-for="p in g.platforms" :key="p" :platform="(p as PlatformId)" />
+          </span>
+          <span
+            v-if="g.familyShared"
+            class="family"
+            :title="`${friendName} y a accès par le partage familial Steam : le jeu ne lui appartient pas.`"
+          >
+            Famille Steam
           </span>
           <span v-if="mine(g)" class="owned">Tu l'as aussi</span>
         </div>
@@ -166,7 +210,6 @@ const updatedAt = computed(() =>
 .sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
 .sec-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
 .sec-head .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); }
-.sec-head .spacer { flex: 1; }
 .back { display: inline-flex; align-items: center; gap: 6px; }
 .back svg { width: 16px; height: 16px; }
 .search {
@@ -176,7 +219,7 @@ const updatedAt = computed(() =>
 }
 .search:focus { border-color: var(--accent); }
 .sub { font-size: 12.5px; color: var(--text-dim); margin: 0 0 14px; }
-.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 .empty { color: var(--text-dim); font-size: 14px; padding: 28px 0; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 22px 16px; }
@@ -192,6 +235,14 @@ const updatedAt = computed(() =>
 .owned {
   font-size: 11px; font-weight: 600; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 99px; padding: 2px 8px; white-space: nowrap;
+}
+/* Emprunté à la famille Steam : bleu Steam, et non la couleur d'accent — ce n'est pas
+   une bonne nouvelle à souligner, c'est une nuance de propriété à ne pas confondre avec
+   « il l'a ». */
+.family {
+  font-size: 11px; font-weight: 600; color: var(--steam);
+  background: color-mix(in srgb, var(--steam) 14%, transparent);
   border-radius: 99px; padding: 2px 8px; white-space: nowrap;
 }
 </style>

@@ -97,6 +97,11 @@ function normalizeGame(raw) {
   // dans la WebView, et un refus pur et simple sur mobile.
   const cover = clamp(raw.cover, MAX_COVER);
   if (cover.startsWith("https://")) game.cover = cover;
+  // Jeu emprunté au groupe familial Steam : il est dans la bibliothèque sans lui
+  // appartenir. Retenu comme un booléen strict — un client qui envoie autre chose ne
+  // doit pas pouvoir glisser une chaîne dans l'objet R2. Absent = possédé, le cas
+  // courant, et l'immense majorité des lignes n'a donc pas ce champ.
+  if (raw.familyShared === true) game.familyShared = true;
   return game;
 }
 
@@ -108,7 +113,8 @@ function bucket(env) {
 /**
  * `PUT /v1/library` — dépose la bibliothèque d'un appareil.
  *
- * Corps : `{ deviceId, deviceName, digest, games: [{ key, title, platforms, cover }] }`.
+ * Corps : `{ deviceId, deviceName, digest,
+ *            games: [{ key, title, platforms, cover, familyShared }] }`.
  *
  * `digest` est une empreinte **opaque** calculée par le client. Le serveur ne la recalcule
  * pas : elle ne sert qu'à ce même client (et aux amis, pour leur cache) à savoir s'il faut

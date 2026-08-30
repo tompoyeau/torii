@@ -15,8 +15,13 @@ fn get_json(url: &str) -> Option<Value> {
 
 /// Récupère les métadonnées d'un jeu Steam via l'API publique `appdetails`.
 pub fn appdetails(appid: &str) -> Option<GameMeta> {
+    // 🔑 `l=french` traduit description, genres et date de sortie ; `cc=fr` cale le pays
+    // sur celui de l'utilisateur. Le champ `name`, lui, n'est PAS localisé par Steam
+    // (vérifié) — aucun risque de renommer les jeux de la bibliothèque au passage.
+    // ⚠️ La date devient « 24 févr. 2017 » : `parse_year` cherche une suite de 4 chiffres
+    // en 19xx/20xx, il s'en moque.
     let url =
-        format!("https://store.steampowered.com/api/appdetails?appids={appid}&l=english&cc=us");
+        format!("https://store.steampowered.com/api/appdetails?appids={appid}&l=french&cc=fr");
     let root = get_json(&url)?;
     let entry = root.get(appid)?;
     if !entry["success"].as_bool().unwrap_or(false) {
@@ -57,6 +62,8 @@ pub fn appdetails(appid: &str) -> Option<GameMeta> {
         app_type: data["type"].as_str().map(String::from),
         // Steam n'expose pas la taille d'installation via une API publique.
         size_gb: None,
+        // Interrogé en français, et par appid : aucun doute sur le jeu visé.
+        localized: true,
     })
 }
 
@@ -125,7 +132,7 @@ pub fn search_appid(title: &str) -> Option<String> {
 /// Recherche stricte : ne renvoie un appid que si un résultat a un nom assez proche.
 fn search_exact(title: &str) -> Option<String> {
     let url = format!(
-        "https://store.steampowered.com/api/storesearch/?term={}&cc=us&l=english",
+        "https://store.steampowered.com/api/storesearch/?term={}&cc=fr&l=french",
         percent_encode(title)
     );
     let root = get_json(&url)?;
