@@ -117,6 +117,11 @@ npx wrangler d1 execute torii --remote --file=migrations/0001_libraries.sql
 npx wrangler d1 execute torii --remote --file=migrations/0002_sessions.sql
 ```
 
+> 🔴 **La migration passe AVANT le déploiement du Worker, jamais après.** `0002` ajoute la
+> colonne `sessions.id`, que le nouveau code écrit à chaque ouverture de session : déployer
+> d'abord, c'est une erreur SQL sur `verify` et `signup` — donc **plus personne ne peut se
+> connecter** jusqu'à ce que la migration passe.
+
 ## L'envoi des e-mails
 
 C'est la seule dépendance externe, et elle demande **un domaine à toi** : on ne peut pas
