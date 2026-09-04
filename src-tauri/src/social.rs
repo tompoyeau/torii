@@ -103,6 +103,15 @@ pub struct Presence {
     pub game_title: Option<String>,
     #[serde(default)]
     pub since: Option<i64>,
+    /// Combien de temps le serveur doit retenir cette présence, en secondes.
+    ///
+    /// 🔑 C'est le client qui le dit, parce que lui seul connaît son rythme du moment
+    /// (cf. [`cadence_pour`]) : une valeur fixe côté serveur ferait disparaître un joueur
+    /// au repos entre deux battements, ou laisserait « en jeu » pendant un quart d'heure
+    /// quelqu'un qui vient de fermer Torii. Le serveur la borne, évidemment.
+    /// Absente = l'ancien comportement (90 s), pour les versions déjà installées.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ttl: Option<u64>,
 }
 
 /* ── Transport ─────────────────────────────────────────────────────────────── */
@@ -468,9 +477,75 @@ pub fn clear_presence(config_dir: &Path) -> Result<(), String> {
 
 /* ── Réglages de partage ───────────────────────────────────────────────────── */
 
-/// Rythme du battement de cœur. Le serveur périme une présence à 90 s : trois
-/// battements manqués suffisent donc à passer hors ligne.
-const HEARTBEAT: Duration = Duration::from_secs(30);
+/* ── Rythme du battement de cœur ───────────────────────────────────────────── */
+
+/// 🔑 **Le battement était à 30 s en permanence, et c'est ce qui plafonnait le service.**
+///
+/// Chaque battement fait une requête Worker **et** une écriture D1. À 30 s, c'est
+/// 2 880 par jour et par joueur laissant Torii ouvert — contre 100 000 par jour offertes
+/// pour *chacune* de ces deux ressources, pour TOUT le service. Le calcul est vite fait :
+/// une trentaine de joueurs allumés en continu et le service s'arrête.
+///
+/// Or l'essentiel d'une journée « Torii ouvert » est du temps où **personne ne joue et
+/// personne ne regarde**. C'est ce temps-là qu'on ralentit, et lui seul.
+///
+/// ⚠️ Ce qu'il ne faut PAS ralentir, c'est le bandeau « un ami lance un jeu » : c'est la
+/// fonction phare. D'où trois rythmes plutôt qu'un.
+mod cadence {
+    use std::time::Duration;
+
+    /// Quelqu'un joue — moi ou un ami. C'est le seul moment où l'information bouge vite
+    /// et où quelqu'un la regarde. Rythme d'origine, inchangé.
+    pub const RAPIDE: Duration = Duration::from_secs(30);
+    /// Des amis sont connectés mais personne ne joue : une partie peut démarrer d'une
+    /// seconde à l'autre, et c'est ce délai-là qui borne le bandeau.
+    pub const NORMAL: Duration = Duration::from_secs(90);
+    /// Personne en ligne. Rien à annoncer, personne pour l'entendre.
+    pub const REPOS: Duration = Duration::from_secs(300);
+    /// Pas de compte connecté : aucune requête n'est émise, la boucle ne fait que
+    /// vérifier localement. Autant rester réactif pour le moment où on se connecte.
+    pub const HORS_LIGNE: Duration = RAPIDE;
+    /// Découpage de l'attente. Dormir 5 minutes d'un bloc, c'est ne pas voir qu'on vient
+    /// de lancer un jeu ; on se réveille donc par tranches pour vérifier ça — sans réseau,
+    /// donc gratuitement.
+    pub const TRANCHE: Duration = Duration::from_secs(10);
+}
+
+/// Combien de temps le serveur doit retenir la présence publiée, en secondes.
+///
+/// 🔑 **Trois battements manqués**, comme avant — mais rapporté au rythme du moment, pas à
+/// une constante. Sans ça, un joueur au rythme de repos disparaîtrait avant son battement
+/// suivant, et un joueur en pleine partie qui ferme Torii resterait affiché « en jeu »
+/// pendant un quart d'heure. Le serveur borne cette valeur (cf. `publishPresence`).
+fn retention(cadence: Duration) -> u64 {
+    cadence.as_secs() * 3
+}
+
+/// Choisit le rythme du prochain battement d'après ce qu'on vient d'apprendre.
+///
+/// Isolé et testé pour la même raison que [`presence_for`] : c'est ici que se joue le
+/// compromis entre la réactivité du bandeau et la survie du service, et ce genre
+/// d'arbitrage doit être vérifiable autrement qu'à l'œil.
+///
+/// `circle` vaut `None` quand le battement n'a rien pu lire (panne réseau, session
+/// révoquée) : on garde alors le rythme normal, ni pressé ni endormi.
+fn cadence_pour(je_joue: bool, circle: Option<&Circle>) -> Duration {
+    if je_joue {
+        return cadence::RAPIDE;
+    }
+    let Some(circle) = circle else {
+        return cadence::NORMAL;
+    };
+    if circle.friends.iter().any(|a| a.status == "in-game") {
+        return cadence::RAPIDE;
+    }
+    // « offline » ici veut dire « aucune nouvelle depuis la péremption », donc Torii
+    // fermé — pas « ne joue pas ».
+    if circle.friends.iter().any(|a| a.status != "offline") {
+        return cadence::NORMAL;
+    }
+    cadence::REPOS
+}
 
 /// Ce qu'on laisse voir de soi aux amis.
 pub const PRESENCE_OFFLINE: &str = "offline";
@@ -585,6 +660,11 @@ pub fn game_key(title: &str) -> String {
 }
 
 /// Démarre le fil qui publie la présence et récupère le cercle (un seul aller-retour).
+///
+/// L'attente entre deux battements suit [`cadence_pour`], et elle est **découpée en
+/// tranches** : dormir cinq minutes d'un bloc, ce serait ne pas voir qu'on vient de lancer
+/// un jeu — le sien mettrait cinq minutes à s'afficher chez ses amis. La vérification par
+/// tranche est purement locale (aucune requête), donc elle ne coûte rien.
 pub fn spawn_heartbeat(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut publishing = false;
@@ -594,11 +674,46 @@ pub fn spawn_heartbeat(app: tauri::AppHandle) {
         // 🔑 Le premier cercle reçu ne notifie RIEN : au démarrage, tous ceux qui jouent
         // paraîtraient venir de commencer, et Torii cracherait une volée de bandeaux.
         let mut amorce = true;
+        // Le jeu en cours au dernier battement. Change = on bat tout de suite.
+        let mut jeu_publie: Option<String>;
+        // Le rythme du battement précédent : c'est lui qui dit au serveur combien de
+        // temps retenir la présence (cf. `beat`).
+        let mut cadence_precedente = cadence::NORMAL;
+
         loop {
-            std::thread::sleep(HEARTBEAT);
-            publishing = beat(&app, publishing, &mut parties, &mut amorce);
+            // 🔑 Le battement d'ABORD : la boucle dormait en premier, ce qui laissait
+            // trente secondes avant d'apparaître en ligne. Au rythme de repos, ç'aurait
+            // été cinq minutes.
+            let battement = beat(&app, publishing, cadence_precedente, &mut parties, &mut amorce);
+            publishing = battement.publie;
+            cadence_precedente = battement.cadence;
+            jeu_publie = jeu_courant(&app);
+
+            let mut reste = battement.cadence;
+            while !reste.is_zero() {
+                let tranche = reste.min(cadence::TRANCHE);
+                std::thread::sleep(tranche);
+                reste -= tranche;
+                if jeu_courant(&app) != jeu_publie {
+                    break; // partie lancée ou quittée ici : ça ne peut pas attendre
+                }
+            }
         }
     });
+}
+
+/// L'identifiant du jeu en cours sur cette machine, ou `None`. Sert uniquement à repérer
+/// un changement local entre deux battements.
+fn jeu_courant(app: &tauri::AppHandle) -> Option<String> {
+    procwatch::current_game(app).map(|(id, _, _)| id)
+}
+
+/// Ce qu'un battement laisse derrière lui : l'état de publication, et le rythme du suivant.
+struct Battement {
+    /// Une présence est-elle actuellement publiée ? Permet de l'effacer proprement si le
+    /// partage vient d'être coupé.
+    publie: bool,
+    cadence: Duration,
 }
 
 /// Repère les amis qui **viennent** de lancer une partie et affiche un bandeau.
@@ -651,58 +766,80 @@ fn signaler_lancements(
 fn beat(
     app: &tauri::AppHandle,
     publishing: bool,
+    precedente: Duration,
     parties: &mut HashMap<String, String>,
     amorce: &mut bool,
-) -> bool {
+) -> Battement {
+    let repos = |publie| Battement { publie, cadence: cadence::HORS_LIGNE };
+
     let Ok(dir) = app.path().app_config_dir() else {
-        return publishing;
+        return repos(publishing);
     };
-    // Pas de compte connecté : le service social est simplement inactif.
+    // Pas de compte connecté : le service social est simplement inactif. Aucune requête
+    // n'est émise, donc le rythme choisi ici ne coûte rien — autant rester réactif pour
+    // le moment où quelqu'un se connecte.
     if secrets::load(&dir).torii_token.is_none() {
-        return false;
+        return repos(false);
     }
 
     let prefs = load_prefs(&dir);
     if prefs.mode() == PRESENCE_OFFLINE {
         // Partage coupé alors qu'on publiait : on disparaît tout de suite plutôt que
-        // d'attendre les 90 s de péremption.
+        // d'attendre la péremption.
         if publishing {
             let _ = clear_presence(&dir);
         }
         // 🔑 Invisible ≠ aveugle. On continue de LIRE le cercle : sans ça, quelqu'un en
         // mode invisible ne verrait plus ses amis ni leurs lancements — il serait puni
         // d'avoir voulu se cacher, ce que personne n'attend d'un mode « invisible ».
-        if let Ok(circle) = circle(&dir) {
+        let lu = circle(&dir).ok();
+        if let Some(circle) = &lu {
             if prefs.notify_friend_launch {
-                signaler_lancements(app, &dir, &circle, parties, amorce);
+                signaler_lancements(app, &dir, circle, parties, amorce);
             }
-            let _ = app.emit("torii-circle", circle);
+            let _ = app.emit("torii-circle", circle.clone());
         }
-        return false;
+        // Invisible, on ne publie rien : notre propre partie ne justifie donc pas de
+        // presser le rythme. Seul ce que font les amis compte.
+        return Battement { publie: false, cadence: cadence_pour(false, lu.as_ref()) };
     }
 
     // Un jeu réduit au silence est traité comme si rien ne tournait.
     let muted = id_set::PRESENCE_MUTED.load(&dir);
     let game = procwatch::current_game(app).filter(|(id, _, _)| !muted.contains(id));
+    let je_joue = game.is_some();
 
-    let Some(presence) = presence_for(&prefs, game, procwatch::idle_seconds()) else {
+    let Some(mut presence) = presence_for(&prefs, game, procwatch::idle_seconds()) else {
         if publishing {
             let _ = clear_presence(&dir);
         }
-        return false;
+        return Battement { publie: false, cadence: cadence_pour(je_joue, None) };
     };
+
+    // 🔑 La rétention doit couvrir l'attente QUI SUIT, mais celle-ci dépend du cercle
+    // qu'on n'a pas encore reçu — c'est la réponse de cette requête. On se fie donc au
+    // rythme PRÉCÉDENT, qui est exactement la durée qu'on vient d'attendre et le meilleur
+    // prédicteur de la suivante : le cercle ne change presque jamais d'un battement à
+    // l'autre. Le plancher à `NORMAL` couvre le cas où le rythme vient de s'allonger.
+    //
+    // Une partie en cours fait exception, et volontairement : on annonce alors la
+    // rétention la plus COURTE, pour que fermer Torii en pleine partie ne laisse pas
+    // « en jeu » chez ses amis pendant un quart d'heure.
+    let couverture = if je_joue { cadence::RAPIDE } else { precedente.max(cadence::NORMAL) };
+    presence.ttl = Some(retention(couverture));
 
     match publish(&dir, &presence) {
         Ok(circle) => {
             if prefs.notify_friend_launch {
                 signaler_lancements(app, &dir, &circle, parties, amorce);
             }
+            let cadence = cadence_pour(je_joue, Some(&circle));
             let _ = app.emit("torii-circle", circle);
-            true
+            Battement { publie: true, cadence }
         }
         // Panne réseau ou session révoquée : on retentera au prochain battement, sans
         // rien casser côté interface.
-        Err(_) => publishing,
+        Err(_) => Battement { publie: publishing, cadence: cadence_pour(je_joue, None) },
     }
 }
 
@@ -735,6 +872,8 @@ fn presence_for(
                 game_key: Some(game_key(&title)),
                 game_title: Some(title),
                 since: Some(since),
+                // Posée par `beat`, qui seul connaît le rythme du moment.
+                ttl: None,
             },
             // Une partie en cours prime sur l'inactivité : on peut suivre une
             // cinématique sans toucher au clavier pendant dix minutes.
@@ -764,6 +903,84 @@ mod tests {
             away_after_minutes: 10,
             ..Default::default()
         }
+    }
+
+    fn ami(status: &str) -> Friend {
+        Friend {
+            id: "a1".into(),
+            display_name: "Ami".into(),
+            steam_id: None,
+            status: status.into(),
+            game_key: None,
+            game_title: None,
+            since: None,
+        }
+    }
+
+    fn cercle(statuts: &[&str]) -> Circle {
+        Circle { friends: statuts.iter().map(|s| ami(s)).collect(), ..Default::default() }
+    }
+
+    /// Le rythme rapide est réservé aux moments où quelqu'un joue — c'est le seul cas où
+    /// l'information bouge vite et où quelqu'un la regarde.
+    #[test]
+    fn le_rythme_rapide_est_reserve_aux_parties() {
+        // Je joue : rapide, quoi que fassent les autres.
+        assert_eq!(cadence_pour(true, Some(&cercle(&["offline"]))), cadence::RAPIDE);
+        // Un ami joue : rapide aussi, c'est lui qui déclenchera le bandeau.
+        assert_eq!(cadence_pour(false, Some(&cercle(&["offline", "in-game"]))), cadence::RAPIDE);
+    }
+
+    /// Des amis connectés mais personne en partie : rythme normal. C'est ce délai-là qui
+    /// borne le bandeau « un ami lance un jeu », il ne doit pas partir en vrille.
+    #[test]
+    fn des_amis_en_ligne_maintiennent_le_rythme_normal() {
+        assert_eq!(cadence_pour(false, Some(&cercle(&["online"]))), cadence::NORMAL);
+        assert_eq!(cadence_pour(false, Some(&cercle(&["away", "offline"]))), cadence::NORMAL);
+    }
+
+    /// Personne en ligne : rien à annoncer, personne pour l'entendre. C'est ce cas qui
+    /// représente l'essentiel d'une journée « Torii ouvert », donc l'essentiel du trafic.
+    #[test]
+    fn seul_on_se_met_au_repos() {
+        assert_eq!(cadence_pour(false, Some(&cercle(&["offline", "offline"]))), cadence::REPOS);
+        assert_eq!(cadence_pour(false, Some(&cercle(&[]))), cadence::REPOS);
+    }
+
+    /// Un battement qui n'a rien pu lire ne doit ni s'emballer ni s'endormir : on ne sait
+    /// pas ce qui se passe, on reprend au rythme normal.
+    #[test]
+    fn sans_cercle_on_reste_au_rythme_normal() {
+        assert_eq!(cadence_pour(false, None), cadence::NORMAL);
+        assert_eq!(cadence_pour(true, None), cadence::RAPIDE);
+    }
+
+    /// Contrat de fil avec le serveur : le champ s'appelle `ttl`, et il **disparaît** du
+    /// corps quand il n'est pas posé. C'est ce qui garantit que les versions déjà
+    /// installées — qui ne le connaissent pas — gardent exactement l'ancien comportement,
+    /// le serveur retombant alors sur son défaut de 90 s.
+    #[test]
+    fn le_ttl_ne_part_que_s_il_est_pose() {
+        let muet = Presence { status: "online".into(), ..Default::default() };
+        let json = serde_json::to_string(&muet).unwrap();
+        assert!(!json.contains("ttl"), "rien à envoyer, rien ne part : {json}");
+
+        let dit = Presence { status: "online".into(), ttl: Some(270), ..Default::default() };
+        let json = serde_json::to_string(&dit).unwrap();
+        assert!(json.contains("\"ttl\":270"), "champ attendu par le serveur : {json}");
+    }
+
+    /// La rétention doit toujours couvrir au moins trois battements du rythme annoncé,
+    /// sinon la présence expire avant le battement suivant et l'ami clignote hors ligne.
+    #[test]
+    fn la_retention_couvre_trois_battements() {
+        for c in [cadence::RAPIDE, cadence::NORMAL, cadence::REPOS] {
+            assert_eq!(retention(c), c.as_secs() * 3);
+            assert!(retention(c) >= c.as_secs() * 3, "trois battements manqués au minimum");
+        }
+        // Et elle reste dans les bornes que le serveur accepte (60 à 900 s).
+        assert!(retention(cadence::RAPIDE) >= 60);
+        assert!(retention(cadence::REPOS) <= 900);
     }
 
     /// Le partage est coupé par défaut, et rien ne doit sortir tant qu'il l'est —

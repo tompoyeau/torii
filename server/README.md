@@ -230,11 +230,43 @@ Les routes privées attendent `Authorization: Bearer <jeton>`.
 
 ### Pourquoi `PUT /v1/presence` renvoie les amis
 
-Le client bat le cœur toutes les 30 s. Faire de ce battement la lecture du cercle divise
-le trafic par deux — une requête au lieu de deux. À 30 s d'intervalle, une personne
-génère ~2 880 requêtes/jour ; le forfait gratuit Cloudflare en offre 100 000, soit une
-trentaine de testeurs. Au-delà, il faudra passer au push (WebSocket + Durable Objects,
-plan payant).
+Faire du battement de cœur la lecture du cercle divise le trafic par deux — une requête au
+lieu de deux.
+
+⚠️ Corollaire : **le rythme du battement fixe à la fois la fraîcheur de ce qu'on publie et
+celle de ce qu'on lit.** C'est ce qui rend ce rythme structurant, et pas seulement un
+détail de client.
+
+### Le rythme du battement, et pourquoi il varie
+
+À 30 s constants — ce qu'a fait Torii jusqu'à la 0.19 — une personne génère
+**2 880 requêtes/jour**. Le forfait gratuit en offre 100 000, partagées avec le proxy :
+**une trentaine de joueurs allumés en continu**, et le service s'arrête.
+
+Or l'essentiel d'une journée « Torii ouvert » est du temps où personne ne joue et personne
+ne regarde. Le client fait donc varier son rythme (`cadence_pour` dans `social.rs`) :
+
+| Situation | Rythme | Requêtes/h |
+|---|---|---|
+| Quelqu'un joue (moi ou un ami) | 30 s | 120 |
+| Des amis en ligne, personne en partie | 90 s | 40 |
+| Personne en ligne | 5 min | 12 |
+
+Une journée réaliste (2 h de jeu, 4 h avec des amis connectés, 18 h seul) tombe à
+**~620 requêtes/jour**, soit **~160 joueurs** au lieu de 34. Une journée sans personne :
+288/jour, ~350 joueurs.
+
+🔑 Le délai du bandeau « un ami lance un jeu » est borné par le rythme : 90 s au pire quand
+des amis sont connectés — c'est le seul moment où ça compte. Dès que quelqu'un joue, on
+repasse à 30 s.
+
+Le client annonce en même temps la rétention à appliquer (`ttl`, borné à 60–900 s côté
+serveur), parce que lui seul connaît son rythme du moment. Sans ça, une valeur fixe ferait
+disparaître un joueur au repos entre deux battements, ou laisserait « en jeu » pendant un
+quart d'heure quelqu'un qui vient de fermer Torii.
+
+Au-delà de quelques centaines de joueurs, il faudra le push (WebSocket + Durable Objects)
+ou le plan payant (5 $/mois, 50 M d'écritures D1).
 
 ## États de présence
 

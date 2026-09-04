@@ -8,15 +8,37 @@
  *    d'adresses pour savoir qui utilise Torii. Le code d'ami se donne de la main à la
  *    main, et se régénère si on l'a trop diffusé.
  *
- * 2. **Publier sa présence renvoie celle des autres.** Le client bat le cœur toutes les
- *    30 s ; faire de cet appel la lecture des amis divise par deux le trafic (une requête
- *    au lieu de deux), ce qui compte quand le forfait gratuit se mesure en requêtes/jour.
+ * 2. **Publier sa présence renvoie celle des autres.** Faire de cet appel la lecture des
+ *    amis divise par deux le trafic (une requête au lieu de deux), ce qui compte quand le
+ *    forfait gratuit se mesure en requêtes/jour.
+ *
+ *    ⚠️ Corollaire à ne pas perdre de vue : le rythme du battement fixe **à la fois** la
+ *    fraîcheur de ce qu'on publie et celle de ce qu'on lit. Le client le fait donc varier
+ *    (30 s quand quelqu'un joue, 5 min quand personne n'est en ligne) et annonce au
+ *    serveur la durée de rétention qui va avec — voir `PRESENCE_TTL` plus bas.
  */
 
 import { body, clamp, fail, json, newFriendCode, now } from "./lib.js";
 
-/** Durée de vie d'une présence : ~3 battements manqués et la personne passe hors ligne. */
+/**
+ * Durée de vie d'une présence, en secondes.
+ *
+ * 🔑 C'est le CLIENT qui la propose désormais (`ttl` dans le corps), parce que lui seul
+ * connaît son rythme du moment : il bat toutes les 30 s quand quelqu'un joue, mais
+ * seulement toutes les 5 minutes quand personne n'est en ligne — un battement toutes les
+ * 30 s en permanence, c'est 2 880 requêtes par jour et par joueur contre 100 000 offertes
+ * pour tout le service (cf. `cadence_pour` dans `social.rs`).
+ *
+ * Une valeur fixe ne peut pas convenir aux deux : à 90 s, un joueur au repos disparaîtrait
+ * entre deux battements ; à 900 s, quelqu'un qui ferme Torii en pleine partie resterait
+ * affiché « en jeu » pendant un quart d'heure. D'où une valeur proposée puis **bornée**.
+ *
+ * `PRESENCE_TTL` reste le défaut : c'est ce que reçoivent les versions déjà installées,
+ * qui n'envoient pas ce champ. Leur comportement ne change pas d'un iota.
+ */
 const PRESENCE_TTL = 90;
+const PRESENCE_TTL_MIN = 60;
+const PRESENCE_TTL_MAX = 900;
 /** Bornes d'un lot de SteamID envoyé pour la suggestion d'amis. */
 const MAX_STEAM_IDS = 200;
 
@@ -250,6 +272,11 @@ export async function publishPresence(request, env, session) {
   // Une date de début fournie par le client ne peut pas être dans le futur : les
   // horloges des machines dérivent, et un « depuis 3 h » erroné est très visible.
   const since = Number.isFinite(data.since) ? Math.min(Math.floor(data.since), now()) : null;
+  // Bornée dans les deux sens : trop court, la personne clignote hors ligne entre deux
+  // battements ; trop long, elle reste affichée « en jeu » après avoir fermé Torii.
+  const ttl = Number.isFinite(data.ttl)
+    ? Math.min(Math.max(Math.floor(data.ttl), PRESENCE_TTL_MIN), PRESENCE_TTL_MAX)
+    : PRESENCE_TTL;
 
   await env.DB.prepare(
     `INSERT INTO presence (account_id, status, game_key, game_title, since, expires_at)
@@ -259,7 +286,7 @@ export async function publishPresence(request, env, session) {
        game_title = excluded.game_title, since = excluded.since,
        expires_at = excluded.expires_at`,
   )
-    .bind(session.accountId, status, gameKey, gameTitle, since, now() + PRESENCE_TTL)
+    .bind(session.accountId, status, gameKey, gameTitle, since, now() + ttl)
     .run();
 
   return json(await loadCircle(env, session.accountId));

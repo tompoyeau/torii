@@ -1057,27 +1057,43 @@ Poser une limite sans corriger ça aurait transformé chaque 429 en dégât perm
   portant déjà `aria-expanded`. Il n'y manquait que `aria-haspopup` et Échap. Ne pas
   repartir de l'idée qu'ils sont à refaire.
 
-## 🔴 Le plafond réel : ~34 joueurs simultanés
+## Cadence adaptative du battement (fait) — le plafond passe de ~34 à ~160 joueurs
 
-Trouvé en faisant le lot B, et il domine tout le reste. `HEARTBEAT` = 30 s côté client
-(`social.rs`) et chaque battement fait **une requête Worker + une écriture D1** :
+Le battement était à **30 s en permanence**, et chacun fait une requête Worker **et** une
+écriture D1 : 2 880 par jour et par joueur laissant Torii ouvert, contre 100 000/jour
+offertes pour *chacune* de ces deux ressources — donc **~34 joueurs allumés en continu**.
+⚠️ Ce n'était pas une découverte : `server/README.md` écrivait déjà « soit une trentaine de
+testeurs ». Le calcul était posé, il n'avait simplement jamais été suivi d'effet.
 
-- 2 battements/min × 60 × 24 = **2 880 par jour et par joueur** connecté en permanence ;
-- offre gratuite : **100 000 requêtes Workers/jour** (partagées avec le proxy) et
-  **100 000 écritures D1/jour** ;
-- → le service sature à **~34 joueurs allumés en continu**, ~200 s'ils jouent 4 h/jour.
+- **Trois rythmes** (`cadence_pour`, pur et testé, comme `presence_for` juste à côté) :
+  **30 s** si quelqu'un joue (moi ou un ami), **90 s** si des amis sont en ligne sans
+  jouer, **5 min** si personne n'est en ligne. Journée réaliste (2 h de jeu, 4 h avec des
+  amis, 18 h seul) : ~620 requêtes/jour au lieu de 2 880 → **~160 joueurs**, ~350 pour une
+  journée sans personne.
+- 🔑 **Ce qu'on ne ralentit pas** : le bandeau « un ami lance un jeu ». Son délai est borné
+  par le rythme, donc 90 s au pire *quand des amis sont connectés* — le seul moment où ça
+  compte. Dès que quelqu'un joue, on est à 30 s. C'est tout l'objet des trois paliers
+  plutôt qu'un seul repli.
+- 🔑 **La rétention voyage avec le battement** (`Presence.ttl`, borné 60–900 s par le
+  serveur). Une valeur fixe ne peut pas convenir aux deux extrêmes : à 90 s un joueur au
+  repos disparaîtrait entre deux battements, à 900 s quelqu'un qui ferme Torii en pleine
+  partie resterait « en jeu » un quart d'heure. ⚠️ Le champ **absent** = ancien
+  comportement (90 s) : les versions déjà installées ne changent pas d'un iota, et un test
+  vérifie qu'il ne part pas quand il n'est pas posé.
+- ⚠️ **Poule et œuf, résolu par le rythme PRÉCÉDENT** : la rétention doit couvrir l'attente
+  qui suit, mais celle-ci dépend du cercle… qui arrive dans la réponse de cette requête. On
+  se fie donc au rythme précédent (exactement la durée qu'on vient d'attendre, et le
+  meilleur prédicteur), plancher à `NORMAL`. Exception volontaire : en partie on annonce la
+  rétention la plus COURTE, pour ne pas rester « en jeu » après avoir fermé Torii.
+- 🔑 **L'attente est découpée en tranches de 10 s** et on bat immédiatement si le jeu local
+  a changé. Sans ça, lancer un jeu au rythme de repos mettrait cinq minutes à s'afficher
+  chez les amis. C'est aussi ce qui rattrape le démarrage : `procwatch` n'a pas encore
+  scanné au premier battement, donc un jeu déjà lancé est publié ≤10 s après.
+- Le battement a lieu **avant** la première attente : la boucle dormait d'abord, ce qui
+  laissait 30 s avant d'apparaître en ligne (et aurait fait 5 min avec les nouveaux rythmes).
 
-Aucun des lots A/B/C/D ne touche ce mur. Les issues, par ordre de préférence :
-
-1. **Cadence adaptative** (30 s en jeu ou quand un ami joue, 2–5 min sinon). L'essentiel
-   d'une session 24/7 est « en ligne, personne ne joue » : 4 à 10× de trafic en moins sans
-   rien perdre de perceptible. ⚠️ Le bandeau « un ami lance un jeu » est ce qui souffre —
-   c'est la fonction phare, ne pas la ralentir quand quelqu'un joue.
-2. **Écrire seulement quand ça change** : allonger `PRESENCE_TTL` et ne réécrire que si
-   l'état a bougé ou si la péremption approche. ⚠️ Ne réduit que les écritures D1, pas les
-   requêtes Workers — donc à combiner avec (1), jamais seul.
-3. **Workers Paid, 5 $/mois** : 50 M d'écritures D1/mois, ~570 joueurs 24/7. C'est la
-   réponse honnête au-delà de quelques centaines de joueurs.
+Au-delà de quelques centaines de joueurs, il restera le push (WebSocket + Durable Objects)
+ou le plan payant (5 $/mois, 50 M d'écritures D1/mois).
 
 ## Prochaines étapes
 
