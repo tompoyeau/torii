@@ -1057,6 +1057,43 @@ Poser une limite sans corriger ça aurait transformé chaque 429 en dégât perm
   portant déjà `aria-expanded`. Il n'y manquait que `aria-haspopup` et Échap. Ne pas
   repartir de l'idée qu'ils sont à refaire.
 
+## Durcissement de la WebView (fait) — CSP et portée du protocole `asset`
+
+`tauri.conf.json` avait `"csp": null` et `assetProtocol.scope: ["**"]` : aucune barrière
+dans la WebView, et la possibilité d'y lire **n'importe quel fichier du disque**. Rien
+d'exploitable — un seul `v-html`, sur des SVG locaux — mais dans Tauri une injection front
+donne accès à `invoke`, donc au lancement de processus. C'est le genre de dette qu'on paie
+le jour où quelqu'un ajoute un `v-html` de trop.
+
+- **La directive qui compte, c'est `script-src 'self'`** : sans `'unsafe-inline'`, un
+  `<img onerror=…>` injecté ne s'exécute pas. Le reste est du renfort.
+- ⚠️ **`img-src` reste large (`https:`), et c'est délibéré.** Les jaquettes viennent de CDN
+  qu'on ne construit pas : Steam, IGDB, GOG, Epic, ITAD, Instant Gaming renvoient leurs URL
+  dans leurs réponses d'API, et leurs noms d'hôtes changent. Une liste blanche incomplète =
+  des jaquettes manquantes chez certains, en silence. Un hôte d'images n'exécute rien : on
+  échange une protection quasi nulle contre un risque de régression réel.
+- `connect-src 'self' ipc: http://ipc.localhost` peut, lui, être serré : **le front ne fait
+  aucun `fetch`** (vérifié), tout passe par le pont Tauri.
+- 🔑 **`dangerousDisableAssetCspModification: ["style-src"]`** — le piège du lot. Tauri
+  ajoute ses propres hachages aux directives, et la spec CSP dit qu'une directive
+  contenant un hash **ignore `'unsafe-inline'`**. Or l'application a 13 liaisons `:style`
+  (le dégradé de chaque jaquette, la position du menu contextuel…) : si `'unsafe-inline'`
+  devenait inerte, la grille perdrait tous ses fonds. Le drapeau interdit à Tauri de
+  toucher `style-src`, donc notre `'unsafe-inline'` reste effectif.
+- `devCsp` est posée en parallèle (Vite + HMR : `'unsafe-inline'`, `'unsafe-eval'`,
+  `ws://localhost:1420`) pour que `npm run tauri dev` continue de marcher.
+- **Portée `asset` = les extensions d'images, pas `**`.** La liste reflète exactement le
+  filtre du sélecteur de jaquette (`AddGameModal.browseCover`). Les motifs sont écrits en
+  classes de caractères (`**/*.[jJ][pP][gG]`) parce que les globs sont **sensibles à la
+  casse** et qu'un chemin peut être saisi à la main. Ça ne protège pas d'une lecture
+  d'image, mais ça ferme `credentials.dat`, les documents et le code source.
+  ⚠️ Ne pas restreindre à un dossier : la jaquette d'un jeu manuel est un fichier que
+  l'utilisateur choisit **où il veut** et qui reste sur place (cf. `displayableCover`).
+- Vérifié : le `dist/index.html` produit ne contient **aucun script ni style en ligne**
+  (un `<script src>` et un `<link rel=stylesheet>`), donc `script-src 'self'` passe sans
+  hachage. Et la politique appliquée telle quelle dans un navigateur ne produit **aucune
+  violation** sur la grille, une fiche de jeu et les Paramètres.
+
 ## Cadence adaptative du battement (fait) — le plafond passe de ~34 à ~160 joueurs
 
 Le battement était à **30 s en permanence**, et chacun fait une requête Worker **et** une
@@ -1103,7 +1140,4 @@ ou le plan payant (5 $/mois, 50 M d'écritures D1/mois).
 
 ### Diffusion à grande échelle — lots restants
 
-- **Lot D — WebView** : `"csp": null` et `assetProtocol.scope: ["**"]` dans
-  `tauri.conf.json`. Rien d'exploitable aujourd'hui (un seul `v-html`, sur des SVG locaux),
-  mais dans Tauri une injection front donne accès à `invoke`, donc au lancement de
-  processus. À faire avant que quelqu'un n'ajoute un `v-html` de trop.
+(les quatre lots sont faits ; voir les sections dédiées plus haut)
