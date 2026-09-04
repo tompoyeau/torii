@@ -1094,6 +1094,30 @@ le jour où quelqu'un ajoute un `v-html` de trop.
   hachage. Et la politique appliquée telle quelle dans un navigateur ne produit **aucune
   violation** sur la grille, une fiche de jeu et les Paramètres.
 
+### 🔑 `cargo build --release` NE teste PAS la CSP de production
+
+Piège coûteux, qui m'a fait annoncer à tort que la CSP cassait l'application. `tauri-build`
+émet `cargo:rustc-cfg=dev` pour **tout** build lancé hors du CLI Tauri — `cargo check`,
+`cargo build`, **et `cargo build --release`**. Et `dev` veut dire que c'est la `devCsp`,
+la permissive, qui s'applique. Un binaire release construit à la main ne prouve donc
+**rien** sur la politique réelle.
+
+Le vérifier en une commande, avant de conclure quoi que ce soit :
+
+```bash
+for d in src-tauri/target/release/build/ludo-*/; do
+  printf '%s dev=%s\n' "$d" "$(grep -c 'cfg=dev' "$d/output")"
+done
+```
+
+Seul `npm run tauri build` produit un `dev=0`. ⚠️ Il finit en erreur sur la signature de
+l'updater sans `TAURI_SIGNING_PRIVATE_KEY` — mais **le `.exe` est écrit avant** cette
+étape, donc il reste testable (les bundles MSI/NSIS aussi).
+
+Corollaire à retenir : chercher la politique dans le `.exe` ne marche pas non plus, les
+assets du front y sont **compressés** (ni le titre HTML ni le nom du bundle JS ne s'y
+retrouvent). L'absence d'une directive dans le binaire ne prouve rien.
+
 ## Cadence adaptative du battement (fait) — le plafond passe de ~34 à ~160 joueurs
 
 Le battement était à **30 s en permanence**, et chacun fait une requête Worker **et** une
