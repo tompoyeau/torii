@@ -1465,6 +1465,27 @@ async fn torii_remove_friend(app: tauri::AppHandle, account_id: String) -> Resul
     Ok(offload!(social::remove_friend(&dir, &account_id))?)
 }
 
+/// Les appareils connectés à ce compte Torii.
+#[tauri::command]
+async fn torii_devices(app: tauri::AppHandle) -> Result<Vec<social::Appareil>, String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::appareils(&dir))?)
+}
+
+/// Déconnecte un appareil (le serveur refuse ceux qui ne sont pas à nous).
+#[tauri::command]
+async fn torii_revoke_device(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::revoquer_appareil(&dir, &id))?)
+}
+
+/// Déconnecte tous les autres appareils, jamais celui-ci.
+#[tauri::command]
+async fn torii_revoke_other_devices(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::revoquer_autres_appareils(&dir))?)
+}
+
 /// Régénère son code d'ami : l'ancien cesse aussitôt de fonctionner.
 #[tauri::command]
 async fn torii_rotate_code(app: tauri::AppHandle) -> Result<String, String> {
@@ -1921,6 +1942,9 @@ pub fn run() {
             torii_invite_account,
             torii_respond,
             torii_remove_friend,
+            torii_devices,
+            torii_revoke_device,
+            torii_revoke_other_devices,
             torii_rotate_code,
             torii_suggestions,
             torii_prefs,

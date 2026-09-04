@@ -29,4 +29,44 @@ bucket_name = "torii-libraries"
 # [[send_email]]
 # name = "EMAIL"
 
-# Les secrets (PEPPER, EMAIL_FROM, DEV_CODES) ne sont PAS ici : `wrangler secret put`.
+# --- Limites ------------------------------------------------------------------
+#
+# ⚠️ Elles exigent **wrangler 4** : wrangler 3 ignore cette section SANS RIEN DIRE et
+# déploie un Worker sans aucune limite. Le Worker répond 500 « mal configuré » si les
+# bindings manquent, pour que l'oubli se voie tout de suite.
+#
+# `period` n'accepte que 10 ou 60 (secondes), et le compteur est tenu par centre de
+# données : c'est un garde-fou contre l'abus, pas une comptabilité exacte.
+
+# Toutes les routes. Un client normal fait 2 requêtes/minute (le battement de cœur en fait
+# une toutes les 30 s) : 300 laisse tout le monde tranquille et coupe le martèlement.
+[[ratelimits]]
+name = "RL_API"
+namespace_id = "2001"
+simple = { limit = 300, period = 60 }
+
+# Envoi de codes, par IP. Les garde-fous de `login_codes` sont par ADRESSE E-MAIL : ils
+# protègent la boîte de quelqu'un, pas le service — 10 000 adresses différentes les
+# traversent sans en déclencher un seul. Un humain en demande un, deux s'il se trompe.
+[[ratelimits]]
+name = "RL_CODE"
+namespace_id = "2002"
+simple = { limit = 5, period = 60 }
+
+# 🔑 Envoi de codes, pour le SERVICE ENTIER (une seule clé, « global »). C'est le seul
+# rempart contre une attaque distribuée, où chaque requête vient d'une IP différente — par
+# exemple une page web qui fait appeler la route par le navigateur de ses visiteurs. Sans
+# lui, le compte Resend est suspendu et le domaine grillé : plus personne ne se connecte,
+# y compris les comptes existants. Mieux vaut un 429 passager.
+[[ratelimits]]
+name = "RL_CODE_GLOBAL"
+namespace_id = "2003"
+simple = { limit = 20, period = 60 }
+
+# Ménage nocturne : codes de connexion périmés et sessions abandonnées. Ce sont les deux
+# seules tables dont la taille dépend du nombre de TENTATIVES et non du nombre de comptes.
+[triggers]
+crons = ["17 4 * * *"]
+
+# Les secrets (PEPPER, EMAIL_FROM, RESEND_API_KEY, DEV_CODES) ne sont PAS ici :
+# `wrangler secret put`.

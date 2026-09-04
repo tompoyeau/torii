@@ -24,10 +24,27 @@ export function fail(status, code, message) {
   return json({ error: code, message }, status);
 }
 
-/** Corps JSON d'une requête, ou `null` s'il est absent/illisible (jamais d'exception). */
-export async function body(request) {
+/**
+ * Corps maximal accepté par défaut. Toutes les routes de ce service échangent de petits
+ * objets ; celle qui envoie une bibliothèque pose sa propre borne, plus haute.
+ */
+export const MAX_CORPS = 64 * 1024;
+
+/**
+ * Corps JSON d'une requête, ou `null` s'il est absent, illisible ou trop gros (jamais
+ * d'exception).
+ *
+ * 🔑 La taille se vérifie **après lecture**, pas seulement sur `content-length` : un envoi
+ * en `chunked` n'annonce aucune taille, et le contrôle d'en-tête seul se contourne en un
+ * drapeau `curl`. On lit donc en texte d'abord — la borne s'applique avant que
+ * `JSON.parse` n'ait à digérer quoi que ce soit.
+ */
+export async function body(request, max = MAX_CORPS) {
+  if (Number(request.headers.get("content-length") || 0) > max) return null;
   try {
-    return await request.json();
+    const texte = await request.text();
+    if (texte.length > max) return null;
+    return JSON.parse(texte);
   } catch {
     return null;
   }
@@ -45,6 +62,30 @@ const ENC = new TextEncoder();
  */
 export async function hash(value, pepper) {
   const bytes = await crypto.subtle.digest("SHA-256", ENC.encode(`${pepper}:${value}`));
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * HMAC-SHA256 en hexadécimal — pour **signer**, là où `hash` ne fait que masquer.
+ *
+ * 🔑 Pourquoi les deux coexistent, et pourquoi il ne faut PAS remplacer `hash` par
+ * celui-ci : `hash` sert à ranger en base des valeurs à forte entropie (jetons de session,
+ * codes de connexion) qu'on ne fait que comparer. Changer sa formule invaliderait d'un
+ * coup toutes les sessions ouvertes et tous les codes en vol. `hmac`, lui, signe des
+ * données que le CLIENT nous rapporte — le laissez-passer d'inscription — c'est-à-dire le
+ * seul endroit où un attaquant choisit une partie du message. `SHA256(poivre + message)`
+ * y était une construction maison, sensible par famille aux extensions de longueur ;
+ * HMAC est la construction faite pour ça, et elle tient en cinq lignes.
+ */
+export async function hmac(value, pepper) {
+  const cle = await crypto.subtle.importKey(
+    "raw",
+    ENC.encode(pepper),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const bytes = await crypto.subtle.sign("HMAC", cle, ENC.encode(value));
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 

@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -350,6 +350,21 @@ export async function toriiRemoveFriend(accountId: string): Promise<void> {
 /** Régénère son code d'ami ; l'ancien cesse aussitôt de fonctionner. */
 export async function toriiRotateCode(): Promise<string> {
   return await social<string>("torii_rotate_code");
+}
+
+/** Les appareils connectés à ce compte Torii, du plus récemment vu au plus ancien. */
+export async function toriiDevices(): Promise<ToriiDevice[]> {
+  return await social<ToriiDevice[]>("torii_devices");
+}
+
+/** Déconnecte un appareil. Le serveur refuse ceux qui ne sont pas à nous. */
+export async function toriiRevokeDevice(id: string): Promise<void> {
+  await social<void>("torii_revoke_device", { id });
+}
+
+/** Déconnecte tous les autres appareils — jamais celui-ci. */
+export async function toriiRevokeOtherDevices(): Promise<void> {
+  await social<void>("torii_revoke_other_devices");
 }
 
 /** Amis Steam déjà sur Torii (les deux comptes doivent être découvrables). */

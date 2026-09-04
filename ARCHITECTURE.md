@@ -979,6 +979,64 @@ Poser une limite sans corriger ça aurait transformé chaque 429 en dégât perm
 - `Limite` interrompt la passe (les appels suivants seraient refusés pareillement et
   compteraient quand même), et la passe incomplète est tracée dans le journal.
 
+## Durcissement de l'API sociale (fait) — sessions, ménage, limites, appareils
+
+- **Les sessions ne mouraient jamais.** `authenticate` ne regardait pas l'âge du jeton,
+  `last_seen_at` n'était jamais mis à jour, rien ne purgeait la table. Désormais
+  `SESSION_TTL` = 6 mois **d'inactivité** (Torii bat le cœur toutes les 30 s : un appareil
+  utilisé ne tombe jamais), la session morte est supprimée au moment où on la découvre, et
+  le ménage nocturne ramasse le reste.
+- 🔑 `REFRESH_MIN` = 24 h, et **surtout pas une écriture par requête** : à 30 s de
+  battement ce serait 2 880 écritures/jour et par appareil, contre 100 000/jour offertes
+  pour TOUT le service. Une écriture par appareil et par jour suffit à distinguer un
+  appareil vivant d'un appareil abandonné.
+- **Écran « mes appareils »** (Réglages → Réseau Torii) : `GET /v1/sessions`,
+  `DELETE /v1/sessions/{id}`, `DELETE /v1/sessions` (tous les autres). Colonne `id`
+  ajoutée (migration `0002`) — un identifiant **public**, distinct de `token_hash` qui ne
+  sort jamais du serveur. `current` marque cet appareil : sans lui, le seul faux pas
+  possible de l'écran serait de se déconnecter soi-même.
+  ⚠️ Ne pas confondre avec les appareils de `libraryIndex` juste au-dessus dans les mêmes
+  réglages : ceux-là ont **déposé une bibliothèque**, ceux-ci ont une **session ouverte**.
+- **Trois limites par IP** (`RL_API` 300/min, `RL_CODE` 5/min, `RL_CODE_GLOBAL` 20/min sur
+  une clé unique). 🔑 La globale n'est pas un doublon : les garde-fous de `login_codes`
+  sont **par adresse e-mail**, donc 10 000 adresses les traversent sans en déclencher un
+  seul, et une attaque distribuée a autant d'IP qu'elle veut. Ce qu'on protège, c'est le
+  compte Resend — suspendu, plus personne ne se connecte, comptes existants compris.
+- **HMAC** pour le laissez-passer d'inscription, au lieu de `SHA256(poivre + message)`.
+  ⚠️ NE PAS étendre `hmac` aux jetons ni aux codes : `hash` y range des valeurs à forte
+  entropie qu'on ne fait que comparer, et changer sa formule invaliderait d'un coup toutes
+  les sessions ouvertes. HMAC ne sert que là où le CLIENT rapporte le message.
+- **`body()` borne la lecture après coup**, pas seulement sur `content-length` : un envoi
+  `chunked` n'annonce aucune taille et traversait l'ancien contrôle. 🔑 `updateMe` est le
+  seul appelant qui distingue « corps vide » de « corps illisible » — les autres finissent
+  de toute façon en 400 faute du champ attendu, alors que lui répondait **200 avec le
+  compte inchangé** : un appel refusé qui a l'air d'avoir réussi.
+- Déclencheur cron `17 4 * * *` → `menage()`. `presence` n'est purgée qu'au bout d'un mois :
+  une ligne par compte, réécrite au même endroit, donc elle ne croît pas — l'effacer plus
+  tôt coûterait une écriture pour la recréer au retour de la personne.
+
+## 🔴 Le plafond réel : ~34 joueurs simultanés
+
+Trouvé en faisant le lot B, et il domine tout le reste. `HEARTBEAT` = 30 s côté client
+(`social.rs`) et chaque battement fait **une requête Worker + une écriture D1** :
+
+- 2 battements/min × 60 × 24 = **2 880 par jour et par joueur** connecté en permanence ;
+- offre gratuite : **100 000 requêtes Workers/jour** (partagées avec le proxy) et
+  **100 000 écritures D1/jour** ;
+- → le service sature à **~34 joueurs allumés en continu**, ~200 s'ils jouent 4 h/jour.
+
+Aucun des lots A/B/C/D ne touche ce mur. Les issues, par ordre de préférence :
+
+1. **Cadence adaptative** (30 s en jeu ou quand un ami joue, 2–5 min sinon). L'essentiel
+   d'une session 24/7 est « en ligne, personne ne joue » : 4 à 10× de trafic en moins sans
+   rien perdre de perceptible. ⚠️ Le bandeau « un ami lance un jeu » est ce qui souffre —
+   c'est la fonction phare, ne pas la ralentir quand quelqu'un joue.
+2. **Écrire seulement quand ça change** : allonger `PRESENCE_TTL` et ne réécrire que si
+   l'état a bougé ou si la péremption approche. ⚠️ Ne réduit que les écritures D1, pas les
+   requêtes Workers — donc à combiner avec (1), jamais seul.
+3. **Workers Paid, 5 $/mois** : 50 M d'écritures D1/mois, ~570 joueurs 24/7. C'est la
+   réponse honnête au-delà de quelques centaines de joueurs.
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.
@@ -987,12 +1045,6 @@ Poser une limite sans corriger ça aurait transformé chaque 429 en dégât perm
 
 ### Diffusion à grande échelle — lots restants
 
-- **Lot B — API sociale** : sessions sans expiration ni rafraîchissement (`authenticate`
-  ne regarde pas l'âge du jeton, `last_seen_at` n'est jamais mis à jour, rien ne purge),
-  pas d'écran « mes appareils », `login_codes` jamais purgée, aucune limite par IP sur
-  `request-code` (le garde-fou est par adresse e-mail : 10 000 adresses = 50 000 mails/h
-  via Resend, compte suspendu), `MAX_BODY` contournable en `chunked` (corrigé côté proxy,
-  pas côté API), laissez-passer d'inscription signé `SHA256(pepper:msg)` au lieu d'un HMAC.
 - **Lot C — accessibilité** : `<html lang="en">` alors que tout est en français ;
   `--text-faint` sous le seuil AA dans les deux thèmes (3,9:1 sombre, 2,8:1 clair) et
   `--accent-ink` sur `--accent` à 3,7:1 en clair ; `outline: none` sur 9 champs de saisie ;

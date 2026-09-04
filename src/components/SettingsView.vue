@@ -27,6 +27,7 @@ const {
   findSteamFriends, inviteAccount, rotateCode, setDisplayName,
   libraryIndex: toriiLibrary, librarySyncing, refreshLibraryIndex,
   setLibrarySync, setShareLibrary, syncLibraryNow, forgetDevice,
+  devices, devicesLoading, refreshDevices, revokeDevice, revokeOtherDevices,
 } = useTorii();
 
 /* ── Bibliothèque synchronisée ─────────────────────────────────────────────── */
@@ -78,6 +79,40 @@ const onSyncLibraryNow = () =>
   });
 
 const onForgetDevice = (deviceId: string) => withLibrary(() => forgetDevice(deviceId));
+
+/* ── Appareils connectés ───────────────────────────────────────────────────── */
+
+/**
+ * ⚠️ Rien à voir avec `otherDevices` juste au-dessus : ceux-là ont déposé une
+ * bibliothèque, ceux-ci ont une session ouverte. Un PC peut être connecté sans jamais
+ * avoir rien synchronisé — et c'est précisément celui qu'on veut pouvoir déconnecter.
+ */
+const devicesError = ref<string | null>(null);
+const revokeAllOpen = ref(false);
+const otherSessions = computed(() => devices.value.filter((d) => !d.current));
+
+async function withDevices(action: () => Promise<unknown>) {
+  devicesError.value = null;
+  try {
+    await action();
+  } catch (e) {
+    devicesError.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+const onRevokeDevice = (id: string, nom: string) =>
+  withDevices(async () => {
+    await revokeDevice(id);
+    showToast(`« ${nom} » a été déconnecté.`);
+  });
+
+const onRevokeOthers = () =>
+  withDevices(async () => {
+    const combien = otherSessions.value.length;
+    await revokeOtherDevices();
+    revokeAllOpen.value = false;
+    showToast(combien > 1 ? `${combien} appareils déconnectés.` : "L'autre appareil a été déconnecté.");
+  });
 
 /** Pseudo en cours d'édition (non enregistré tant qu'on ne valide pas). */
 const pseudoDraft = ref("");
@@ -285,7 +320,11 @@ const startMinimized = ref(false);
 const closeToTray = ref(false);
 async function refreshSystemPrefs() {
   // L'index des bibliothèques suit le même chemin : il a pu changer depuis un autre PC.
-  if (toriiConnected.value) void refreshLibraryIndex().catch(() => {});
+  // Les sessions ouvertes aussi — c'est même le seul endroit d'où on peut les voir.
+  if (toriiConnected.value) {
+    void refreshLibraryIndex().catch(() => {});
+    void refreshDevices().catch(() => {});
+  }
   // Relu à chaque ouverture : quelqu'un qui vient de connecter Steam ne doit pas avoir
   // à redémarrer Torii pour que « visible par mes amis Steam » devienne cliquable.
   mySteamId.value = (await getSettings())?.steamId ?? null;
@@ -861,6 +900,57 @@ function unhide(id: string) {
                 Aucun jeu masqué. Fais un clic droit sur un jeu pour l'ajouter.
               </p>
 
+              <div class="divider" />
+
+              <h3 class="sub-title">Mes appareils</h3>
+              <p class="pane-hint">
+                Les machines où ce compte Torii est connecté. Une session inutilisée
+                pendant six mois tombe d'elle-même, mais si tu ne reconnais pas un
+                appareil, déconnecte-le tout de suite : c'est immédiat et sans appel.
+              </p>
+
+              <p v-if="devicesError" class="row-error" role="alert">{{ devicesError }}</p>
+
+              <div v-if="devices.length" class="items">
+                <div v-for="d in devices" :key="d.id" class="item">
+                  <div class="item-text">
+                    <span class="item-title">
+                      {{ d.device }}
+                      <span v-if="d.current" class="tag">cet appareil</span>
+                    </span>
+                    <span class="item-sub">
+                      Connecté {{ sinceLabel(d.createdAt) }}<template v-if="!d.current">
+                        · actif {{ sinceLabel(d.lastSeenAt) }}</template>
+                    </span>
+                  </div>
+                  <button
+                    v-if="!d.current"
+                    class="ghost-btn"
+                    @click="onRevokeDevice(d.id, d.device)"
+                  >
+                    Déconnecter
+                  </button>
+                </div>
+              </div>
+              <p v-else class="empty">
+                {{ devicesLoading ? "Chargement…" : "Aucun appareil connecté à afficher." }}
+              </p>
+
+              <div v-if="otherSessions.length" class="row-actions">
+                <button v-if="!revokeAllOpen" class="ghost-btn" @click="revokeAllOpen = true">
+                  Déconnecter tous les autres appareils
+                </button>
+                <template v-else>
+                  <span class="confirm-lead">
+                    {{ otherSessions.length > 1
+                      ? `Les ${otherSessions.length} autres appareils devront se reconnecter.`
+                      : "L'autre appareil devra se reconnecter." }}
+                  </span>
+                  <button class="danger-btn" @click="onRevokeOthers">Confirmer</button>
+                  <button class="ghost-btn" @click="revokeAllOpen = false">Annuler</button>
+                </template>
+              </div>
+
               <div class="row-actions">
                 <button class="ghost-btn" @click="toriiLogout()">Déconnecter ce compte</button>
               </div>
@@ -1092,6 +1182,15 @@ function unhide(id: string) {
 }
 .clear-all:hover { color: var(--accent); }
 .empty { font-size: 13.5px; color: var(--text-faint); margin: 4px 0 0; }
+
+/* Étiquette « cet appareil » : discrète, mais c'est elle qui évite de se déconnecter
+   soi-même en croyant fermer une autre machine. */
+.tag {
+  margin-left: 8px; padding: 2px 7px; border-radius: 99px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--accent); background: var(--accent-soft);
+}
+.confirm-lead { align-self: center; font-size: 12.5px; color: var(--text-dim); }
 
 @media (max-width: 720px) {
   .dialog { flex-direction: column; height: 90vh; }

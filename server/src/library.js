@@ -124,12 +124,14 @@ export async function uploadLibrary(request, env, session) {
   const libs = bucket(env);
   if (!libs) return fail(500, "mal_configure", "Le stockage des bibliothèques n'est pas configuré.");
 
-  const annonce = Number(request.headers.get("content-length") || 0);
-  if (annonce > MAX_BODY) {
+  // Deux contrôles, et il en faut deux : celui-ci donne le bon message d'erreur à un vrai
+  // client (qui annonce toujours sa taille), et `body(…, MAX_BODY)` borne la lecture même
+  // quand rien n'est annoncé — un envoi en `chunked` traversait l'ancien contrôle seul.
+  if (Number(request.headers.get("content-length") || 0) > MAX_BODY) {
     return fail(413, "trop_gros", "Cette bibliothèque dépasse la taille acceptée.");
   }
 
-  const data = (await body(request)) || {};
+  const data = (await body(request, MAX_BODY)) || {};
   const deviceId = clamp(data.deviceId, 40);
   if (!ID.test(deviceId)) {
     return fail(400, "appareil_invalide", "Identifiant d'appareil invalide.");

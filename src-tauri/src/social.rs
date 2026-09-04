@@ -281,6 +281,47 @@ pub fn logout(config_dir: &Path) -> Result<(), String> {
     secrets::save(config_dir, &creds)
 }
 
+/// Un appareil connecté à ce compte, tel que l'affiche l'écran « mes appareils ».
+///
+/// `id` est un identifiant public, distinct de l'empreinte du jeton — laquelle ne sort
+/// jamais du serveur. `current` marque cet ordinateur-ci : sans ça, le seul faux pas
+/// possible de cet écran serait de se déconnecter soi-même en croyant fermer une autre
+/// machine.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Appareil {
+    pub id: String,
+    pub device: String,
+    pub created_at: i64,
+    pub last_seen_at: i64,
+    pub current: bool,
+}
+
+/// Les appareils connectés à ce compte, du plus récemment vu au plus ancien.
+pub fn appareils(config_dir: &Path) -> Result<Vec<Appareil>, String> {
+    #[derive(Deserialize)]
+    struct Wrapper {
+        sessions: Vec<Appareil>,
+    }
+    let w: Wrapper = call(config_dir, "GET", "/v1/sessions", None)?;
+    Ok(w.sessions)
+}
+
+/// Déconnecte un appareil. Le serveur refuse ceux qui ne sont pas à nous.
+pub fn revoquer_appareil(config_dir: &Path, id: &str) -> Result<(), String> {
+    let _: serde_json::Value = call(config_dir, "DELETE", &format!("/v1/sessions/{id}"), None)?;
+    Ok(())
+}
+
+/// Déconnecte tous les autres appareils, jamais celui-ci.
+///
+/// C'est le geste à faire quand on soupçonne qu'un jeton a fuité : tout tombe d'un coup
+/// sans qu'on ait à se reconnecter là où on est en train d'agir.
+pub fn revoquer_autres_appareils(config_dir: &Path) -> Result<(), String> {
+    let _: serde_json::Value = call(config_dir, "DELETE", "/v1/sessions", None)?;
+    Ok(())
+}
+
 /// Compte connecté, ou `None` si aucune session valide (jeton absent ou révoqué).
 pub fn me(config_dir: &Path) -> Option<Account> {
     #[derive(Deserialize)]

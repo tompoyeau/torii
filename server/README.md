@@ -25,6 +25,28 @@ quoi, maintenant »). Base **D1** (SQLite).
 - **Pas d'annuaire.** On ajoute un ami par **code d'ami**, jamais par e-mail : sinon
   tester une liste d'adresses suffirait à savoir qui utilise Torii. Les suggestions par
   SteamID exigent que **les deux** personnes se soient rendues découvrables.
+- **Une session n'est pas éternelle.** Elle expire après six mois **sans usage** (Torii
+  bat le cœur toutes les 30 s : quelqu'un qui s'en sert n'est jamais déconnecté), et
+  `GET /v1/sessions` permet de voir et de fermer les appareils encore connectés. Un
+  ménage nocturne efface les sessions mortes et les codes de connexion périmés — les deux
+  seules tables dont la taille dépend du nombre de tentatives et non du nombre de comptes.
+
+## Ce qui borne l'abus
+
+Le service tient sur l'offre gratuite, et la ressource la plus fragile n'est pas la base
+mais **l'envoi d'e-mails** : un compte Resend suspendu, c'est plus personne qui peut se
+connecter, y compris les comptes existants.
+
+- `RL_API` — **300 requêtes/min par IP**, toutes routes. Un client normal en fait deux.
+- `RL_CODE` — **5 demandes de code/min par IP**. ⚠️ Les garde-fous de `login_codes` sont
+  **par adresse e-mail** : ils protègent la boîte de quelqu'un, pas le service. 10 000
+  adresses différentes les traversent sans en déclencher un seul.
+- `RL_CODE_GLOBAL` — **20 codes/min pour le service entier**, une seule clé. C'est le seul
+  rempart contre une attaque distribuée, où chaque requête vient d'une IP différente.
+
+⚠️ Ces limites exigent **wrangler 4** : wrangler 3 ignore la section `[[ratelimits]]` sans
+rien dire et déploie un Worker sans aucune limite. Le Worker répond 500 « mal configuré »
+si les bindings manquent, pour que l'oubli se voie tout de suite.
 
 ## Mise en place (une seule fois)
 
@@ -92,6 +114,7 @@ dans `migrations/`, à appliquer une fois :
 
 ```bash
 npx wrangler d1 execute torii --remote --file=migrations/0001_libraries.sql
+npx wrangler d1 execute torii --remote --file=migrations/0002_sessions.sql
 ```
 
 ## L'envoi des e-mails
@@ -182,6 +205,9 @@ Les routes privées attendent `Authorization: Bearer <jeton>`.
 | `POST /v1/auth/verify` | `{ email, code, device }` → jeton de session. Crée le compte à la première connexion. |
 | `POST /v1/auth/logout` | Révoque la session courante (les autres appareils restent connectés). |
 | `GET /v1/me` | Le compte connecté. |
+| `GET /v1/sessions` | Les appareils connectés à ce compte. Ne renvoie jamais d'empreinte de jeton. |
+| `DELETE /v1/sessions/{id}` | Déconnecte un appareil. |
+| `DELETE /v1/sessions` | Déconnecte tous les **autres** appareils, jamais celui-ci. |
 | `PATCH /v1/me` | Nom affiché, SteamID, découvrabilité. |
 | `GET /v1/friends` | Amis (avec présence), demandes reçues, demandes envoyées. |
 | `POST /v1/friends/invite` | `{ friendCode }`. Inviter quelqu'un qui nous a déjà invité vaut acceptation. |

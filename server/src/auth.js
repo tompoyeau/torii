@@ -9,7 +9,7 @@
  */
 
 import {
-  body, clamp, fail, hash, json, looksLikeEmail, newFriendCode, newId,
+  body, clamp, fail, hash, hmac, json, looksLikeEmail, newFriendCode, newId,
   normalizeEmail, now, randomCode, randomToken, sameHash,
 } from "./lib.js";
 import { forgetAllLibraries } from "./library.js";
@@ -25,6 +25,29 @@ const SEND_WINDOW = 3600;
 const MAX_ATTEMPTS = 5;
 /** Validité du laissez-passer d'inscription : le temps de choisir un pseudo, pas plus. */
 const SIGNUP_TTL = 15 * 60;
+
+/**
+ * Durée de vie d'une session, comptée depuis la **dernière utilisation**.
+ *
+ * 🔑 Avant, un jeton valait à vie : rien ne regardait son âge, `last_seen_at` n'était
+ * jamais mis à jour et aucune ligne n'était jamais supprimée. Un jeton dérobé ouvrait le
+ * compte pour toujours, et la table ne faisait que grossir.
+ *
+ * Six mois d'INACTIVITÉ, pas six mois tout court : Torii bat le cœur toutes les 30 s, donc
+ * quelqu'un qui s'en sert n'est jamais déconnecté. Ne tombent que les appareils
+ * abandonnés — le PC revendu, la machine réinstallée.
+ */
+const SESSION_TTL = 180 * 24 * 3600;
+
+/**
+ * Fréquence de rafraîchissement de `last_seen_at`.
+ *
+ * ⚠️ SURTOUT PAS à chaque requête : le client bat le cœur toutes les 30 s, ce qui ferait
+ * 2 880 écritures par jour et par appareil — l'offre gratuite D1 en donne 100 000 par
+ * jour pour TOUT le service. Une écriture par appareil et par jour suffit à distinguer un
+ * appareil vivant d'un appareil abandonné.
+ */
+const REFRESH_MIN = 24 * 3600;
 
 function b64url(texte) {
   const octets = new TextEncoder().encode(texte);
@@ -45,7 +68,7 @@ function deb64url(texte) {
  */
 async function emettreLaissezPasser(email, env) {
   const charge = `${b64url(email)}.${now() + SIGNUP_TTL}`;
-  return `${charge}.${await hash(charge, env.PEPPER)}`;
+  return `${charge}.${await hmac(charge, env.PEPPER)}`;
 }
 
 /** Renvoie l'adresse portée par le laissez-passer, ou `null` s'il ne vaut rien. */
@@ -54,7 +77,10 @@ async function lireLaissezPasser(jeton, env) {
   if (morceaux.length !== 3) return null;
   const [adresse, expiration, signature] = morceaux;
   if (!/^\d+$/.test(expiration) || Number(expiration) < now()) return null;
-  if (!sameHash(await hash(`${adresse}.${expiration}`, env.PEPPER), signature)) return null;
+  // ⚠️ Le passage de `hash` à `hmac` invalide les laissez-passer déjà émis. Ils vivent
+  // 15 minutes : au pire, une inscription commencée juste avant le déploiement redemande
+  // un code. Rien à migrer.
+  if (!sameHash(await hmac(`${adresse}.${expiration}`, env.PEPPER), signature)) return null;
   try {
     const email = normalizeEmail(deb64url(adresse));
     return looksLikeEmail(email) ? email : null;
@@ -248,15 +274,27 @@ export async function verifyCode(request, env) {
       .run();
   }
 
+  const token = await ouvrirSession(env, account.id, device);
+  return json({ token, created, account: publicAccount(account) });
+}
+
+/**
+ * Ouvre une session et renvoie le jeton en clair — la seule et unique fois où il existe
+ * ailleurs que chez le client. En base, seule son empreinte est conservée.
+ *
+ * `id` est un identifiant public, distinct de l'empreinte : c'est lui qu'on montre dans
+ * la liste des appareils et qu'on cite pour en révoquer un. L'empreinte, elle, ne sort
+ * jamais du serveur — c'est la clé qui déverrouille le compte.
+ */
+async function ouvrirSession(env, accountId, device) {
   const token = randomToken();
   await env.DB.prepare(
-    `INSERT INTO sessions (token_hash, account_id, device, created_at, last_seen_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, token_hash, account_id, device, created_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   )
-    .bind(await hash(token, env.PEPPER), account.id, device, now(), now())
+    .bind(newId(), await hash(token, env.PEPPER), accountId, device, now(), now())
     .run();
-
-  return json({ token, created, account: publicAccount(account) });
+  return token;
 }
 
 /**
@@ -304,14 +342,7 @@ export async function signup(request, env) {
       .run();
   }
 
-  const token = randomToken();
-  await env.DB.prepare(
-    `INSERT INTO sessions (token_hash, account_id, device, created_at, last_seen_at)
-     VALUES (?, ?, ?, ?, ?)`,
-  )
-    .bind(await hash(token, env.PEPPER), account.id, device, now(), now())
-    .run();
-
+  const token = await ouvrirSession(env, account.id, device);
   return json({ token, created, account: publicAccount(account) });
 }
 
@@ -356,6 +387,84 @@ export async function logout(request, env, session) {
 }
 
 /**
+ * `GET /v1/sessions` — les appareils connectés à ce compte.
+ *
+ * 🔑 Sans cette liste, une session ouverte est invisible : impossible de savoir qu'un
+ * ancien PC est encore connecté, donc impossible de le déconnecter. C'est la moitié
+ * visible de l'expiration — l'une sans l'autre ne fait qu'à moitié le travail.
+ *
+ * Ne sort jamais `token_hash` : l'identifiant public suffit à désigner un appareil.
+ */
+export async function listSessions(request, env, session) {
+  const rows = await env.DB.prepare(
+    `SELECT id, token_hash, device, created_at, last_seen_at
+       FROM sessions WHERE account_id = ? ORDER BY last_seen_at DESC`,
+  )
+    .bind(session.accountId)
+    .all();
+
+  return json({
+    sessions: (rows.results || []).map((r) => ({
+      id: r.id,
+      device: r.device || "inconnu",
+      createdAt: r.created_at,
+      lastSeenAt: r.last_seen_at,
+      // Marquer l'appareil courant évite le seul faux pas possible de cet écran : se
+      // déconnecter soi-même en croyant fermer une autre machine.
+      current: r.token_hash === session.tokenHash,
+    })),
+  });
+}
+
+/**
+ * `DELETE /v1/sessions/{id}` — déconnecte un appareil.
+ *
+ * Le `account_id` de la clause est ce qui empêche de fermer la session de quelqu'un
+ * d'autre en devinant un identifiant : sans lui, l'`id` seul suffirait.
+ */
+export async function revokeSession(request, env, session, id) {
+  await env.DB.prepare("DELETE FROM sessions WHERE id = ? AND account_id = ?")
+    .bind(id, session.accountId)
+    .run();
+  return json({ ok: true });
+}
+
+/**
+ * `DELETE /v1/sessions` — déconnecte tous les AUTRES appareils, jamais celui-ci.
+ *
+ * C'est le geste à faire quand on soupçonne qu'un jeton a fuité : il coupe tout d'un coup
+ * sans obliger à se reconnecter là où on est en train d'agir.
+ */
+export async function revokeOtherSessions(request, env, session) {
+  await env.DB.prepare("DELETE FROM sessions WHERE account_id = ? AND token_hash <> ?")
+    .bind(session.accountId, session.tokenHash)
+    .run();
+  return json({ ok: true });
+}
+
+/**
+ * Ménage nocturne (déclencheur cron, cf. `index.js`).
+ *
+ * 🔑 Deux tables ne se vidaient jamais toutes seules : `login_codes` gardait une ligne par
+ * adresse ayant demandé un code — une liste d'e-mails qui ne fait que grandir, y compris
+ * pour des adresses qui ne se sont jamais connectées — et `sessions` gardait tout jeton
+ * jamais utilisé pour se déconnecter. À grande échelle, ce sont les deux seules tables
+ * dont la taille ne dépend pas du nombre de comptes mais du nombre de tentatives.
+ *
+ * `presence` n'est purgée qu'au bout d'un mois : c'est une ligne par compte, réécrite au
+ * même endroit, donc elle ne croît pas. La supprimer plus tôt coûterait une écriture pour
+ * la recréer au retour de la personne.
+ */
+export async function menage(env) {
+  const instant = now();
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM login_codes WHERE expires_at < ?").bind(instant - 3600),
+    env.DB.prepare("DELETE FROM sessions WHERE last_seen_at < ?").bind(instant - SESSION_TTL),
+    env.DB.prepare("DELETE FROM presence WHERE expires_at < ?").bind(instant - 30 * 24 * 3600),
+  ]);
+}
+
+/**
  * Résout l'en-tête `Authorization: Bearer …` en session. Renvoie `null` si le jeton est
  * absent ou inconnu — l'appelant décide alors du code d'erreur.
  */
@@ -366,14 +475,29 @@ export async function authenticate(request, env) {
 
   const tokenHash = await hash(token, env.PEPPER);
   const row = await env.DB.prepare(
-    `SELECT s.token_hash, s.account_id, a.id, a.email, a.display_name, a.friend_code,
-            a.steam_id, a.steam_discoverable, a.share_library
+    `SELECT s.token_hash, s.account_id, s.last_seen_at, a.id, a.email, a.display_name,
+            a.friend_code, a.steam_id, a.steam_discoverable, a.share_library
        FROM sessions s JOIN accounts a ON a.id = s.account_id
       WHERE s.token_hash = ?`,
   )
     .bind(tokenHash)
     .first();
   if (!row) return null;
+
+  // Session dormante depuis trop longtemps : elle tombe, et la ligne part avec elle
+  // plutôt que d'attendre le ménage nocturne — c'est le moment où on sait qu'elle est
+  // morte, et c'est une écriture qui n'arrivera qu'une fois.
+  if (now() - row.last_seen_at > SESSION_TTL) {
+    await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(tokenHash).run();
+    return null;
+  }
+
+  // Marque l'appareil vivant, au plus une fois par jour (cf. REFRESH_MIN).
+  if (now() - row.last_seen_at > REFRESH_MIN) {
+    await env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?")
+      .bind(now(), tokenHash)
+      .run();
+  }
 
   return { tokenHash, accountId: row.account_id, account: row };
 }
@@ -391,7 +515,14 @@ export async function me(request, env, session) {
  * activé pour qu'une suggestion apparaisse (cf. `suggestions` dans social.js).
  */
 export async function updateMe(request, env, session) {
-  const data = (await body(request)) || {};
+  // ⚠️ Ici, et pas ailleurs, il faut distinguer « corps vide » de « corps illisible » :
+  // les autres routes finissent de toute façon en 400 faute du champ attendu, alors que
+  // celle-ci répondrait 200 avec le compte inchangé — un appel refusé qui a l'air d'avoir
+  // réussi. C'est le cas d'un corps trop gros, écarté sans être lu (cf. `body`).
+  const data = await body(request);
+  if (!data || typeof data !== "object") {
+    return fail(400, "requete_invalide", "Corps de requête absent, illisible ou trop gros.");
+  }
   const patch = [];
   const values = [];
 

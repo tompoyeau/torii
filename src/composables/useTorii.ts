@@ -7,9 +7,10 @@ import {
   toriiDeleteAccount, toriiRespond, toriiRotateCode, toriiSetPrefs, toriiSetProfile,
   toriiSignup,
   toriiSuggestions, toriiVerify,
+  toriiDevices, toriiRevokeDevice, toriiRevokeOtherDevices,
 } from "../lib/tauri";
 import type { ToriiPerson } from "../types";
-import type { LibraryIndex, PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle } from "../types";
+import type { LibraryIndex, PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle, ToriiDevice } from "../types";
 
 /**
  * État du réseau Torii (compte, amis, présence, réglages de partage).
@@ -307,6 +308,41 @@ async function forgetDevice(deviceId: string) {
   await refreshLibraryIndex();
 }
 
+/* ── Appareils connectés ───────────────────────────────────────────────────── */
+
+/**
+ * ⚠️ À ne pas confondre avec les appareils de `libraryIndex`, juste au-dessus : ceux-là
+ * sont les machines qui ont **déposé une bibliothèque**, ceux-ci les machines qui ont une
+ * **session ouverte**. Un PC peut être connecté sans jamais rien synchroniser.
+ */
+const devices = ref<ToriiDevice[]>([]);
+const devicesLoading = ref(false);
+
+async function refreshDevices() {
+  if (!account.value) {
+    devices.value = [];
+    return;
+  }
+  devicesLoading.value = true;
+  try {
+    devices.value = await toriiDevices();
+  } finally {
+    devicesLoading.value = false;
+  }
+}
+
+/** Déconnecte un appareil. Le serveur refuse ceux qui ne sont pas à nous. */
+async function revokeDevice(id: string) {
+  await toriiRevokeDevice(id);
+  await refreshDevices();
+}
+
+/** Déconnecte tous les autres appareils — jamais celui-ci. */
+async function revokeOtherDevices() {
+  await toriiRevokeOtherDevices();
+  await refreshDevices();
+}
+
 /* ── Amis ──────────────────────────────────────────────────────────────────── */
 
 /**
@@ -400,6 +436,11 @@ export function useTorii() {
     setShareLibrary,
     syncLibraryNow,
     forgetDevice,
+    devices,
+    devicesLoading,
+    refreshDevices,
+    revokeDevice,
+    revokeOtherDevices,
     setPresenceMode,
     setMuted,
     isMuted,

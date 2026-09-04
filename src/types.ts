@@ -260,6 +260,22 @@ export interface FriendsCommon {
 
 /* ── Service social Torii (comptes, amis, présence) ─────────────────────────── */
 
+/**
+ * Un appareil connecté au compte Torii.
+ *
+ * `id` est un identifiant public : l'empreinte du jeton, elle, ne quitte jamais le
+ * serveur. `current` marque cet ordinateur-ci — sans quoi le seul faux pas possible de
+ * l'écran serait de se déconnecter soi-même en croyant fermer une autre machine.
+ */
+export interface ToriiDevice {
+  id: string;
+  device: string;
+  /** Instants Unix en secondes, comme toutes les dates du service. */
+  createdAt: number;
+  lastSeenAt: number;
+  current: boolean;
+}
+
 /** Le compte Torii de l'utilisateur. */
 export interface ToriiAccount {
   id: string;

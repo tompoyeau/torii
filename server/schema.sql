@@ -58,14 +58,23 @@ CREATE TABLE IF NOT EXISTS login_codes (
 
 -- Sessions ouvertes. Une par appareil : le PC et (plus tard) le mobile coexistent, et
 -- on peut en révoquer une sans toucher aux autres.
+--
+-- 🔑 `last_seen_at` n'est pas décoratif : c'est lui qui fait expirer une session dormante
+-- (SESSION_TTL dans auth.js) et qui alimente la liste « mes appareils ». Il n'est
+-- rafraîchi qu'une fois par jour et par appareil — le client bat le cœur toutes les 30 s,
+-- l'écrire à chaque requête consommerait à lui seul tout le quota d'écritures D1.
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash   TEXT PRIMARY KEY,
+  -- Identifiant PUBLIC de l'appareil, montré dans la liste et cité pour le déconnecter.
+  -- Distinct de l'empreinte, qui est un secret dérivé et ne sort jamais du serveur.
+  id           TEXT,
   account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   device       TEXT,
   created_at   INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_account ON sessions(account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_id ON sessions(id) WHERE id IS NOT NULL;
 
 -- Relation d'amitié, toujours réciproque une fois acceptée. La paire est stockée une
 -- seule fois (demandeur, destinataire) ; les lectures interrogent les deux colonnes.
