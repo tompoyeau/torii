@@ -6,7 +6,8 @@ Petit Cloudflare Worker qui donne à Torii l'accès à :
 
 Même approche que Playnite. Gratuit (offre gratuite Cloudflare Workers).
 
-> ⚠️ Après avoir ajouté la partie ITAD (ci-dessous), **redéploie le Worker** (`npx wrangler deploy`).
+> ⚠️ Après toute modification (y compris l'ajout de la partie ITAD ci-dessous),
+> **redéploie le Worker** : `npx wrangler deploy` depuis ce dossier.
 
 ## Mise en place (une seule fois)
 
@@ -37,7 +38,6 @@ Poser les secrets (colle les valeurs quand demandé) :
 ```bash
 npx wrangler secret put TWITCH_CLIENT_ID
 npx wrangler secret put TWITCH_CLIENT_SECRET
-npx wrangler secret put PROXY_TOKEN        # optionnel : un mot de passe au hasard
 ```
 
 ### 2 bis. Clé IsThereAnyDeal (pour la Boutique)
@@ -60,15 +60,27 @@ Wrangler affiche l'URL publique, du type
 `https://torii-igdb-proxy.<ton-sous-domaine>.workers.dev`.
 **C'est cette URL qu'il faut donner à Torii** (voir intégration côté app).
 
+Vérifie au passage que les deux limites sont bien attachées — wrangler les liste à la fin
+du déploiement :
+
+```
+env.RL_TOTAL (900 requests/60s)      Rate Limit
+env.RL_AMONT (600 requests/60s)      Rate Limit
+```
+
+⚠️ Si elles n'apparaissent pas, le Worker répond **503** à tout : c'est voulu (voir
+« Protection » plus bas). Elles exigent **wrangler 4** ; wrangler 3 ignore silencieusement
+la section `[[ratelimits]]`.
+
 ### 3. Tester
 
 ```bash
 curl -X POST "https://torii-igdb-proxy.<sous-domaine>.workers.dev/games" \
-  -H "x-proxy-token: <ton PROXY_TOKEN si défini>" \
   --data 'search "Fortnite"; fields name, genres.name; limit 1;'
 ```
 
 Réponse attendue : un JSON avec `name: "Fortnite"` et `genres` (dont *Shooter*).
+Relance la même commande avec `-D -` : la seconde doit afficher `CF-Cache-Status: HIT`.
 
 ## Fonctionnement
 
@@ -77,14 +89,48 @@ Réponse attendue : un JSON avec `name: "Fortnite"` et `genres` (dont *Shooter*)
   ajoute les en-têtes `Client-ID` + `Authorization: Bearer`, et relaie vers
   `api.igdb.com/v4/<endpoint>`.
 - Endpoints IGDB autorisés : `games`, `external_games`, `genres`, `covers`, `multiquery`.
-- **ITAD** : tout chemin `/itad/<endpoint>` (GET ou POST) est relayé vers
-  `api.isthereanydeal.com/<endpoint>` avec la clé `ITAD_API_KEY` injectée. Utilisé par la
-  Boutique : `deals/v2` (vitrine), `games/search/v1` + `games/prices/v3` (recherche),
-  `games/info/v2` + `games/prices/v3` + `games/overview/v2` (fiche produit).
+- **ITAD** : `/itad/<endpoint>` (GET ou POST) est relayé vers
+  `api.isthereanydeal.com/<endpoint>` avec la clé `ITAD_API_KEY` injectée. Endpoints
+  autorisés : `deals/v2` (vitrine), `games/search/v1`, `games/info/v2`,
+  `games/overview/v2`, `games/prices/v3`, `games/lookup/v1`.
 - Les secrets (Twitch + ITAD) restent **côté Cloudflare** (jamais dans l'app ni le dépôt git).
+- **Pas d'en-têtes CORS** : aucun client de Torii n'est un navigateur (tout part de Rust,
+  et demain d'un client mobile). Les annoncer aurait surtout permis à une page web tierce
+  de faire marteler ce proxy par le navigateur de ses visiteurs — autant d'adresses IP
+  différentes, donc autant de limites contournées.
 
-## Limites
+## Protection
+
+L'URL de ce Worker part **en clair dans chaque version installée** : elle s'extrait du
+binaire en quelques secondes. Aucun secret partagé ne peut donc distinguer Torii d'un
+script. Deux mécanismes seulement tiennent la porte :
+
+1. **Le cache.** Une réponse servie depuis le cache ne coûte ni appel IGDB, ni appel ITAD,
+   ni token Twitch. C'est la meilleure défense parce qu'elle sert aussi les joueurs : tout
+   le monde possède Fortnite ou Minecraft, et la première personne qui les demande paie
+   pour toutes les suivantes. IGDB : 24 h (7 jours pour `genres`). ITAD : 10 min pour la
+   vitrine, 5 min pour la recherche et les fiches, **rien** pour les prix.
+2. **Deux limites par adresse IP.** `RL_AMONT` (600/min) ne compte que ce qui sort
+   vraiment vers IGDB ou ITAD — un cache-hit ne consomme donc rien. `RL_TOTAL` (900/min)
+   compte tout, et protège le quota de requêtes du compte Cloudflare, que le Worker
+   `torii-api` partage avec celui-ci. Dépassement → **429** avec `Retry-After`.
+
+Calibrage : le client se throttle déjà à 300 ms par appel, et une recherche par nom coûte
+au plus deux appels — le plafond d'un Torii légitime est donc d'environ **200 appels/min**,
+atteint seulement au tout premier lancement d'une grosse bibliothèque hors Steam. Les
+limites laissent 3× cette marge, pour que plusieurs joueurs derrière la même IP
+(colocation, réseau familial, campus) ne se gênent pas.
+
+`PROXY_TOKEN` (secret optionnel) n'est **pas** une protection : il coupe le proxy pour tout
+ce qui n'envoie pas le jeton, donc aussi pour toutes les versions de Torii déjà installées.
+C'est un interrupteur d'urgence, à n'utiliser que pour fermer la porte en attendant mieux.
+
+⚠️ L'enjeu n'est pas la facture — tout tient sur l'offre gratuite. C'est que **Twitch
+révoque l'application IGDB** en cas d'abus : Torii perdrait d'un coup toute sa métadonnée
+descriptive, pour tout le monde, sans recours rapide.
+
+## Limites des API amont
 
 - IGDB : **4 req/s**, jusqu'à **500 résultats/requête** (largement suffisant en batch).
-- Le `PROXY_TOKEN` limite l'abus casual ; il sera embarqué dans l'app (donc semi-public),
-  mais l'exposition se limite à des lectures de données de jeux publiques.
+- ITAD : limite non documentée, d'où le cache sur la vitrine et la recherche (les 429
+  d'ITAD étaient le symptôme d'origine).

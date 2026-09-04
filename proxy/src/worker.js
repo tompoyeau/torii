@@ -3,16 +3,46 @@
  *
  * Deux services dont la clé ne peut pas être embarquée dans l'app distribuée :
  *   - IGDB : auth Twitch (Client-ID + token d'app). POST /<endpoint> (Apicalypse).
- *   - IsThereAnyDeal (ITAD) : clé d'API. Tout chemin sous /itad/* est relayé vers
- *     https://api.isthereanydeal.com/* avec la clé injectée côté serveur (GET et POST).
+ *   - IsThereAnyDeal (ITAD) : clé d'API. GET/POST /itad/<endpoint>, la clé injectée ici.
  *
  * L'app Torii appelle ce Worker, jamais IGDB/ITAD directement.
+ *
+ * ## Ce Worker est public, et c'est ça qu'il faut avoir en tête
+ *
+ * Son URL part en clair dans chaque version installée : elle s'extrait du binaire en
+ * quelques secondes. Aucun secret partagé ne peut donc distinguer Torii d'un script —
+ * `PROXY_TOKEN` compris, puisqu'il faudrait l'embarquer lui aussi. Il ne reste que deux
+ * défenses, et ce sont exactement les deux mises en place ici :
+ *
+ *   1. **le cache** — une réponse servie depuis le cache ne coûte ni appel IGDB, ni appel
+ *      ITAD, ni token Twitch. C'est la meilleure des deux, parce qu'elle sert aussi les
+ *      joueurs : tout le monde possède Fortnite, Minecraft ou Valorant, et la première
+ *      personne qui les demande paie pour toutes les suivantes ;
+ *   2. **une limite par IP** — elle borne ce qu'une seule source peut consommer, sans
+ *      jamais gêner un lancement normal (l'app se throttle déjà à 300 ms par appel).
+ *
+ * ⚠️ L'enjeu n'est pas la facture — tout tient sur l'offre gratuite. C'est que Twitch
+ * révoque l'application IGDB en cas d'abus : Torii perdrait d'un coup TOUTE sa métadonnée
+ * descriptive, pour tout le monde, sans recours rapide. Et accessoirement que les 100 000
+ * requêtes/jour de l'offre gratuite Workers, partagées avec `torii-api`, soient brûlées
+ * par quelqu'un d'autre avant midi.
+ *
+ * ## Pas d'en-têtes CORS, et c'est volontaire
+ *
+ * Aucun client de Torii n'est un navigateur : tout part de Rust (`ureq`), et demain d'un
+ * client mobile — ni l'un ni l'autre n'applique la politique d'origine. Annoncer
+ * `Access-Control-Allow-Origin: *` n'aurait donc servi personne, sauf une page web tierce
+ * qui aurait pu faire marteler ce proxy par le navigateur de ses visiteurs : autant
+ * d'adresses IP différentes, donc autant de limites par IP contournées. Si un vrai client
+ * web voit le jour un jour, ce sera une ligne à remettre — en connaissance de cause.
  *
  * Secrets Cloudflare (voir README) :
  *   - TWITCH_CLIENT_ID       : Client ID de l'app Twitch (IGDB)
  *   - TWITCH_CLIENT_SECRET   : Client Secret de l'app Twitch (IGDB)
- *   - ITAD_API_KEY           : clé d'API IsThereAnyDeal (gratuite, isthereanydeal.com/apps/my/)
- *   - PROXY_TOKEN (option)   : jeton partagé pour limiter l'usage (header x-proxy-token)
+ *   - ITAD_API_KEY           : clé d'API IsThereAnyDeal
+ *   - PROXY_TOKEN (option)   : interrupteur d'urgence, cf. plus bas
+ *
+ * Bindings (wrangler.toml) : RL_TOTAL et RL_AMONT, les deux compteurs par IP.
  */
 
 // Cache du token d'app Twitch, par isolate (les tokens durent ~60 jours).
@@ -33,117 +63,247 @@ async function getAppToken(env) {
   return cachedToken.value;
 }
 
-const ALLOWED = new Set(["games", "external_games", "genres", "covers", "multiquery"]);
+// --- Ce qu'on accepte de relayer -------------------------------------------
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type, x-proxy-token",
-};
+/** Endpoints IGDB autorisés. Tout le reste est refusé, y compris ce qui existe chez IGDB. */
+const IGDB_ALLOWED = new Set(["games", "external_games", "genres", "covers", "multiquery"]);
 
 /**
- * Durée de cache (secondes) selon l'endpoint ITAD. La vitrine `deals` est identique
- * pour tous et bouge lentement → TTL long ; la recherche → TTL moyen. Mutualiser ces
- * réponses au cache edge évite de taper ITAD à chaque appel (démarrages, tris, reloads)
- * et donc les 429 (rate-limit ITAD). 0 = pas de cache.
+ * Endpoints ITAD autorisés — liste relevée sur TOUTES les versions de `store.rs`, y
+ * compris celles déjà installées chez les joueurs (`git log -p` sur le fichier).
+ *
+ * 🔑 Sans cette liste, `/itad/<n'importe quoi>` relayait la clé ITAD vers n'importe quel
+ * endpoint de l'API, y compris ceux qui écrivent. Un allowlist ne coûte rien ici : le
+ * client n'en appellera jamais d'autre sans qu'on touche à ce fichier.
  */
-function cacheTtl(pathname) {
-  if (pathname.startsWith("/itad/deals/")) return 600; // 10 min : vitrine commune
-  if (pathname.startsWith("/itad/games/search/")) return 300; // 5 min : autocomplétion/recherche
-  if (pathname.startsWith("/itad/games/")) return 300; // 5 min : info/overview d'un jeu
-  return 0; // le reste (prix POST, etc.) n'est pas caché ici
+const ITAD_ALLOWED = new Set([
+  "deals/v2",
+  "games/search/v1",
+  "games/info/v2",
+  "games/overview/v2",
+  "games/prices/v3",
+  "games/lookup/v1",
+]);
+
+/**
+ * Une requête Apicalypse tient en quelques centaines d'octets ; le plus gros lot Steam
+ * (400 appids) fait ~4 Ko. 16 Ko laisse de la marge et ferme la porte à l'idée d'utiliser
+ * ce Worker comme tuyau.
+ */
+const MAX_CORPS = 16 * 1024;
+const MAX_CHEMIN = 200;
+/** La query string est recopiée telle quelle vers ITAD : elle se borne aussi. */
+const MAX_QUERY = 512;
+
+// --- Cache -----------------------------------------------------------------
+
+/**
+ * Durée de cache (secondes) par endpoint.
+ *
+ * IGDB décrit des jeux : un nom, un genre, une jaquette, une année. Ça ne bouge
+ * pratiquement jamais, et le client garde de toute façon sa propre copie sur disque
+ * (`igdb_meta_cache_v1.json`). Le cache d'ici sert donc à **mutualiser entre joueurs**,
+ * pas à éviter des allers-retours au même joueur.
+ *
+ * ITAD décrit des prix : ça bouge tous les jours, d'où des durées bien plus courtes.
+ */
+const TTL_IGDB = { genres: 604800 /* 7 j */ };
+const TTL_IGDB_DEFAUT = 86400; // 24 h
+
+function ttlItad(endpoint) {
+  if (endpoint === "deals/v2") return 600; // 10 min : vitrine commune à tout le monde
+  if (endpoint.startsWith("games/search/")) return 300; // 5 min : autocomplétion
+  if (endpoint.startsWith("games/")) return 300; // 5 min : info/overview/lookup d'un jeu
+  return 0; // le reste (prix en POST) n'est pas caché ici
 }
 
 /**
- * Relaye une requête vers l'API IsThereAnyDeal en injectant la clé côté serveur.
- * Le chemin `/itad/<reste>` devient `https://api.isthereanydeal.com/<reste>` ; la
- * query string est conservée, `key` est ajoutée. GET et POST supportés.
+ * Clé de cache pour une requête POST : la méthode interdit d'utiliser la requête telle
+ * quelle, et le corps (la requête Apicalypse, ou la liste d'ids ITAD) est ce qui la
+ * distingue. On fabrique donc une URL GET synthétique portant son empreinte.
  *
- * Les GET éligibles (cf. `cacheTtl`) sont servis/écrits dans le cache edge Cloudflare,
- * clé = URL du proxy (sans la clé ITAD, jamais exposée). Seuls les 200 sont mis en cache.
+ * 🔑 Bâtie sur `origin` de la requête entrante : le cache de Cloudflare est cloisonné par
+ * zone, une clé pointant ailleurs ne serait jamais relue. Le chemin `/__cache/…` ne
+ * correspond à aucune route — s'il est appelé directement, il tombe sur un 405.
  */
-async function proxyItad(request, url, env, ctx) {
-  if (!env.ITAD_API_KEY) {
-    return new Response("ITAD_API_KEY manquant côté serveur", { status: 500, headers: CORS });
-  }
+async function cleDeCache(origin, prefixe, corps) {
+  const octets = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(corps));
+  const empreinte = [...new Uint8Array(octets)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return new Request(`${origin}/__cache/${prefixe}?q=${empreinte}`, { method: "GET" });
+}
 
-  // Cache edge (GET uniquement). Clé stable = URL entrante du proxy.
-  const ttl = request.method === "GET" ? cacheTtl(url.pathname) : 0;
+// --- Réponses --------------------------------------------------------------
+
+function texte(status, message) {
+  return new Response(message, {
+    status,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
+/**
+ * 429 avec `Retry-After`. Le client Rust le distingue d'une panne : il arrête sa passe de
+ * métadonnées au lieu de brûler 200 appels de plus, et surtout il ne mémorise pas les
+ * jeux concernés comme « absents d'IGDB » (cf. `metadata/igdb.rs`).
+ */
+function tropDeRequetes() {
+  return new Response("trop de requêtes, réessaie dans une minute", {
+    status: 429,
+    headers: { "retry-after": "60", "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
+/** Corps de la requête, ou `null` s'il dépasse la borne. */
+async function corpsBorne(request) {
+  if (Number(request.headers.get("content-length") || 0) > MAX_CORPS) return null;
+  // Un envoi en `chunked` n'annonce aucune taille : on revérifie après lecture.
+  const corps = await request.text();
+  return corps.length > MAX_CORPS ? null : corps;
+}
+
+// --- Relais ----------------------------------------------------------------
+
+/**
+ * Relaye vers IGDB. POST uniquement (Apicalypse), endpoint sur liste blanche, réponse
+ * mise en cache par empreinte de la requête.
+ */
+async function relaisIgdb(request, url, env, ctx, ip) {
+  if (request.method !== "POST") return texte(405, "POST only");
+
+  const endpoint = url.pathname.replace(/^\/+/, "");
+  if (!IGDB_ALLOWED.has(endpoint)) return texte(403, `endpoint interdit: ${endpoint}`);
+
+  const corps = await corpsBorne(request);
+  if (corps === null) return texte(413, "requête trop longue");
+
   const cache = caches.default;
-  const cacheKey = new Request(url.toString(), { method: "GET" });
-  if (ttl > 0) {
-    const hit = await cache.match(cacheKey);
-    if (hit) return hit;
+  const cle = await cleDeCache(url.origin, `igdb/${endpoint}`, corps);
+  const garde = await cache.match(cle);
+  if (garde) return garde;
+
+  // 🔑 La limite ne se décompte qu'ici : une réponse servie par le cache ne coûte rien à
+  // IGDB, donc rien ne justifie de la faire entrer dans le quota de qui la demande. Un
+  // joueur au premier lancement croise surtout des jeux déjà demandés par d'autres ; un
+  // script qui fabrique des requêtes inédites, lui, paie chacune des siennes.
+  if (!(await env.RL_AMONT.limit({ key: ip })).success) return tropDeRequetes();
+
+  let token;
+  try {
+    token = await getAppToken(env);
+  } catch (e) {
+    return texte(502, `auth error: ${e}`);
   }
 
-  const rest = url.pathname.slice("/itad/".length);
-  const target = new URL(`https://api.isthereanydeal.com/${rest}`);
-  for (const [k, v] of url.searchParams) target.searchParams.set(k, v);
-  target.searchParams.set("key", env.ITAD_API_KEY);
+  const resp = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Client-ID": env.TWITCH_CLIENT_ID,
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+    body: corps,
+  });
+
+  const ttl = TTL_IGDB[endpoint] ?? TTL_IGDB_DEFAUT;
+  const out = new Response(await resp.text(), {
+    status: resp.status,
+    headers: {
+      "content-type": "application/json",
+      "cache-control": resp.ok ? `public, max-age=${ttl}` : "no-store",
+    },
+  });
+  // Seuls les succès sont mémorisés : une panne IGDB ne doit pas se figer pour 24 h.
+  if (resp.ok) ctx.waitUntil(cache.put(cle, out.clone()));
+  return out;
+}
+
+/**
+ * Relaye vers IsThereAnyDeal en injectant la clé côté serveur. `/itad/<endpoint>` devient
+ * `https://api.isthereanydeal.com/<endpoint>` ; la query string est conservée, `key`
+ * ajoutée en dernier (donc jamais dictée par le client).
+ */
+async function relaisItad(request, url, env, ctx, ip) {
+  // Ce qui est autorisé se décide avant ce qui est configuré : sinon une clé manquante
+  // répondrait « mal configuré » à une requête qui, de toute façon, était refusée.
+  const endpoint = url.pathname.slice("/itad/".length).replace(/\/+$/, "");
+  if (!ITAD_ALLOWED.has(endpoint)) return texte(403, `endpoint interdit: ${endpoint}`);
+
+  if (!env.ITAD_API_KEY) return texte(500, "ITAD_API_KEY manquant côté serveur");
+
+  const corps = request.method === "POST" ? await corpsBorne(request) : "";
+  if (corps === null) return texte(413, "requête trop longue");
+
+  const cache = caches.default;
+  // 🔑 GET uniquement, donc jamais les prix : eux arrivent en POST, et une remise affichée
+  // avec cinq minutes de retard vaudrait moins que les appels économisés. La clé est
+  // l'URL entrante telle quelle, sans la clé ITAD — qui n'est ajoutée qu'en aval.
+  const ttl = request.method === "GET" ? ttlItad(endpoint) : 0;
+  const cle = ttl > 0 ? new Request(url.toString(), { method: "GET" }) : null;
+  if (cle) {
+    const garde = await cache.match(cle);
+    if (garde) return garde;
+  }
+
+  if (!(await env.RL_AMONT.limit({ key: ip })).success) return tropDeRequetes();
+
+  const cible = new URL(`https://api.isthereanydeal.com/${endpoint}`);
+  for (const [k, v] of url.searchParams) cible.searchParams.set(k, v);
+  cible.searchParams.set("key", env.ITAD_API_KEY);
 
   const init = { method: request.method, headers: { Accept: "application/json" } };
   if (request.method === "POST") {
     init.headers["content-type"] = "application/json";
-    init.body = await request.text();
+    init.body = corps;
   }
-  const resp = await fetch(target, init);
-  const text = await resp.text();
-  const headers = { ...CORS, "content-type": "application/json" };
-  if (ttl > 0 && resp.ok) headers["Cache-Control"] = `public, max-age=${ttl}`;
-  const out = new Response(text, { status: resp.status, headers });
+  const resp = await fetch(cible, init);
 
-  // N'écrit au cache que les succès ; `waitUntil` pour ne pas retarder la réponse.
-  if (ttl > 0 && resp.ok) ctx.waitUntil(cache.put(cacheKey, out.clone()));
+  const out = new Response(await resp.text(), {
+    status: resp.status,
+    headers: {
+      "content-type": "application/json",
+      "cache-control": cle && resp.ok ? `public, max-age=${ttl}` : "no-store",
+    },
+  });
+  if (cle && resp.ok) ctx.waitUntil(cache.put(cle, out.clone()));
   return out;
 }
 
 export default {
   async fetch(request, env, ctx) {
-    if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
-
     const url = new URL(request.url);
 
-    // Jeton partagé optionnel pour limiter l'abus du proxy public (IGDB + ITAD).
+    /**
+     * Interrupteur d'urgence, pas une protection. Posé, il coupe le proxy pour tout ce qui
+     * n'a pas le jeton — donc aussi pour toutes les versions de Torii déjà installées, qui
+     * ne l'envoient pas. À n'utiliser que le jour où il faut fermer la porte en attendant
+     * mieux. L'abus ordinaire, lui, est traité par le cache et les limites ci-dessous.
+     */
     if (env.PROXY_TOKEN && request.headers.get("x-proxy-token") !== env.PROXY_TOKEN) {
-      return new Response("unauthorized", { status: 401, headers: CORS });
+      return texte(401, "unauthorized");
     }
 
-    // --- IsThereAnyDeal (GET/POST) ---
-    if (url.pathname.startsWith("/itad/")) {
-      return proxyItad(request, url, env, ctx);
+    // Une erreur de configuration doit se voir tout de suite, pas produire un proxy
+    // silencieusement grand ouvert — c'est exactement ce qui est arrivé à `PROXY_TOKEN`,
+    // resté « optionnel » et jamais posé.
+    if (!env.RL_TOTAL || !env.RL_AMONT) {
+      return texte(503, "Worker mal configuré : limites par IP absentes");
     }
 
-    // --- IGDB (POST uniquement) ---
-    if (request.method !== "POST") {
-      return new Response("POST only", { status: 405, headers: CORS });
-    }
-    const endpoint = url.pathname.replace(/^\/+/, "");
-    if (!ALLOWED.has(endpoint)) {
-      return new Response(`endpoint interdit: ${endpoint}`, { status: 403, headers: CORS });
+    if (url.pathname.length > MAX_CHEMIN || url.search.length > MAX_QUERY) {
+      return texte(414, "requête trop longue");
     }
 
-    let token;
-    try {
-      token = await getAppToken(env);
-    } catch (e) {
-      return new Response(`auth error: ${e}`, { status: 502, headers: CORS });
-    }
+    // `cf-connecting-ip` est posée par Cloudflare et ne peut pas être usurpée par le
+    // client (une valeur envoyée par lui est écrasée). Absente en local (`wrangler dev`).
+    const ip = request.headers.get("cf-connecting-ip") || "local";
 
-    const body = await request.text();
-    const resp = await fetch(`https://api.igdb.com/v4/${endpoint}`, {
-      method: "POST",
-      headers: {
-        "Client-ID": env.TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-      body,
-    });
+    // Compteur grossier sur TOUTES les requêtes, cache compris : il protège le quota de
+    // requêtes du compte Cloudflare, que `torii-api` partage avec ce Worker.
+    if (!(await env.RL_TOTAL.limit({ key: ip })).success) return tropDeRequetes();
 
-    const text = await resp.text();
-    return new Response(text, {
-      status: resp.status,
-      headers: { ...CORS, "content-type": "application/json" },
-    });
+    if (url.pathname.startsWith("/itad/")) return relaisItad(request, url, env, ctx, ip);
+    return relaisIgdb(request, url, env, ctx, ip);
   },
 };

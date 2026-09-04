@@ -922,8 +922,84 @@ les amis. Le surveillant l'adopte désormais tout seul.
   27 déjà dans la bibliothèque, 0 écarté, 3 jeux détectés (Minecraft, Dolphin,
   Rainbow Six).
 
+## Durcissement du proxy — cache, limites par IP, listes blanches (fait)
+
+Préparation d'une diffusion large. Le constat de départ : `PROXY_TOKEN` était « optionnel »
+et n'avait **jamais été posé en production** — le proxy IGDB/ITAD répondait 200 à n'importe
+quel `curl`. Et il ne pouvait pas en être autrement : son URL part en clair dans chaque
+binaire installé, donc aucun secret partagé ne distingue Torii d'un script.
+
+- 🔑 **Deux défenses, pas trois.** Le **cache** (une réponse servie depuis le cache ne
+  coûte ni appel IGDB, ni token Twitch — et elle sert aussi les joueurs, puisque tout le
+  monde demande les mêmes jeux populaires) et une **limite par IP**. Le reste est du
+  théâtre. `PROXY_TOKEN` est conservé comme interrupteur d'urgence, et le README dit
+  désormais qu'il n'est pas une protection.
+- **IGDB n'avait aucun cache** (seul `/itad/` en avait un). Une requête POST ne se cache
+  pas telle quelle : la clé est une URL GET synthétique `<origin>/__cache/igdb/<endpoint>?q=<sha256(corps)>`.
+  🔑 Bâtie sur l'`origin` **entrante** — le cache Cloudflare est cloisonné par zone, une
+  clé pointant ailleurs ne serait jamais relue.
+- ⚠️ Contrairement à ce que laisse croire la doc Cloudflare, le cache **fonctionne bien
+  sur `*.workers.dev`** (vérifié : `CF-Cache-Status: HIT` sur le déploiement réel). Pas
+  besoin de domaine personnalisé pour ça.
+- `RL_AMONT` (600/min) n'est décomptée **qu'en cas de miss** — un joueur croise surtout des
+  jeux déjà demandés par d'autres, un script fabrique des requêtes inédites et paie
+  chacune des siennes. `RL_TOTAL` (900/min) compte tout et protège le quota de requêtes du
+  compte (100 000/jour, **partagé avec `torii-api`**).
+- 🔑 CALIBRAGE : le client se throttle à 300 ms/appel (`CALL_DELAY_MS`) et une recherche par
+  nom coûte 2 appels → plafond légitime ≈ **200 appels/min**, au tout premier lancement
+  seulement. Les limites laissent 3× de marge (colocation, réseau familial).
+- ⚠️ **wrangler 4 obligatoire** : wrangler 3 ignore *silencieusement* `[[ratelimits]]` et
+  déploie un Worker sans limite (`--dry-run` affiche « No bindings found »). Le Worker
+  répond donc **503** si les bindings manquent, plutôt que de tourner grand ouvert — c'est
+  précisément l'erreur de `PROXY_TOKEN` qu'on ne refait pas.
+- Listes blanches : les endpoints ITAD sont désormais bornés comme ceux d'IGDB (relevés sur
+  **tout l'historique** de `store.rs`, pas seulement la version courante — les anciens
+  clients doivent continuer de marcher). Corps borné à 16 Ko, vérifié **après lecture**
+  aussi (un envoi `chunked` n'annonce aucune taille). Pas d'en-têtes CORS : aucun client
+  n'est un navigateur, et les annoncer aurait permis à une page tierce de faire marteler le
+  proxy par le navigateur de ses visiteurs — donc depuis autant d'IP différentes.
+
+### 🔑 Le piège corrigé au passage : une panne était mémorisée comme une absence
+
+`igdb_meta_cache_v1.json` est un `HashMap<String, Option<IgdbMeta>>` où `None` signifie
+« cherché, absent d'IGDB — ne plus chercher ». Or `query()` renvoyait `Option` et
+**écrasait la différence** entre « IGDB a répondu, rien trouvé » et « l'appel a échoué » :
+un Wi-Fi coupé au premier lancement privait définitivement les jeux concernés de
+description, genre et jaquette. Le cache n'a pas d'expiration — c'était sans retour.
+
+Poser une limite sans corriger ça aurait transformé chaque 429 en dégât permanent.
+
+- `query` renvoie maintenant `Reponse::{Corps, Panne, Limite}` ; `name_meta` renvoie
+  `Issue::{Trouve, Absent, Panne, Limite}`. **Seul `Absent` entre en cache.**
+- `steam_metas` renvoie une `PasseSteam { metas, interroges, limite }` : `interroges` liste
+  les appids réellement tranchés. Un appid absent d'un lot dont l'appel a échoué reste
+  inconnu ; un appid qu'`external_games` n'a rattaché à rien est, lui, vraiment absent.
+- Sur `Panne` au 1ᵉʳ appel de `name_meta`, on ne tente pas le repli `search` : un « rien
+  trouvé » au second appel ne prouverait rien de plus, et mémoriserait une absence fausse.
+- `Limite` interrompt la passe (les appels suivants seraient refusés pareillement et
+  compteraient quand même), et la passe incomplète est tracée dans le journal.
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.
 2. Temps de jeu Steam local (`localconfig.vdf`).
 3. Peupler les genres plus largement sans saturer l'API (pour un filtre catégorie plus riche).
+
+### Diffusion à grande échelle — lots restants
+
+- **Lot B — API sociale** : sessions sans expiration ni rafraîchissement (`authenticate`
+  ne regarde pas l'âge du jeton, `last_seen_at` n'est jamais mis à jour, rien ne purge),
+  pas d'écran « mes appareils », `login_codes` jamais purgée, aucune limite par IP sur
+  `request-code` (le garde-fou est par adresse e-mail : 10 000 adresses = 50 000 mails/h
+  via Resend, compte suspendu), `MAX_BODY` contournable en `chunked` (corrigé côté proxy,
+  pas côté API), laissez-passer d'inscription signé `SHA256(pepper:msg)` au lieu d'un HMAC.
+- **Lot C — accessibilité** : `<html lang="en">` alors que tout est en français ;
+  `--text-faint` sous le seuil AA dans les deux thèmes (3,9:1 sombre, 2,8:1 clair) et
+  `--accent-ink` sur `--accent` à 3,7:1 en clair ; `outline: none` sur 9 champs de saisie ;
+  aucune modale ne piège ni ne rend le focus (`.focus()` apparaît **une** fois dans tout le
+  front, `tabindex` zéro fois) ; zéro `aria-live` (toasts et bandeau muets) ; `role="dialog"`
+  sur 2 surfaces modales sur 6 ; menus déroulants inatteignables au clavier.
+- **Lot D — WebView** : `"csp": null` et `assetProtocol.scope: ["**"]` dans
+  `tauri.conf.json`. Rien d'exploitable aujourd'hui (un seul `v-html`, sur des SVG locaux),
+  mais dans Tauri une injection front donne accès à `invoke`, donc au lancement de
+  processus. À faire avant que quelqu'un n'ajoute un `v-html` de trop.

@@ -15,7 +15,7 @@
 use crate::models::GameDto;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -68,14 +68,34 @@ fn save_cache(dir: &Path, cache: &MetaCache) {
     }
 }
 
-/// POST une requête Apicalypse au proxy, renvoie le JSON.
-fn query(endpoint: &str, body: &str) -> Option<Value> {
-    ureq::post(&format!("{PROXY_URL}/{endpoint}"))
+/// Ce qu'a donné un appel au proxy.
+///
+/// 🔑 `Corps` veut dire « IGDB a répondu », pas « IGDB a trouvé » : une réponse vide en
+/// est une. C'est cette distinction-là qui compte, parce que le cache disque mémorise les
+/// recherches infructueuses pour ne pas les refaire — et qu'une panne mémorisée comme une
+/// absence prive un jeu de sa description POUR TOUJOURS (le cache n'a pas d'expiration).
+enum Reponse {
+    Corps(Value),
+    /// Réseau coupé, proxy en erreur, JSON illisible : on ne sait rien, on ne retient rien.
+    Panne,
+    /// Limite du proxy atteinte (429). Comme `Panne`, mais il faut en plus arrêter la
+    /// passe : les appels suivants seraient refusés de la même façon.
+    Limite,
+}
+
+/// POST une requête Apicalypse au proxy.
+fn query(endpoint: &str, body: &str) -> Reponse {
+    match ureq::post(&format!("{PROXY_URL}/{endpoint}"))
         .timeout(Duration::from_secs(15))
         .send_string(body)
-        .ok()?
-        .into_json()
-        .ok()
+    {
+        Ok(resp) => match resp.into_json() {
+            Ok(v) => Reponse::Corps(v),
+            Err(_) => Reponse::Panne,
+        },
+        Err(ureq::Error::Status(429, _)) => Reponse::Limite,
+        Err(_) => Reponse::Panne,
+    }
 }
 
 /// URL d'une image IGDB à une taille donnée (ex. « cover_big_2x », « 1080p »).
@@ -224,9 +244,21 @@ fn parse_meta(g: &Value) -> IgdbMeta {
     }
 }
 
+/// Ce que rapporte la passe Steam.
+///
+/// `interroges` n'est pas un détail : ce sont les seuls appids dont on a le droit de
+/// mémoriser l'absence. Ceux d'un lot dont l'appel a échoué doivent rester inconnus, pour
+/// être retentés au prochain scan.
+#[derive(Default)]
+struct PasseSteam {
+    metas: HashMap<String, IgdbMeta>,
+    interroges: HashSet<String>,
+    limite: bool,
+}
+
 /// Métadonnées des jeux Steam en masse (appid → meta), via `external_games` puis `games`.
-fn steam_metas(appids: &[String]) -> HashMap<String, IgdbMeta> {
-    let mut out = HashMap::new();
+fn steam_metas(appids: &[String]) -> PasseSteam {
+    let mut out = PasseSteam::default();
     for chunk in appids.chunks(STEAM_CHUNK) {
         let uids = chunk
             .iter()
@@ -236,8 +268,13 @@ fn steam_metas(appids: &[String]) -> HashMap<String, IgdbMeta> {
         let body = format!(
             "fields game,uid; where external_game_source = {STEAM_SOURCE} & uid = ({uids}); limit 500;"
         );
-        let Some(ext) = query("external_games", &body) else {
-            continue;
+        let ext = match query("external_games", &body) {
+            Reponse::Corps(v) => v,
+            Reponse::Limite => {
+                out.limite = true;
+                return out;
+            }
+            Reponse::Panne => continue,
         };
         std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
 
@@ -250,6 +287,14 @@ fn steam_metas(appids: &[String]) -> HashMap<String, IgdbMeta> {
                 }
             }
         }
+        // IGDB a répondu : un appid qu'il ne rattache à aucun jeu est vraiment absent de
+        // sa base, et cette absence-là se mémorise sans risque.
+        let mappes: HashSet<&String> = gid_to_appid.values().collect();
+        for appid in chunk {
+            if !mappes.contains(appid) {
+                out.interroges.insert(appid.clone());
+            }
+        }
         if gid_to_appid.is_empty() {
             continue;
         }
@@ -260,16 +305,26 @@ fn steam_metas(appids: &[String]) -> HashMap<String, IgdbMeta> {
             .collect::<Vec<_>>()
             .join(",");
         let body2 = format!("{FIELDS} where id = ({ids}); limit 500;");
-        let Some(games) = query("games", &body2) else {
-            continue;
+        let games = match query("games", &body2) {
+            Reponse::Corps(v) => v,
+            Reponse::Limite => {
+                out.limite = true;
+                return out;
+            }
+            Reponse::Panne => continue,
         };
         std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+
+        // Le second appel a répondu : le reste du lot est tranché lui aussi.
+        for appid in chunk {
+            out.interroges.insert(appid.clone());
+        }
 
         if let Some(arr) = games.as_array() {
             for g in arr {
                 if let Some(gid) = g["id"].as_i64() {
                     if let Some(appid) = gid_to_appid.get(&gid) {
-                        out.insert(appid.clone(), parse_meta(g));
+                        out.metas.insert(appid.clone(), parse_meta(g));
                     }
                 }
             }
@@ -294,7 +349,7 @@ pub fn recognize(guess: &str) -> Option<(String, IgdbMeta)> {
     }
 
     let body = format!("search \"{clean}\"; {FIELDS} limit 10;");
-    let Some(Value::Array(arr)) = query("games", &body) else {
+    let Reponse::Corps(Value::Array(arr)) = query("games", &body) else {
         return None;
     };
     std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
@@ -316,37 +371,62 @@ pub fn recognize(guess: &str) -> Option<(String, IgdbMeta)> {
     Some((g["name"].as_str()?.to_string(), parse_meta(g)))
 }
 
+/// Résultat d'une recherche par titre. Trois issues et pas deux : « IGDB ne connaît pas
+/// ce jeu » se mémorise, « je n'ai pas pu demander » surtout pas.
+enum Issue {
+    Trouve(IgdbMeta),
+    /// IGDB a répondu et n'a rien : inutile de redemander au prochain lancement.
+    Absent,
+    /// L'appel a échoué. Le jeu reste inconnu du cache, on retentera.
+    Panne,
+    /// Limite du proxy atteinte : comme `Panne`, et il faut arrêter la passe.
+    Limite,
+}
+
 /// Métadonnées d'un jeu non-Steam par son titre : match exact puis repli `search`.
-fn name_meta(title: &str) -> Option<IgdbMeta> {
+fn name_meta(title: &str) -> Issue {
     let clean = clean_title(title);
     if clean.is_empty() {
-        return None;
+        return Issue::Absent;
     }
     let target = norm(&clean);
 
     // 1) Correspondance exacte du nom (précis quand la casse coïncide).
     let body = format!("{FIELDS} where name = \"{clean}\"; limit 3;");
-    if let Some(Value::Array(arr)) = query("games", &body) {
-        std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
-        for g in &arr {
-            if g["name"].as_str().map(norm).as_deref() == Some(target.as_str()) {
-                return Some(parse_meta(g));
+    match query("games", &body) {
+        Reponse::Corps(Value::Array(arr)) => {
+            std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+            for g in &arr {
+                if g["name"].as_str().map(norm).as_deref() == Some(target.as_str()) {
+                    return Issue::Trouve(parse_meta(g));
+                }
             }
         }
+        Reponse::Corps(_) => {}
+        Reponse::Limite => return Issue::Limite,
+        // 🔑 On ne tente pas le repli `search` : sans réponse au premier appel, un
+        // « rien trouvé » au second ne prouverait rien de plus, et le jeu serait quand
+        // même mémorisé comme absent alors que la panne est la seule chose établie.
+        Reponse::Panne => return Issue::Panne,
     }
 
     // 2) Repli `search` (tolérant à la casse), on ne garde qu'un nom normalisé identique.
     let body = format!("search \"{clean}\"; {FIELDS} limit 15;");
-    if let Some(Value::Array(arr)) = query("games", &body) {
-        std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
-        for g in &arr {
-            if g["name"].as_str().map(norm).as_deref() == Some(target.as_str()) {
-                return Some(parse_meta(g));
+    match query("games", &body) {
+        Reponse::Corps(Value::Array(arr)) => {
+            std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+            for g in &arr {
+                if g["name"].as_str().map(norm).as_deref() == Some(target.as_str()) {
+                    return Issue::Trouve(parse_meta(g));
+                }
             }
         }
+        Reponse::Corps(_) => {}
+        Reponse::Limite => return Issue::Limite,
+        Reponse::Panne => return Issue::Panne,
     }
 
-    None
+    Issue::Absent
 }
 
 /// Remplit la métadonnée descriptive de tous les jeux (Steam en masse + autres par nom),
@@ -389,17 +469,30 @@ pub fn fill_metadata(
         out.extend(cached_batch);
     }
 
+    // Vrai dès qu'un appel a échoué : la passe est incomplète, il ne faut pas croire que
+    // les jeux non résolus sont absents d'IGDB.
+    let mut interrompue = false;
+
     // Steam en masse.
     if !steam_todo.is_empty() {
         let appids: Vec<String> = steam_todo.iter().map(|(_, a)| a.clone()).collect();
-        let by_appid = steam_metas(&appids);
+        let passe = steam_metas(&appids);
+        interrompue |= passe.limite;
         let mut batch = Vec::new();
         for (gid, appid) in &steam_todo {
-            let meta = by_appid.get(appid).cloned();
-            cache.insert(gid.clone(), meta.clone());
-            dirty = true;
-            if let Some(meta) = meta {
-                batch.push((gid.clone(), meta));
+            match passe.metas.get(appid) {
+                Some(meta) => {
+                    cache.insert(gid.clone(), Some(meta.clone()));
+                    dirty = true;
+                    batch.push((gid.clone(), meta.clone()));
+                }
+                // Interrogé, rien trouvé : IGDB ne connaît pas cet appid, on le note.
+                None if passe.interroges.contains(appid) => {
+                    cache.insert(gid.clone(), None);
+                    dirty = true;
+                }
+                // Lot en panne : on ne sait pas, donc on ne dit rien. Retenté au prochain scan.
+                None => interrompue = true,
             }
         }
         if !batch.is_empty() {
@@ -412,11 +505,23 @@ pub fn fill_metadata(
     // Non-Steam, un par un (throttlé), émis par petits lots.
     let mut batch = Vec::new();
     for g in other_todo {
-        let meta = name_meta(&g.title);
-        cache.insert(g.id.clone(), meta.clone());
-        dirty = true;
-        if let Some(meta) = meta {
-            batch.push((g.id.clone(), meta));
+        match name_meta(&g.title) {
+            Issue::Trouve(meta) => {
+                cache.insert(g.id.clone(), Some(meta.clone()));
+                dirty = true;
+                batch.push((g.id.clone(), meta));
+            }
+            Issue::Absent => {
+                cache.insert(g.id.clone(), None);
+                dirty = true;
+            }
+            Issue::Panne => interrompue = true,
+            // Inutile d'insister : les appels suivants seraient refusés pareillement, et
+            // chacun compterait quand même dans la limite. Le reste attendra le prochain scan.
+            Issue::Limite => {
+                interrompue = true;
+                break;
+            }
         }
         if batch.len() >= NONSTEAM_BATCH {
             traduire_lot(&mut batch);
@@ -428,6 +533,18 @@ pub fn fill_metadata(
         traduire_lot(&mut batch);
         emit(&batch);
         out.extend(batch);
+    }
+
+    // Trace explicite : sans elle, une passe écourtée ressemble à s'y méprendre à une
+    // bibliothèque dont IGDB ne connaîtrait pas la moitié des jeux.
+    if interrompue {
+        crate::journal::write(
+            config_dir,
+            "INFO",
+            "métadonnées IGDB : passe incomplète (proxy injoignable ou limite atteinte). \
+             Les jeux non résolus ne sont PAS mémorisés comme absents, ils seront \
+             retentés au prochain scan.",
+        );
     }
 
     if dirty {

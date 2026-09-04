@@ -2,5 +2,38 @@ name = "torii-igdb-proxy"
 main = "src/worker.js"
 compatibility_date = "2024-11-01"
 
-# Les secrets (TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, PROXY_TOKEN optionnel) ne
-# sont PAS dans ce fichier : ils sont posés via `wrangler secret put <NOM>`.
+# Les secrets (TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, ITAD_API_KEY, PROXY_TOKEN
+# optionnel) ne sont PAS dans ce fichier : ils sont posés via `wrangler secret put <NOM>`.
+
+# --- Limites par adresse IP --------------------------------------------------
+#
+# L'URL de ce Worker part en clair dans chaque version installée : elle s'extrait du
+# binaire. Il n'existe donc pas de secret capable de distinguer Torii d'un script, et ces
+# deux compteurs sont — avec le cache — la seule chose qui borne l'abus. Sans eux, une
+# boucle `curl` consomme les identifiants Twitch/IGDB jusqu'à ce qu'ils soient révoqués.
+#
+# 🔑 CALIBRAGE. Le client se throttle déjà à 300 ms par appel (`CALL_DELAY_MS`), et une
+# recherche par nom coûte au plus deux appels : le plafond d'un Torii légitime est donc
+# d'environ **200 appels par minute**, atteint seulement au tout premier lancement d'une
+# grosse bibliothèque hors Steam. Les lancements suivants lisent le cache disque et
+# n'appellent presque rien. On laisse 3x cette marge, pour que plusieurs joueurs derrière
+# la même IP (colocation, réseau familial, campus) ne se gênent pas.
+#
+# ⚠️ Le compteur est tenu par centre de données, pas globalement : c'est un garde-fou
+# contre l'abus, jamais une comptabilité exacte. C'est le comportement voulu ici.
+#
+# `period` n'accepte que 10 ou 60 (secondes).
+
+# Toutes les requêtes, cache compris. Protège le quota de requêtes du compte Cloudflare
+# (100 000/jour sur l'offre gratuite), partagé avec le Worker `torii-api`.
+[[ratelimits]]
+name = "RL_TOTAL"
+namespace_id = "1001"
+simple = { limit = 900, period = 60 }
+
+# Seulement ce qui sort vraiment vers IGDB ou ITAD (donc uniquement les requêtes que le
+# cache n'a pas su servir). C'est cette limite-là qui protège les clés d'API.
+[[ratelimits]]
+name = "RL_AMONT"
+namespace_id = "1002"
+simple = { limit = 600, period = 60 }
