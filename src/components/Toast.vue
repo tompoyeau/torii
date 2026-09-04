@@ -5,7 +5,15 @@ const { toasts } = useToast();
 </script>
 
 <template>
-  <div class="toasts">
+  <!--
+    🔑 `role="status"` + `aria-live="polite"` : sans eux, un toast n'existe pas pour un
+    lecteur d'écran — « Pseudo mis à jour », « Bibliothèque envoyée » et tous les autres
+    retours d'action passaient à la trappe. `polite` et pas `assertive` : ça se dit à la
+    fin de ce qui est en cours de lecture, ça n'interrompt personne.
+    L'attribut est posé sur le CONTENEUR, qui existe en permanence : une région live
+    ajoutée en même temps que son contenu n'est pas annoncée.
+  -->
+  <div class="toasts" role="status" aria-live="polite">
     <transition-group name="toast">
       <div v-for="t in toasts" :key="t.id" class="toast">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5" /></svg>

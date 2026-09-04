@@ -192,6 +192,7 @@ onBeforeUnmount(() => {
           <button
             class="visible-pill"
             :class="presenceMode"
+            aria-haspopup="true"
             :aria-expanded="presenceOpen"
             @click="presenceOpen = !presenceOpen"
           >
@@ -481,7 +482,7 @@ onBeforeUnmount(() => {
   background: var(--bg); border: 1px solid var(--border); color: var(--text);
   font-family: var(--mono); font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase;
 }
-.add-row input:focus { outline: none; border-color: var(--accent); }
+.add-row input:focus { border-color: var(--accent); }
 .add-error { margin: 8px 0 0; font-size: 12.5px; color: #ff6b6b; }
 .add-mine { display: flex; flex-direction: column; }
 

@@ -45,8 +45,25 @@ function pickGenre(g: string | null) {
 function onDocClick(e: MouseEvent) {
   if (!(e.target as HTMLElement).closest(".genre-wrap")) genreMenuOpen.value = false;
 }
-onMounted(() => document.addEventListener("click", onDocClick));
-onBeforeUnmount(() => document.removeEventListener("click", onDocClick));
+/**
+ * Échap ferme le menu. Il ne se fermait qu'au clic à côté — un geste que le clavier n'a
+ * pas : une fois ouvert, on ne pouvait en sortir qu'en choisissant une catégorie.
+ * Le focus retourne au bouton, sinon Échap laisse le clavier nulle part.
+ */
+const genreBtn = ref<HTMLElement | null>(null);
+function onDocKey(e: KeyboardEvent) {
+  if (e.key !== "Escape" || !genreMenuOpen.value) return;
+  genreMenuOpen.value = false;
+  genreBtn.value?.focus();
+}
+onMounted(() => {
+  document.addEventListener("click", onDocClick);
+  document.addEventListener("keydown", onDocKey);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onDocClick);
+  document.removeEventListener("keydown", onDocKey);
+});
 
 /** Tri de la liste selon la puce active. */
 function sortGames(list: Game[], key: SortKey): Game[] {
@@ -112,8 +129,10 @@ function title(f: LibraryFilter): string {
         <span class="spacer" />
         <div v-if="availableGenres.length" class="genre-wrap">
           <button
+            ref="genreBtn"
             class="chip genre-btn"
             :class="{ active: !!genre }"
+            aria-haspopup="true"
             :aria-expanded="genreMenuOpen"
             @click.stop="genreMenuOpen = !genreMenuOpen"
           >

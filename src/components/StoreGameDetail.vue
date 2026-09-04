@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useStore } from "../composables/useStore";
 import { useScrollLock } from "../composables/useScrollLock";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { openExternal } from "../lib/tauri";
 import { formatEur } from "../lib/format";
@@ -12,6 +13,10 @@ const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 
 const open = computed(() => selectedGameId.value != null);
 useScrollLock(open);
+
+/** Même raison que la fiche de la bibliothèque : le panneau recouvre la page. */
+const panneau = ref<HTMLElement | null>(null);
+useFocusTrap(panneau, open);
 
 const price = formatEur;
 
@@ -82,7 +87,7 @@ watch([selectedGameId, shots], () => {
 </script>
 
 <template>
-  <div class="sd" :class="{ open }">
+  <div ref="panneau" class="sd" :class="{ open }" role="dialog" aria-modal="true" tabindex="-1" aria-label="Fiche produit">
     <template v-if="open">
       <div class="sd-banner">
         <div class="sd-banner-art" :style="{ background: 'linear-gradient(160deg,#241a3a,#0e0a18)' }" />

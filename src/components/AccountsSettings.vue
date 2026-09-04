@@ -275,7 +275,7 @@ async function onSaveKey() {
   flex: 1; min-width: 200px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font-size: 13px; font-family: var(--mono);
 }
-.row input:focus { outline: none; border-color: var(--border-strong); }
+.row input:focus { border-color: var(--border-strong); }
 .btn-secondary {
   padding: 8px 13px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface);
   color: var(--text-dim); font-weight: 600; font-size: 12.5px;

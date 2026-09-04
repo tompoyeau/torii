@@ -1015,6 +1015,48 @@ Poser une limite sans corriger ça aurait transformé chaque 429 en dégât perm
   une ligne par compte, réécrite au même endroit, donc elle ne croît pas — l'effacer plus
   tôt coûterait une écriture pour la recréer au retour de la personne.
 
+## Accessibilité (fait) — langue, contrastes, focus, modales
+
+- **`<html lang="fr">`** ([index.html](index.html)). C'était `en` : un lecteur d'écran lisait
+  toute l'interface avec une voix anglaise. Une ligne, et c'est la plus rentable du lot.
+- **Contrastes.** Mesurés dans l'application qui tourne, pire cas sur les quatre fonds
+  (`--bg`, `--surface`, `--surface-2`, `--surface-3`) :
+
+  | | avant (pire cas) | après |
+  |---|---|---|
+  | `--text-faint` sombre | 3,01 | **4,60** |
+  | `--text-faint` clair | 2,69 | **4,54** |
+  | `--accent` comme texte, clair | 3,31 | **4,60** |
+  | `--accent-ink` sur `--accent`, clair | 3,74 | **5,45** |
+
+  🔑 Vérifier sur `--surface-3` et pas sur `--bg` : un texte peut passer sur le fond de page
+  et échouer dans un menu, et c'est le cas qu'on ne voit jamais à l'œil.
+  ⚠️ L'accent du thème CLAIR a été assombri (#ec4b30 → #c63118) : le blanc posé dessus ne
+  passait pas sur les boutons d'action, et l'accent sert aussi de couleur de TEXTE à
+  49 endroits. Le thème sombre était déjà bon (6,7:1) et ne bouge pas. Remonter
+  `--text-faint` rapproche forcément « faint » de « dim » — c'est le prix d'un texte
+  lisible, pas un réglage à défaire.
+- **`outline: none` retiré des 9 champs de saisie.** Ils retombent sur l'anneau global
+  `:focus-visible` de `style.css` : un seul style de focus pour toute l'application, au
+  lieu d'un simple changement de bordure — qui était le seul indice dans la recherche.
+- **`useFocusTrap`** ([src/composables/useFocusTrap.ts](src/composables/useFocusTrap.ts)),
+  posé sur 6 surfaces : AddGameModal, ToriiSignInDialog, SettingsView, GameDetail,
+  StoreGameDetail, confirmation de retrait d'ami. Trois responsabilités, et il faut les
+  trois : entrer (le focus va dans la modale), tourner en rond (Tab du dernier revient au
+  premier), **rendre** (à la fermeture, le focus retourne au bouton qui a ouvert).
+  ⚠️ Le conteneur doit porter `tabindex="-1"` — repli quand la modale n'a aucun élément
+  focusable, sans quoi le focus retombe sur `<body>`. Écouteur en **capture** sur le
+  document : un champ de la modale peut traiter Tab lui-même, on décide avant lui.
+- **`role="status"` + `aria-live="polite"`** sur le conteneur des toasts. 🔑 Sur le
+  CONTENEUR, qui existe en permanence : une région live ajoutée en même temps que son
+  contenu n'est pas annoncée.
+- Échap ferme le menu des catégories et rend le focus au bouton. Il ne se fermait qu'au
+  clic à côté — un geste que le clavier n'a pas.
+- ⚠️ **Correction d'un constat d'audit erroné** : les menus déroulants (catégories,
+  lancement, écrou, présence) SONT accessibles au clavier — ce sont de vrais `<button>`
+  portant déjà `aria-expanded`. Il n'y manquait que `aria-haspopup` et Échap. Ne pas
+  repartir de l'idée qu'ils sont à refaire.
+
 ## 🔴 Le plafond réel : ~34 joueurs simultanés
 
 Trouvé en faisant le lot B, et il domine tout le reste. `HEARTBEAT` = 30 s côté client
@@ -1045,12 +1087,6 @@ Aucun des lots A/B/C/D ne touche ce mur. Les issues, par ordre de préférence :
 
 ### Diffusion à grande échelle — lots restants
 
-- **Lot C — accessibilité** : `<html lang="en">` alors que tout est en français ;
-  `--text-faint` sous le seuil AA dans les deux thèmes (3,9:1 sombre, 2,8:1 clair) et
-  `--accent-ink` sur `--accent` à 3,7:1 en clair ; `outline: none` sur 9 champs de saisie ;
-  aucune modale ne piège ni ne rend le focus (`.focus()` apparaît **une** fois dans tout le
-  front, `tabindex` zéro fois) ; zéro `aria-live` (toasts et bandeau muets) ; `role="dialog"`
-  sur 2 surfaces modales sur 6 ; menus déroulants inatteignables au clavier.
 - **Lot D — WebView** : `"csp": null` et `assetProtocol.scope: ["**"]` dans
   `tauri.conf.json`. Rien d'exploitable aujourd'hui (un seul `v-html`, sur des SVG locaux),
   mais dans Tauri une injection front donne accès à `invoke`, donc au lancement de

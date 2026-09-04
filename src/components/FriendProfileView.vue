@@ -21,6 +21,7 @@ import { useFriendLibrary } from "../composables/useFriendLibrary";
 import { useFriendList } from "../composables/useFriendList";
 import { useLibrary } from "../composables/useLibrary";
 import { useScrollLock } from "../composables/useScrollLock";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { useTorii } from "../composables/useTorii";
 import { useUi } from "../composables/useUi";
 import { showToast } from "../composables/useToast";
@@ -168,6 +169,9 @@ async function copierCode() {
  */
 const menuOpen = ref(false);
 const confirming = ref(false);
+/** Retirer un ami est indéfaisable : la confirmation doit retenir le clavier. */
+const modale = ref<HTMLElement | null>(null);
+useFocusTrap(modale, confirming);
 const removing = ref(false);
 
 /** Un écrou sans rien dedans serait une promesse vide : seul un lien Torii se retire. */
@@ -279,6 +283,7 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
             class="gear"
             title="Réglages de cette relation"
             aria-label="Réglages de cette relation"
+            aria-haspopup="true"
             :aria-expanded="menuOpen"
             @click="menuOpen = !menuOpen"
           >
@@ -387,7 +392,7 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
 
     <!-- Confirmation de retrait : une vraie modale, parce que c'est indéfaisable. -->
     <div v-if="confirming" class="modal-back" @click.self="confirming = false">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="retirer-titre">
+      <div ref="modale" class="modal" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="retirer-titre">
         <h3 id="retirer-titre">Retirer {{ name }} ?</h3>
         <p>{{ removeHint }}</p>
         <p class="sub">

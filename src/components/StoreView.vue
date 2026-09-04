@@ -238,7 +238,7 @@ function onCoverError(url: string | null) {
 }
 .store-search:focus-within { border-color: var(--accent); }
 .store-search > svg { width: 17px; height: 17px; color: var(--text-faint); flex: none; }
-.store-search input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--text); font-size: 14px; padding: 8px 0; }
+.store-search input { flex: 1; min-width: 0; background: none; border: none; color: var(--text); font-size: 14px; padding: 8px 0; }
 .store-search .clear { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: none; border: none; color: var(--text-faint); }
 .store-search .clear svg { width: 15px; height: 15px; }
 .store-search .clear:hover { background: var(--surface-2); color: var(--text); }

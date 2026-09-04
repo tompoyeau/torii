@@ -6,6 +6,7 @@ import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { useTorii } from "../composables/useTorii";
 import { useScrollLock } from "../composables/useScrollLock";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { platformName } from "../data/platforms";
 import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
 import type { FriendLib, GameSource, SteamAchievements } from "../types";
@@ -39,6 +40,13 @@ const game = computed(() => byId(selectedGameId.value));
 
 // Fiche ouverte = la bibliothèque en dessous ne doit plus défiler (ni montrer sa barre).
 useScrollLock(computed(() => !!game.value));
+
+/**
+ * Le panneau recouvre la page : au clavier, sans piège, la tabulation continuait de
+ * parcourir la bibliothèque cachée derrière lui.
+ */
+const panneau = ref<HTMLElement | null>(null);
+useFocusTrap(panneau, computed(() => !!game.value));
 
 const friendById = computed(() => new Map(friends.value.map((f) => [f.steamId, f])));
 
@@ -344,7 +352,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="detail" :class="{ open: !!game }">
+  <div
+    ref="panneau"
+    class="detail"
+    :class="{ open: !!game }"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    :aria-label="game ? game.title : 'Fiche du jeu'"
+  >
     <template v-if="game">
       <div class="detail-banner">
         <div class="detail-banner-art" :style="{ background: game.cover }" />
@@ -396,6 +412,7 @@ onBeforeUnmount(() => {
               <button
                 class="btn-ghost solid"
                 title="Options du jeu"
+                aria-haspopup="true"
                 :aria-expanded="uninstallMenuOpen"
                 @click.stop="toggleSettingsMenu"
               >

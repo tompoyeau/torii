@@ -101,7 +101,7 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   font-size: 13.5px; font-family: inherit;
 }
 .search input::placeholder { color: var(--text-faint); }
-.search input:focus { outline: none; border-color: var(--border-strong); background: var(--surface-2); }
+.search input:focus { border-color: var(--border-strong); background: var(--surface-2); }
 .topbar-spacer { flex: 1; }
 .enrich-pill {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 99px;

@@ -6,6 +6,7 @@ import { useStore } from "../composables/useStore";
 import { useTheme } from "../composables/useTheme";
 import { useUi } from "../composables/useUi";
 import { useScrollLock } from "../composables/useScrollLock";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
 import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openLog, setAutostart, setWindowPrefs } from "../lib/tauri";
@@ -279,6 +280,10 @@ const DENSITIES = [
 // --- À propos & maintenance -------------------------------------------------
 useScrollLock(settingsOpen);
 
+/** Le clavier ne doit pas sortir des Paramètres, et doit revenir d’où il vient. */
+const modale = ref<HTMLElement | null>(null);
+useFocusTrap(modale, settingsOpen);
+
 const version = ref<string | null>(null);
 const cacheMsg = ref("");
 const cacheBusy = ref(false);
@@ -386,7 +391,7 @@ function unhide(id: string) {
 
 <template>
   <div v-if="settingsOpen" class="overlay" @click.self="closeSettings">
-    <div class="dialog">
+    <div ref="modale" class="dialog" role="dialog" aria-modal="true" tabindex="-1" aria-label="Paramètres">
       <!-- Rail de navigation -->
       <aside class="snav">
         <div class="snav-title">Paramètres</div>
@@ -1077,7 +1082,7 @@ function unhide(id: string) {
   padding: 9px 13px; border-radius: 10px; font-size: 13.5px; font-family: inherit;
   background: var(--bg); border: 1px solid var(--border); color: var(--text); min-width: 200px;
 }
-.danger-zone input:focus { outline: none; border-color: #ff6b6b; }
+.danger-zone input:focus { border-color: #ff6b6b; }
 .danger-btn {
   padding: 9px 15px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
   font-family: inherit; color: #ff6b6b;
@@ -1139,7 +1144,7 @@ function unhide(id: string) {
   padding: 8px 12px; border-radius: 9px; font-size: 13.5px; font-family: inherit; min-width: 190px;
   background: var(--bg); border: 1px solid var(--border); color: var(--text);
 }
-.pseudo-input:focus { outline: none; border-color: var(--accent); }
+.pseudo-input:focus { border-color: var(--accent); }
 
 .friend-code {
   font-family: var(--mono); font-size: 15px; letter-spacing: 0.16em; font-weight: 600;

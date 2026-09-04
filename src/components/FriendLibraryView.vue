@@ -215,7 +215,7 @@ const familyCount = computed(() => games.value.filter((g) => g.familyShared).len
 .search {
   width: 220px; padding: 7px 12px; border-radius: 10px;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
-  font-size: 13px; outline: none;
+  font-size: 13px;
 }
 .search:focus { border-color: var(--accent); }
 .sub { font-size: 12.5px; color: var(--text-dim); margin: 0 0 14px; }

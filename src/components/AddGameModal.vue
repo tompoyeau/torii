@@ -3,12 +3,17 @@ import { computed, ref, watch } from "vue";
 import { useUi } from "../composables/useUi";
 import { useLibrary } from "../composables/useLibrary";
 import { useScrollLock } from "../composables/useScrollLock";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { pickFile, pickFolder } from "../lib/tauri";
 
 const { addGameOpen, editGameId, closeAddGame, openGame } = useUi();
 const { addManual, updateManual, byId } = useLibrary();
 
 useScrollLock(addGameOpen);
+
+/** Le clavier ne doit pas sortir de la modale, et doit revenir d’où il vient. */
+const modale = ref<HTMLElement | null>(null);
+useFocusTrap(modale, addGameOpen);
 
 const title = ref("");
 const launchTarget = ref("");
@@ -99,7 +104,14 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <div v-if="addGameOpen" class="modal-backdrop" @click.self="closeAddGame" @keydown="onKey">
-    <div class="modal" role="dialog" aria-modal="true" :aria-label="editing ? 'Modifier le jeu' : 'Ajouter un jeu'">
+    <div
+      ref="modale"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      :aria-label="editing ? 'Modifier le jeu' : 'Ajouter un jeu'"
+    >
       <div class="modal-head">
         <h3>{{ editing ? "Modifier le jeu" : "Ajouter un jeu" }}</h3>
         <button class="modal-close" aria-label="Fermer" @click="closeAddGame">
@@ -188,7 +200,7 @@ function onKey(e: KeyboardEvent) {
   background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap;
 }
 .btn-browse:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-3); }
-.field input:focus { outline: none; border-color: var(--border-strong); background: var(--surface-2); }
+.field input:focus { border-color: var(--border-strong); background: var(--surface-2); }
 .field input::placeholder { color: var(--text-faint); }
 .field-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; }
 .modal-error {

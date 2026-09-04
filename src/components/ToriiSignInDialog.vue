@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useTorii } from "../composables/useTorii";
 import { useScrollLock } from "../composables/useScrollLock";
+import { useFocusTrap } from "../composables/useFocusTrap";
 import { showToast } from "../composables/useToast";
 
 /**
@@ -29,6 +30,10 @@ const devCode = ref<string | null>(null);
 const verrouille = computed(() => etape.value === "pseudo");
 
 useScrollLock(signInOpen);
+
+/** Le clavier ne doit pas sortir de la fenêtre, et doit revenir d’où il vient. */
+const modale = ref<HTMLElement | null>(null);
+useFocusTrap(modale, signInOpen);
 
 const champ = ref<HTMLInputElement | null>(null);
 
@@ -128,7 +133,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="signInOpen" class="modal-backdrop" @click.self="fermer">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Compte Torii">
+    <div ref="modale" class="modal" role="dialog" aria-modal="true" tabindex="-1" aria-label="Compte Torii">
       <div class="modal-head">
         <h3>{{ etape === "pseudo" ? "Choisis ton pseudo" : "Compte Torii" }}</h3>
         <button v-if="!verrouille" class="modal-close" aria-label="Fermer" @click="closeSignIn">
@@ -252,7 +257,7 @@ onBeforeUnmount(() => {
   padding: 11px 13px; border-radius: 10px; font-size: 14px; font-family: inherit;
   background: var(--bg); border: 1px solid var(--border); color: var(--text); width: 100%;
 }
-.field input:focus { outline: none; border-color: var(--accent); }
+.field input:focus { border-color: var(--accent); }
 .field input.code {
   font-family: var(--mono); font-size: 18px; letter-spacing: 0.32em; text-align: center;
 }

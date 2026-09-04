@@ -1,3 +1,19 @@
+/* --- Contraste : ce qui est vérifié, et sur quoi -----------------------------
+   Les couleurs de texte sont calibrées pour tenir le **4,5:1 de WCAG AA** sur le fond le
+   plus défavorable où elles apparaissent — `--surface-3` en thème sombre (le plus clair
+   des fonds sombres) comme en thème clair (le plus sombre des fonds clairs). Vérifier là
+   plutôt que sur `--bg` : un texte peut passer sur le fond de page et échouer dans un
+   menu, et c'est le cas qu'on ne voit jamais à l'œil.
+
+   ⚠️ `--text-faint` est le token le plus fragile : il était à **3,9:1** en sombre et
+   **2,8:1** en clair, sous le seuil, pour 96 usages dans l'application (dates, compteurs,
+   sous-titres de liste). Le remonter rapproche forcément « faint » de « dim » — c'est le
+   prix d'un texte lisible, pas un réglage à défaire.
+
+   ⚠️ `--accent` en thème CLAIR a été assombri (#ec4b30 → #c63118) pour deux raisons à la
+   fois : le blanc `--accent-ink` posé dessus n'était qu'à **3,7:1** sur les boutons
+   d'action principaux, et l'accent SERVI COMME TEXTE (49 endroits) n'était qu'à 3,3:1 sur
+   le fond de page. Le thème sombre, lui, était déjà bon (6,7:1) et ne bouge pas. */
 :root {
   --bg: #131019;
   --bg-grad: radial-gradient(1200px 600px at 78% -10%, #1e1830 0%, transparent 60%),
@@ -9,7 +25,8 @@
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #ece9f3;
   --text-dim: #a39daf;
-  --text-faint: #6f6980;
+  /* 4,6:1 sur --surface-3, 6,0:1 sur --bg (était #6f6980 : 3,0:1 et 3,9:1). */
+  --text-faint: #948fa1;
   --accent: #ff6b57;
   --accent-hover: #ff8069;
   --accent-ink: #1a0f0c;
@@ -38,8 +55,8 @@
                radial-gradient(800px 460px at -5% 6%, #f6ecec 0%, transparent 55%);
     --surface: #ffffff; --surface-2: #f7f5fb; --surface-3: #eeeaf4;
     --border: rgba(23, 17, 33, 0.1); --border-strong: rgba(23, 17, 33, 0.16);
-    --text: #1a1626; --text-dim: #5f596d; --text-faint: #948da3;
-    --accent: #ec4b30; --accent-hover: #d63d24; --accent-ink: #fff; --accent-soft: rgba(236, 75, 48, 0.1);
+    --text: #1a1626; --text-dim: #5f596d; --text-faint: #6e677d;
+    --accent: #c63118; --accent-hover: #a82812; --accent-ink: #fff; --accent-soft: rgba(198, 49, 24, 0.1);
     --steam: #1668bd; --epic: #2a2a32; --gog: #7b45f0; --manual: #148a63; --detected: #b57d09; --riot: #d6342f; --ubisoft: #1580c8; --ea: #cf2f43; --battlenet: #0077c8;
     --shadow-card: 0 18px 38px -20px rgba(40, 20, 60, 0.28);
     --shadow-hero: 0 40px 80px -40px rgba(40, 20, 60, 0.34);
@@ -52,7 +69,7 @@
              radial-gradient(900px 500px at 0% 8%, #1a1522 0%, transparent 55%);
   --surface: #1b1823; --surface-2: #232030; --surface-3: #2c2739;
   --border: rgba(255, 255, 255, 0.08); --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #ece9f3; --text-dim: #a39daf; --text-faint: #6f6980;
+  --text: #ece9f3; --text-dim: #a39daf; --text-faint: #948fa1;
   --accent: #ff6b57; --accent-hover: #ff8069; --accent-ink: #1a0f0c; --accent-soft: rgba(255, 107, 87, 0.14);
   --steam: #6cc0f4; --epic: #dcdce2; --gog: #a483ff; --manual: #56d6a6; --detected: #f0b73f; --riot: #ff4655; --ubisoft: #2aa3ee; --ea: #ff5568; --battlenet: #3bb3ff;
   --shadow-card: 0 18px 40px -18px rgba(0, 0, 0, 0.7);
@@ -65,8 +82,8 @@
              radial-gradient(800px 460px at -5% 6%, #f6ecec 0%, transparent 55%);
   --surface: #ffffff; --surface-2: #f7f5fb; --surface-3: #eeeaf4;
   --border: rgba(23, 17, 33, 0.1); --border-strong: rgba(23, 17, 33, 0.16);
-  --text: #1a1626; --text-dim: #5f596d; --text-faint: #948da3;
-  --accent: #ec4b30; --accent-hover: #d63d24; --accent-ink: #fff; --accent-soft: rgba(236, 75, 48, 0.1);
+  --text: #1a1626; --text-dim: #5f596d; --text-faint: #6e677d;
+  --accent: #c63118; --accent-hover: #a82812; --accent-ink: #fff; --accent-soft: rgba(198, 49, 24, 0.1);
   --steam: #1668bd; --epic: #2a2a32; --gog: #7b45f0; --manual: #148a63; --detected: #b57d09; --riot: #d6342f; --ubisoft: #1580c8; --ea: #cf2f43; --battlenet: #0077c8;
   --shadow-card: 0 18px 38px -20px rgba(40, 20, 60, 0.28);
   --shadow-hero: 0 40px 80px -40px rgba(40, 20, 60, 0.34);
