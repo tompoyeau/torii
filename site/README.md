@@ -18,8 +18,19 @@ Le plus simple est FileZilla ou l'explorateur de fichiers de l'espace client. Ta
 domaine n'est pas rattaché (24 à 48 h après la commande), le site répond sur
 `toriian.cluster121.hosting.ovh.net`.
 
-⚠️ **Penser à activer le SSL** (Let's Encrypt, gratuit) depuis l'espace client OVH : une
-page de téléchargement en `http://` est signalée par les navigateurs.
+⚠️ **Ne pas oublier le `.htaccess`** : c'est un fichier caché, la plupart des clients FTP
+ne l'affichent pas par defaut. Sans lui, pas de redirection vers HTTPS.
+
+### Le SSL est deja actif — mais il ne suffit pas
+
+OVH emet automatiquement un certificat Let's Encrypt pour tout nouveau domaine rattache a
+un nouvel hebergement. Il n'y a donc **rien a activer** dans l'espace client : le menu
+« Activer le certificat SSL » est vide parce que c'est deja fait.
+
+🔑 **Mais un certificat actif ne force personne a l'emprunter.** `http://torii-app.fr`
+repondait 200 en clair, et le navigateur affichait « Non securise » sur la page de
+telechargement — le pire endroit possible. C'est le `.htaccess` qui corrige ca, pas le
+panneau OVH, qui n'offre aucune option pour le faire.
 
 ## Comment le bouton connaît la dernière version
 

@@ -1,0 +1,42 @@
+# Torii — configuration Apache de l'hébergement OVH.
+
+# --- Forcer HTTPS -------------------------------------------------------------
+#
+# Le certificat Let's Encrypt est actif, mais rien n'obligeait les visiteurs à
+# l'emprunter : taper « torii-app.fr » mène à `http://`, et le navigateur affiche
+# « Non sécurisé » sur une page de téléchargement — le pire endroit pour ça.
+#
+# 🔑 DEUX conditions, pas une. OVH ne documente que la première (`%{HTTPS} off`),
+# mais leurs en-têtes de réponse trahissent un load balancer (`x-iplb-request-id`).
+# Quand le TLS est terminé par ce load balancer, `%{HTTPS}` vaut `off` côté serveur
+# **même pour une requête HTTPS** — la règle d'OVH redirige alors une requête déjà
+# sécurisée, indéfiniment. La seconde condition lit l'en-tête que le load balancer
+# ajoute : si l'une des deux dit « c'est déjà du HTTPS », on ne redirige pas.
+# La boucle est impossible par construction.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# --- Pas de listage de dossier ------------------------------------------------
+# Sans ça, `/captures/` affiche l'index du dossier à qui devine l'adresse.
+Options -Indexes
+
+# --- Cache ---------------------------------------------------------------------
+# Les captures et le logo ne changent qu'à une refonte ; le HTML et le script, eux,
+# doivent pouvoir refléter un changement tout de suite.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/jpeg     "access plus 30 days"
+  ExpiresByType image/png      "access plus 30 days"
+  ExpiresByType image/svg+xml  "access plus 30 days"
+  ExpiresByType text/css       "access plus 7 days"
+  ExpiresByType application/javascript "access plus 1 hours"
+  ExpiresByType text/html      "access plus 0 seconds"
+</IfModule>
+
+# --- Page d'erreur -------------------------------------------------------------
+# Une URL inconnue ramène à l'accueil plutôt qu'à la page d'erreur d'OVH.
+ErrorDocument 404 /index.html
