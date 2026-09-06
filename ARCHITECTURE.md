@@ -922,6 +922,37 @@ les amis. Le surveillant l'adopte désormais tout seul.
   27 déjà dans la bibliothèque, 0 écarté, 3 jeux détectés (Minecraft, Dolphin,
   Rainbow Six).
 
+### 🔑 Le sosie : un jeu de launcher pris pour un jeu hors launcher
+
+Le doublon le plus visible de Torii. On achète un jeu, on le lance depuis Steam dans la
+foulée ; la bibliothèque date d'avant l'achat, donc `match_id` ne le reconnaît pas et
+`adopt` le classe « Hors launcher ». Le scan suivant ajoute le **vrai** jeu Steam à côté
+de son sosie : le même jeu, deux fois, pour toujours.
+
+Deux réponses, et il faut les deux — l'une évite le mal, l'autre répare ce qui existe déjà.
+
+- **Prévention** (`procwatch::jeu_de_launcher_frais`) : avant de déclarer un exécutable
+  hors launcher, on **rejoue le relevé des jeux installés** et on regarde s'il tombe
+  dedans. 🔑 C'est possible parce que `platforms::scan_installed` ne coûte **aucun appel
+  réseau** — manifestes et registre seulement. Un vrai rafraîchissement, lui, interroge
+  Steam, GOG et Epic en ligne : impensable au moment où une partie démarre.
+  Si c'est un jeu de launcher, on l'adopte sous sa **vraie identité** (`Adoption::Rattrape`)
+  : la présence annonce le bon titre, la carte apparaît tout de suite, et **rien** n'est
+  écrit dans `detected_games.json`. La cible étant posée, le relevé ne se rejoue pas au
+  passage suivant — sans quoi il tournerait à chaque tick pendant les deux minutes de sursis.
+- **Filet** (`platforms::est_un_sosie`, appelé par `scan_all`) : un jeu détecté dont le
+  dossier vit sous celui d'un vrai jeu est écarté **et effacé**. C'est ce qui répare les
+  doublons déjà en base. ⚠️ Son exécutable ne rejoint **pas** les refusés — contrairement à
+  `forget` : le jeu n'est pas indésirable, il est déjà connu par ailleurs. L'y mettre
+  empêcherait une détection légitime le jour où il serait désinstallé du launcher.
+- ⚠️ `normalize` / `sous` sont désormais **définies une seule fois**, dans `platforms`.
+  Elles l'étaient en trois exemplaires (procwatch, detected, mod) dont un qui ne coupait
+  pas le `\` final. Prévention et filet doivent comparer les chemins à l'identique : deux
+  versions qui divergent, et l'une déclare hors launcher ce que l'autre reconnaît.
+- `est_un_sosie` est isolée et testée parce que c'est **la seule règle de l'application qui
+  supprime une entrée de bibliothèque**. Le test qui compte est celui du dossier voisin :
+  « Portal 2 Demo » ne doit pas disparaître parce que « Portal 2 » existe.
+
 ## Durcissement du proxy — cache, limites par IP, listes blanches (fait)
 
 Préparation d'une diffusion large. Le constat de départ : `PROXY_TOKEN` était « optionnel »

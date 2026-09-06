@@ -26,6 +26,7 @@
 //! « ne pas diffuser ce jeu » fonctionnent sans une ligne de plus. Le titre est deviné
 //! à partir du dossier, puis **corrigé par IGDB** (qui fournit aussi la jaquette).
 
+use super::normalize;
 use crate::models::GameDto;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -204,6 +205,23 @@ pub fn forget(config_dir: &Path, id: &str) -> Result<Vec<GameDto>, String> {
     }
     persist(config_dir, &games)?;
     Ok(games)
+}
+
+/// Efface des jeux détectés qui n'auraient jamais dû l'être — un sosie repéré pendant
+/// que la bibliothèque était en retard d'un scan (jeu acheté puis lancé dans la foulée
+/// depuis son launcher). Appelé par [`super::scan_all`].
+///
+/// ⚠️ Contrairement à [`forget`], l'exécutable ne rejoint **pas** la liste des refusés :
+/// ici le jeu n'est pas indésirable, il est simplement déjà connu par ailleurs. L'ajouter
+/// aux refusés empêcherait une détection légitime le jour où il serait désinstallé du
+/// launcher tout en restant sur le disque.
+pub fn purger(config_dir: &Path, ids: &[String]) {
+    let mut games = scan(config_dir);
+    let avant = games.len();
+    games.retain(|g| !ids.contains(&g.id));
+    if games.len() != avant {
+        let _ = persist(config_dir, &games);
+    }
 }
 
 // --- Reconnaissance ---------------------------------------------------------------
@@ -549,10 +567,10 @@ fn norm(s: &str) -> String {
         .collect()
 }
 
-/// Chemin comparable : minuscules, séparateurs Windows.
-fn normalize(path: &str) -> String {
-    path.to_lowercase().replace('/', "\\")
-}
+// `normalize` vient de `platforms` : il n'existe qu'UNE façon de comparer un chemin dans
+// l'application. La copie locale d'avant ne coupait pas le `\` final — sans conséquence
+// sur un exécutable, mais c'est précisément par ce genre d'écart qu'un chemin cesse de
+// correspondre d'un module à l'autre.
 
 #[cfg(test)]
 mod tests {

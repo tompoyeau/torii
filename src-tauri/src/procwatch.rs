@@ -17,7 +17,7 @@
 
 use crate::journal;
 use crate::models::GameDto;
-use crate::platforms::{detected, playhistory};
+use crate::platforms::{detected, normalize, playhistory, sous as under};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -137,24 +137,72 @@ fn match_id(targets: &[Target], exe: &str) -> Option<String> {
         .map(|t| t.id.clone())
 }
 
+/// Ce qu'a donné l'adoption d'un exécutable inconnu de la bibliothèque.
+enum Adoption {
+    /// La cible existait déjà : deuxième exécutable d'un jeu déjà découvert, lancé hors
+    /// de son dossier. Rien à enregistrer.
+    Connue(String),
+    /// Vrai jeu hors launcher : à inscrire dans `detected_games.json`.
+    HorsLauncher(String, GameDto),
+    /// Jeu de **launcher**, installé depuis le dernier scan de bibliothèque. À afficher
+    /// tout de suite, mais surtout **jamais** à inscrire comme détecté.
+    Rattrape(String, GameDto),
+}
+
+/// Un exécutable inconnu appartient-il à un jeu de launcher installé depuis le dernier
+/// scan de bibliothèque ?
+///
+/// 🔑 C'est le contrôle qui évite le doublon le plus visible de Torii : on achète un jeu,
+/// on le lance depuis Steam dans la foulée, et comme la bibliothèque date d'avant l'achat
+/// le surveillant ne le reconnaît pas — il le classe « hors launcher ». Le scan suivant
+/// ajoute alors le vrai jeu Steam **à côté** de son sosie.
+///
+/// Le relevé est **purement local** (manifestes, registre) : aucun appel réseau, donc rien
+/// qui puisse peser au moment précis où une partie démarre. Et il ne tourne que pour un
+/// exécutable que Windows classe comme jeu et que la bibliothèque ignore — autant dire
+/// une fois par jeu nouvellement installé.
+fn jeu_de_launcher_frais(exe: &str) -> Option<GameDto> {
+    let path = normalize(exe);
+    crate::platforms::scan_installed().into_iter().find(|g| {
+        g.install_dir
+            .as_deref()
+            .filter(|d| !d.is_empty())
+            .is_some_and(|d| under(&path, &normalize(d)))
+    })
+}
+
 /// Adopte un exécutable inconnu de la bibliothèque si Windows le classe comme jeu
 /// (cf. [`crate::platforms::detected`]) : il devient une cible surveillée sur-le-champ.
-///
-/// Renvoie `(id du jeu, jeu à enregistrer)` — le second est `None` quand la cible
-/// existait déjà (deuxième exécutable d'un jeu déjà découvert, lancé hors de son dossier).
 fn adopt(
     state: &mut WatchState,
     config_dir: Option<&std::path::Path>,
     exe: &str,
-) -> Option<(String, Option<GameDto>)> {
+) -> Option<Adoption> {
     let dir = config_dir?;
     let game = detected::identify(exe)?;
     if detected::is_ignored(dir, exe) {
         return None;
     }
     if let Some(target) = state.targets.iter().find(|t| t.id == game.id) {
-        return Some((target.id.clone(), None));
+        return Some(Adoption::Connue(target.id.clone()));
     }
+
+    // Avant de le déclarer hors launcher : et si la bibliothèque était juste en retard ?
+    // On l'adopte alors sous sa VRAIE identité (id et titre du launcher), ce qui a deux
+    // effets : la présence annonce le bon jeu, et la cible étant posée, on ne repassera
+    // plus par ce relevé au prochain passage de la boucle.
+    if let Some(vrai) = jeu_de_launcher_frais(exe) {
+        state.targets.push(Target {
+            id: vrai.id.clone(),
+            title: vrai.title.clone(),
+            roots: vec![normalize(
+                vrai.install_dir.as_deref().unwrap_or(&vrai.launch_target),
+            )],
+            provisoire: false, // le launcher donne le vrai titre : rien à faire trancher par IGDB
+        });
+        return Some(Adoption::Rattrape(vrai.id.clone(), vrai));
+    }
+
     state.targets.push(Target {
         id: game.id.clone(),
         title: game.title.clone(),
@@ -163,7 +211,7 @@ fn adopt(
         )],
         provisoire: true,
     });
-    Some((game.id.clone(), Some(game)))
+    Some(Adoption::HorsLauncher(game.id.clone(), game))
 }
 
 /// Demande à IGDB le vrai nom du jeu découvert (et sa jaquette), puis corrige l'entrée
@@ -298,6 +346,9 @@ fn tick(
     //    chemin), plus les inconnus encore en sursis, dont on a déjà le chemin.
     let mut launched: Vec<(String, Option<i64>)> = Vec::new();
     let mut discovered: Vec<GameDto> = Vec::new();
+    // Jeux de launcher installes depuis le dernier scan : a afficher, jamais a inscrire
+    // comme detectes.
+    let mut rattrapes: Vec<GameDto> = Vec::new();
     candidats.retain(|pid, c| alive.contains(pid) && c.depuis.elapsed() < SURSIS);
     let mut examiner: Vec<(u32, String)> = candidats
         .iter()
@@ -316,12 +367,19 @@ fn tick(
             // jeu (cf. `platforms::detected`). Si oui, il rejoint les cibles séance
             // tenante — la présence et « Récemment joué » suivent sans attendre un scan.
             None => match adopt(&mut state, config_dir.as_deref(), &exe) {
-                Some((id, game)) => {
+                Some(adoption) => {
                     candidats.remove(&pid);
-                    if let Some(game) = game {
-                        discovered.push(game);
+                    match adoption {
+                        Adoption::Connue(id) => id,
+                        Adoption::HorsLauncher(id, game) => {
+                            discovered.push(game);
+                            id
+                        }
+                        Adoption::Rattrape(id, game) => {
+                            rattrapes.push(game);
+                            id
+                        }
                     }
-                    id
                 }
                 // Pas (encore) reconnu : on le garde en sursis s'il a le profil d'un
                 // jeu, pour le rejuger quand Windows aura peut-être tranché.
@@ -405,6 +463,28 @@ fn tick(
         }
     }
 
+    // Jeux de launcher installés depuis le dernier scan. On les pousse au front pour
+    // qu'ils apparaissent tout de suite, sous leur vraie identité — mais **rien n'est
+    // écrit** dans `detected_games.json`, et on ne demande pas son avis à IGDB : le
+    // launcher connaît déjà le titre. Le prochain scan de bibliothèque les trouvera par
+    // la voie normale ; d'ici là, la carte est déjà là.
+    //
+    // L'événement est celui des jeux détectés parce que le front n'y fait rien de
+    // spécifique — il insère ou rafraîchit une carte à partir de l'id (`noteDetected`).
+    for game in rattrapes {
+        if let Some(dir) = config_dir.clone() {
+            journal::write(
+                &dir,
+                "INFO",
+                &format!(
+                    "jeu de launcher repéré avant son scan : « {} » ({}) — pas de doublon hors launcher",
+                    game.title, game.platform
+                ),
+            );
+        }
+        let _ = app.emit("game-detected", game);
+    }
+
     for (id, started) in launched {
         let at = match app.path().app_config_dir() {
             Ok(dir) => match started {
@@ -450,17 +530,9 @@ fn now_unix() -> i64 {
         .unwrap_or(0)
 }
 
-/// Chemin comparable : minuscules, séparateurs Windows, sans `\` final.
-fn normalize(path: &str) -> String {
-    let p = path.to_lowercase().replace('/', "\\");
-    p.trim_end_matches('\\').to_string()
-}
-
-/// `path` est-il la racine elle-même ou un fichier dessous ? Le `\` évite qu'un dossier
-/// voisin au nom plus long (« Portal 2 Demo ») ne passe pour le jeu (« Portal 2 »).
-fn under(path: &str, root: &str) -> bool {
-    path == root || path.starts_with(&format!("{root}\\"))
-}
+// Les aides de comparaison de chemin vivent dans `platforms` (`normalize` / `sous`,
+// importée ici sous le nom `under`) : le filet de `scan_all` doit comparer exactement
+// comme la détection, sinon il ne rattrape pas ce qu'elle laisse passer.
 
 // --- Énumération des process (Win32) --------------------------------------------
 

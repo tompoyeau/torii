@@ -15,18 +15,48 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
-/// Agrège les jeux de toutes les plateformes : d'abord les jeux **installés**
-/// (fichiers locaux), puis les jeux **possédés** en ligne (comptes) et manuels.
-pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
-    // 1. Jeux installés, indexés par id.
-    let mut map: HashMap<String, GameDto> = steam::scan()
+/// Chemin comparable : minuscules, séparateurs Windows, sans `\` final.
+pub(crate) fn normalize(path: &str) -> String {
+    let p = path.to_lowercase().replace('/', "\\");
+    p.trim_end_matches('\\').to_string()
+}
+
+/// `path` est-il la racine elle-même ou un fichier dessous ? Le `\` évite qu'un dossier
+/// voisin au nom plus long (« Portal 2 Demo ») ne passe pour le jeu (« Portal 2 »).
+///
+/// 🔑 **Une seule définition pour toute l'application.** Le surveillant de process s'en
+/// sert pour rattacher un exécutable à un jeu ; `scan_all` pour écarter un sosie « hors
+/// launcher ». Deux versions qui divergeraient d'un `\` feraient que l'une déclare hors
+/// launcher ce que l'autre reconnaît — et le doublon reviendrait par la fenêtre.
+pub(crate) fn sous(path: &str, root: &str) -> bool {
+    path == root || path.starts_with(&format!("{root}\\"))
+}
+
+/// Les jeux **installés**, relevés à l'instant sur le disque : manifestes Steam et Epic,
+/// registre GOG, Riot, Ubisoft.
+///
+/// 🔑 Isolée de [`scan_all`] parce qu'elle ne coûte **aucun appel réseau** — que du
+/// système de fichiers et du registre. C'est ce qui permet de la rejouer seule, au moment
+/// précis où un exécutable inconnu démarre, pour savoir s'il appartient à un jeu installé
+/// depuis le dernier scan (cf. `procwatch::jeu_de_launcher_frais`). Un vrai
+/// rafraîchissement de bibliothèque, lui, interroge Steam, GOG et Epic en ligne : hors de
+/// question de le déclencher au lancement d'une partie.
+pub fn scan_installed() -> Vec<GameDto> {
+    steam::scan()
         .into_iter()
         .chain(epic::scan())
         .chain(gog::scan())
         .chain(riot::scan())
         .chain(ubisoft::scan())
-        .map(|g| (g.id.clone(), g))
-        .collect();
+        .collect()
+}
+
+/// Agrège les jeux de toutes les plateformes : d'abord les jeux **installés**
+/// (fichiers locaux), puis les jeux **possédés** en ligne (comptes) et manuels.
+pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
+    // 1. Jeux installés, indexés par id.
+    let mut map: HashMap<String, GameDto> =
+        scan_installed().into_iter().map(|g| (g.id.clone(), g)).collect();
 
     // Bibliothèque possédée Ubisoft (cache local, sans login ni API) : complète les
     // installés (et leur donne une jaquette, absente du scan registre).
@@ -44,8 +74,30 @@ pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
             map.insert(game.id.clone(), game);
         }
         // 4. Jeux détectés hors launcher (surveillant de process).
+        //
+        // 🔑 FILET : un jeu détecté dont l'exécutable vit dans le dossier d'un jeu de
+        // launcher n'en a jamais été un. Il a été repéré pendant que la bibliothèque
+        // était en retard d'un scan — typiquement un jeu acheté puis lancé depuis Steam
+        // dans la foulée. Sans ce contrôle, on garde les DEUX : le vrai jeu Steam et son
+        // sosie « Hors launcher ». On l'écarte et on l'efface, sinon il revient à chaque
+        // scan ; et on ne l'ajoute PAS aux exécutables refusés, sous peine d'empêcher
+        // une détection légitime si le jeu était un jour désinstallé du launcher.
+        let racines: Vec<String> = map
+            .values()
+            .filter_map(|g| g.install_dir.as_deref())
+            .filter(|d| !d.is_empty())
+            .map(normalize)
+            .collect();
+        let mut sosies: Vec<String> = Vec::new();
         for game in detected::scan(dir) {
+            if est_un_sosie(&game, &racines) {
+                sosies.push(game.id.clone());
+                continue;
+            }
             map.insert(game.id.clone(), game);
+        }
+        if !sosies.is_empty() {
+            detected::purger(dir, &sosies);
         }
     }
 
@@ -75,6 +127,24 @@ pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
         }
     }
     games
+}
+
+/// Un jeu « détecté » est-il en réalité le sosie d'un jeu de launcher déjà présent ?
+///
+/// Isolée et testée parce que c'est la seule règle de l'application qui **supprime** une
+/// entrée de la bibliothèque : trop stricte, elle laisse le doublon ; trop large, elle
+/// efface un vrai jeu hors launcher rangé à côté de ses voisins.
+///
+/// On compare le dossier d'installation quand il existe, l'exécutable sinon — un jeu
+/// détecté n'a pas toujours de dossier renseigné.
+fn est_un_sosie(detecte: &GameDto, racines: &[String]) -> bool {
+    let cible = detecte
+        .install_dir
+        .as_deref()
+        .filter(|d| !d.is_empty())
+        .unwrap_or(&detecte.launch_target);
+    let cible = normalize(cible);
+    racines.iter().any(|r| sous(&cible, r))
 }
 
 /// Fusionne un jeu possédé : s'il est déjà installé, on le marque « possédé »,
@@ -457,4 +527,79 @@ pub(crate) fn vdf_all(text: &str, key: &str) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detecte(install_dir: Option<&str>, exe: &str) -> GameDto {
+        GameDto {
+            id: "detected:truc".into(),
+            title: "Truc".into(),
+            platform: "detected".into(),
+            launch_target: exe.into(),
+            install_dir: install_dir.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    fn racines() -> Vec<String> {
+        [
+            r"C:\Program Files (x86)\Steam\steamapps\common\Portal 2",
+            r"D:\GOG Games\Cyberpunk 2077",
+        ]
+        .iter()
+        .map(|r| normalize(r))
+        .collect()
+    }
+
+    /// Le cas qui motive tout : un jeu acheté puis lance depuis son launcher avant que
+    /// Torii ait rescanne. Il ne doit PAS rester dans la bibliotheque a cote du vrai.
+    #[test]
+    fn un_jeu_de_launcher_repere_trop_tot_est_un_sosie() {
+        let g = detecte(
+            Some(r"C:\Program Files (x86)\Steam\steamapps\common\Portal 2"),
+            r"C:\Program Files (x86)\Steam\steamapps\common\Portal 2\portal2.exe",
+        );
+        assert!(est_un_sosie(&g, &racines()));
+    }
+
+    /// Sans dossier d'installation, c'est l'executable qui tranche.
+    #[test]
+    fn l_executable_suffit_quand_le_dossier_manque() {
+        let g = detecte(
+            None,
+            r"D:\GOG Games\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe",
+        );
+        assert!(est_un_sosie(&g, &racines()));
+    }
+
+    /// Un vrai jeu hors launcher ne doit jamais etre efface, meme range juste a cote.
+    #[test]
+    fn un_vrai_hors_launcher_est_preserve() {
+        let g = detecte(Some(r"E:\Jeux\Genshin Impact"), r"E:\Jeux\Genshin Impact\game.exe");
+        assert!(!est_un_sosie(&g, &racines()));
+        // Aucune racine connue : rien ne peut etre un sosie.
+        assert!(!est_un_sosie(&g, &[]));
+    }
+
+    /// Le piege du prefixe : « Portal 2 Demo » n'est pas dans « Portal 2 ». Sans le `\`
+    /// de `sous`, ce jeu-la serait efface de la bibliotheque.
+    #[test]
+    fn un_dossier_voisin_au_nom_plus_long_n_est_pas_un_sosie() {
+        let g = detecte(
+            Some(r"C:\Program Files (x86)\Steam\steamapps\common\Portal 2 Demo"),
+            r"C:\Program Files (x86)\Steam\steamapps\common\Portal 2 Demo\demo.exe",
+        );
+        assert!(!est_un_sosie(&g, &racines()));
+    }
+
+    /// La comparaison ignore la casse et le sens des separateurs : Windows les melange
+    /// (registre, manifestes, `GetProcessImageFileName`) et le sosie passerait au travers.
+    #[test]
+    fn la_comparaison_survit_a_la_casse_et_aux_slashs() {
+        let g = detecte(None, "c:/PROGRAM FILES (X86)/steam/SteamApps/Common/Portal 2/portal2.exe");
+        assert!(est_un_sosie(&g, &racines()));
+    }
 }
