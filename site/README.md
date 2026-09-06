@@ -77,38 +77,59 @@ portaient de vrais pseudonymes avant la mise en ligne de la démo :
 | `src/composables/useFriends.ts` | `MOCK_FRIENDS` — amis fictifs, avatars générés |
 | `src/composables/useFriendsCommon.ts` | `MOCK` — les mêmes amis, vue « en commun » |
 
-Les pseudonymes et les couleurs d'avatar sont **les mêmes que sur les captures** du site :
-une personne doit se ressembler d'un écran à l'autre.
+Les pseudonymes et les couleurs d'avatar sont **les mêmes que sur la capture** du site :
+une personne doit se ressembler d'un écran à l'autre. (Les vues Amis et « en commun » ne
+sont plus illustrées par des captures, mais les pseudonymes inventés restent partagés — la
+démo, elle, les montre toujours.)
 
 La coquille `index.html` (racine du dépôt) porte un `noindex` : une application monopage
 n'offre qu'un `<div>` vide à un robot, et serait indexée comme une page sans contenu.
 
-## Les captures
+## Une seule capture, et sept dessins
 
-Prises dans l'application réelle, puis **anonymisées** avant publication.
+La page a compté sept copies d'écran ; elle n'en garde **qu'une**, celle de l'en-tête.
+Les sections sont illustrées par des dessins au trait, écrits en SVG directement dans
+`index.html`.
 
-🔑 Les pseudonymes et les avatars des amis sont des **données personnelles de tiers** :
-ils n'ont pas consenti à figurer sur une page publique. Toute nouvelle capture doit
-repasser par cette étape. Les originaux ne sont **pas** dans le dépôt.
-
-La méthode n'est pas le pavé noir — une capture barbouillée ne donne envie d'installer
-rien du tout. On détecte les pixels du texte, on les efface avec la couleur du fond, et on
-redessine un pseudonyme inventé dans la même police ; les avatars sont remplacés par des
-disques dégradés à initiale, identiques à ceux que Torii génère lui-même. Le résultat reste
-une capture vendeuse dans laquelle plus aucune personne réelle ne figure.
+🔑 **Pourquoi.** Une capture par section coûtait trois choses à chaque évolution du
+produit : plus d'un mégaoctet à servir, une anonymisation à refaire (voir plus bas), et
+une image qui ment dès que l'interface bouge d'un pixel. Un dessin ne montre pas le
+produit, il montre l'**idée** de la section — il ne vieillit donc pas, ne pèse rien, et
+ne contient aucune donnée personnelle. Mais une page qui ne montre jamais le produit ne
+convainc personne : d'où celle de l'en-tête, en grand, et la démo pour le reste.
 
 | Fichier | Vue | Anonymisé |
 |---|---|---|
-| `bibliotheque.jpg` | la bibliothèque complète (en-tête de page) | pseudo + avatar du propriétaire |
-| `grille.jpg` | la grille de jaquettes | — |
-| `hors-launcher.jpg` | la barre latérale, 8 plateformes | — |
-| `amis.jpg` | la vue Amis | **12 pseudos + 12 avatars** |
-| `commun.jpg` | le profil d'un ami, jeux en commun | 1 pseudo + 1 avatar |
-| `fiche-jeu.jpg` | la fiche d'un jeu | **9 pseudos + 9 avatars** (pastilles « amis qui possèdent ») |
-| `boutique.jpg` | la boutique et les prix | — (aucune personne) |
+| `captures/bibliotheque.jpg` | la bibliothèque complète (en-tête de page) | pseudo + avatar du propriétaire |
 
-⚠️ Deux personnages apparaissent sur plusieurs captures : leur nom **et** la couleur de
-leur avatar doivent rester identiques partout, sinon la mise en scène se trahit.
+⚠️ **Si une capture est ajoutée un jour, l'anonymisation redevient obligatoire.** Les
+pseudonymes et les avatars des amis sont des **données personnelles de tiers** : ils n'ont
+pas consenti à figurer sur une page publique. La méthode n'est pas le pavé noir — une
+capture barbouillée ne donne envie d'installer rien du tout. On détecte les pixels du
+texte, on les efface avec la couleur du fond, et on redessine un pseudonyme inventé dans
+la même police ; les avatars sont remplacés par des disques dégradés à initiale, identiques
+à ceux que Torii génère lui-même. Les originaux ne sont **pas** dans le dépôt. Les mêmes
+noms et les mêmes couleurs servent dans la démo : une personne doit se ressembler d'un
+écran à l'autre.
 
-Format : 1000 à 1700 px de large, JPEG qualité 82 (70 à 310 Ko pièce). L'hébergement est
-limité à 100 Mo.
+Format : 1700 px de large, JPEG qualité 82 (310 Ko). L'hébergement est limité à 100 Mo.
+
+### Les dessins
+
+Sept `<svg class="illu">` dans `index.html`, sur une grille `viewBox="0 0 460 300"`
+commune, plus une petite icône par carte de la section « pourquoi » (`.ico-carte`).
+
+🔑 **Aucune couleur en dur.** Tout passe par les classes définies dans `styles.css`
+(`cadre`, `doux`, `fin`, `trait`, `accent`, `plein`, `encre`, `aire`, `barre`,
+`barre-faible`), qui pointent vers les jetons de la page. Les dessins suivent donc le
+thème clair sans une seule règle de plus — et un changement d'accent les repeint tous.
+
+⚠️ **`--surface-2` posé sur `--surface` ne se voit presque pas.** Dans l'application ces
+deux fonds ne se touchent jamais sur un aplat ; dans un dessin, si. Sans le filet posé sur
+`.doux`, les jaquettes et les vignettes disparaissent purement et simplement — constaté au
+rendu, en sombre comme en clair.
+
+Pour les relire tous en grand pendant qu'on les retouche : les extraire d'`index.html` et
+les poser côte à côte dans une page à part. Les vérifier dans la page elle-même est
+pénible, parce que l'apparition au défilement les laisse à `opacity: 0` tant que
+l'observateur n'a pas déclenché, ce qu'un rendu automatisé ne provoque pas de façon fiable.

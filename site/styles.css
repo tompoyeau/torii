@@ -116,12 +116,18 @@ h1, h2, h3 { letter-spacing: -0.025em; line-height: 1.12; }
 
 /* --- Sections alternées ------------------------------------------------------- */
 
+/* 🔑 Colonnes ÉGALES depuis que les visuels sont des dessins. Avec des captures, la
+   colonne image était plus large — une copie d'écran rétrécie devient illisible. Mais
+   `order` fait passer une section sur deux dans l'autre colonne : les dessins des
+   sections inversées se retrouvaient 120 px plus étroits que les autres, et une série
+   d'illustrations dont la taille change d'un cran sur deux ne se lit plus comme une
+   série. Un dessin, lui, ne perd rien à 540 px. */
 .section {
   max-width: var(--large);
   margin: 96px auto;
   padding: 0 24px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 52px;
   align-items: center;
 }
@@ -149,14 +155,59 @@ h1, h2, h3 { letter-spacing: -0.025em; line-height: 1.12; }
   width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
 }
 
-.section-image img {
-  border: 1px solid var(--border-strong);
+/* --- Illustrations -------------------------------------------------------------
+   🔑 CE QUI REMPLACE LES CAPTURES. Une copie d'écran par section coûtait cher pour ce
+   qu'elle apportait : plus d'un mégaoctet à servir, une anonymisation des pseudonymes
+   d'amis à refaire à chaque prise, et une image qui ment dès que l'interface bouge.
+   Les dessins, eux, montrent l'IDÉE de la section — ils ne prétendent pas montrer le
+   produit. La seule capture restante est celle de l'en-tête, et la démo fait le reste.
+
+   Les sept dessins partagent ce jeu de classes : c'est ce qui les fait lire comme une
+   famille plutôt que comme sept illustrations trouvées au hasard. Ils héritent des
+   jetons de couleur, donc ils suivent le thème clair sans une règle de plus. */
+
+.section-illu, .essai-illu { margin: 0; }
+
+.illu-cadre {
+  padding: 26px;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 40px 90px -42px rgba(0, 0, 0, 0.9);
+  background:
+    radial-gradient(620px 360px at 74% 4%, var(--accent-soft) 0%, transparent 62%),
+    var(--surface);
+  overflow: hidden;
 }
-.section-image { margin: 0; }
-.section-image figcaption {
-  margin-top: 11px; font-size: 12.5px; color: var(--text-faint); text-align: center;
+.illu { display: block; width: 100%; height: auto; }
+
+.illu .cadre { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
+/* ⚠️ `--surface-2` posé sur `--surface` ne se voit presque pas — c'est voulu dans
+   l'application, où ces deux fonds ne se touchent jamais sur un aplat. Dans un dessin,
+   ils se touchent partout : sans ce filet, les jaquettes et les vignettes disparaissent
+   purement et simplement (constaté au rendu, en sombre comme en clair). */
+.illu .doux { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.illu .fin { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
+.illu .trait {
+  fill: none; stroke: var(--text-faint); stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.illu .accent {
+  fill: none; stroke: var(--accent); stroke-width: 2.2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.illu .plein { fill: var(--accent); }
+.illu .encre { fill: var(--accent-ink); }
+.illu .aire { fill: var(--accent); opacity: 0.13; }
+/* Les « barres » tiennent lieu de texte : deux niveaux suffisent à hiérarchiser. */
+.illu .barre { fill: var(--text-faint); opacity: 0.55; }
+.illu .barre-faible { fill: var(--text-faint); opacity: 0.28; }
+.illu text { fill: var(--text-faint); font-family: var(--font); font-weight: 700; }
+
+/* Petite icône en tête des cartes « pourquoi » : même trait que les dessins. */
+.ico-carte {
+  display: block; width: 32px; height: 32px; margin: 0 0 15px;
+  color: var(--accent);
+  fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
 }
 
 /* --- Comparaison -------------------------------------------------------------- */
@@ -269,7 +320,7 @@ footer nav a:hover { color: var(--text); text-decoration: underline; }
     --accent-ink: #fff;
     --accent-soft: rgba(198, 49, 24, 0.1);
   }
-  .hero-image img, .section-image img { box-shadow: 0 40px 90px -45px rgba(40, 20, 60, 0.45); }
+  .hero-image img { box-shadow: 0 40px 90px -45px rgba(40, 20, 60, 0.45); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -319,20 +370,17 @@ footer nav a:hover { color: var(--text); text-decoration: underline; }
 .essai-libre .fin { margin-bottom: 26px; }
 .essai-libre em { color: var(--text); font-style: normal; font-weight: 600; }
 
-/* L'image déborde du cadre : elle suggère une fenêtre qu'on n'a pas fini d'ouvrir,
-   ce qui est exactement ce que propose le bouton d'à côté. */
-.essai-image { margin: -80px -120px -80px 0; }
-.essai-image img {
-  border: 1px solid var(--border-strong);
-  border-radius: 16px;
-  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.85);
+/* Le dessin penche légèrement : posé bien droit dans un encadré lui-même bien droit,
+   il se confondrait avec le fond. Ce petit décalage suffit à le détacher. */
+.essai-illu .illu-cadre {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
   transform: rotate(-1.4deg);
 }
 
 @media (max-width: 900px) {
   .essai-libre { grid-template-columns: 1fr; gap: 30px; padding: 30px 24px; margin-top: 68px; }
-  .essai-image { margin: 0; }
-  .essai-image img { transform: none; }
+  .essai-illu .illu-cadre { transform: none; }
 }
 
 /* --- Mise en mouvement ---------------------------------------------------------
@@ -379,12 +427,15 @@ footer nav a:hover { color: var(--text); text-decoration: underline; }
   50% { box-shadow: 0 26px 70px -22px rgba(255, 107, 87, 0.85); }
 }
 
-/* Les captures se soulèvent au survol : elles deviennent des objets, pas des images. */
-.section-image img, .essai-image img {
-  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s;
+/* Les dessins se soulèvent au survol : ils deviennent des objets, pas des images. */
+.illu-cadre {
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.35s;
 }
-.section-image img:hover { transform: translateY(-6px) scale(1.008); }
-.essai-image img:hover { transform: rotate(-1.4deg) translateY(-6px); }
+.section-illu .illu-cadre:hover {
+  transform: translateY(-6px);
+  border-color: var(--border-strong);
+}
+.essai-illu .illu-cadre:hover { transform: rotate(-1.4deg) translateY(-6px); }
 
 .grille-comparaison article {
   transition: transform 0.22s, border-color 0.22s, background 0.22s;

@@ -14,7 +14,7 @@
  */
 document.documentElement.classList.add("js");
 
-const BLOCS = ".section-texte, .section-image, .bandeau, .comparaison h2, .comparaison .intro, .grille-comparaison, .faq h2, .faq details, .essai-texte, .essai-image, .final";
+const BLOCS = ".section-texte, .section-illu, .bandeau, .comparaison h2, .comparaison .intro, .grille-comparaison, .faq h2, .faq details, .essai-texte, .essai-illu, .final";
 
 const cibles = document.querySelectorAll(BLOCS);
 for (const el of cibles) el.classList.add("reveal");
