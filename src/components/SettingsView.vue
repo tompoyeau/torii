@@ -1017,6 +1017,10 @@ function unhide(id: string) {
   background: rgba(8, 5, 14, 0.55); backdrop-filter: blur(4px);
 }
 .dialog {
+  /* 🔑 UN titre et sa description sont séparés de cette valeur, partout dans les
+     Paramètres — qu'il s'agisse d'une ligne d'interrupteur, d'un en-tête de section ou
+     d'une ligne de liste. Trois motifs distincts divergeaient (2px, 2px et -4px). */
+  --gap-desc: 4px;
   width: min(1120px, 96vw); height: min(760px, 92vh); display: flex; overflow: hidden;
   background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
   box-shadow: var(--shadow-hero);
@@ -1056,15 +1060,20 @@ function unhide(id: string) {
 .close:hover { color: var(--text); }
 .close svg { width: 16px; height: 16px; }
 .spane-inner { padding: 30px 40px 32px; max-width: 760px; }
-.pane-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 20px; }
-.pane-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: -10px 0 20px; }
+.pane-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px; }
+/* 🔑 PAS de marge haute négative ici. Elle valait -10px pour venir se glisser sous un
+   `.pane-title` (marge basse 20px → 10px au final), mais elle rendait l'espacement
+   dépendant de ce qui précède : sous un `.sub-title` (marge basse 6px) les marges
+   fusionnaient à -4px et la description remontait DANS le titre. C'est aussi ce qui la
+   faisait chevaucher un interrupteur. Le `.pane-title` porte désormais l'écart lui-même. */
+.pane-hint { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 0 0 20px; }
 /* ⚠️ PAS `.pane-hint` : celui-ci porte un `margin-top` négatif pour se glisser sous un
    titre, et remonterait dans l'interrupteur qui précède cette ligne d'état. */
 .sync-state { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 14px 0 0; }
 
 /* Préférences */
 .pref { display: flex; align-items: center; gap: 16px; }
-.row-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.row-text { display: flex; flex-direction: column; gap: var(--gap-desc); flex: 1; min-width: 0; }
 .row-title { font-weight: 600; font-size: 14px; color: var(--text); }
 .row-sub { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
 /* Refus du serveur, juste sous l'interrupteur concerné : il reste affiché tant que la
@@ -1127,7 +1136,7 @@ function unhide(id: string) {
 
 /* À propos & maintenance */
 .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.sub-title { font-size: 14px; font-weight: 700; margin: 4px 0 6px; }
+.sub-title { font-size: 14px; font-weight: 700; margin: 4px 0 var(--gap-desc); }
 .presence-choice { flex-direction: column; align-items: stretch; gap: 12px; }
 .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
 .mode {
@@ -1172,7 +1181,7 @@ function unhide(id: string) {
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .thumb.store svg { width: 18px; height: 18px; }
-.item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--gap-desc); }
 .item-title { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-sub { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-faint); }
 .item-sub :deep(.platform-icon) { width: 13px; height: 13px; }
