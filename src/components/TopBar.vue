@@ -18,8 +18,12 @@ const { section, query, openAddGame, showFriends, openSettings, settingsOpen } =
  * produit rien de visible, ce qui se lit comme une panne. La Boutique était déjà écartée
  * pour cette raison (elle a sa propre barre) ; la bibliothèque d'un ami a la sienne aussi,
  * et sa page profil ne montre rien qui se filtre.
+ *
+ * « En commun » et la Wishlist s'y ajoutent : elles listent respectivement les jeux de tes
+ * amis et ceux que tu convoites — deux jeux de données que le magasin de la bibliothèque
+ * ne contient pas. Chacune a désormais **sa propre** recherche, comme la Boutique.
  */
-const SANS_RECHERCHE = ["store", "friendLibrary", "friendProfile"];
+const SANS_RECHERCHE = ["store", "friendLibrary", "friendProfile", "common", "wishlist"];
 const chercheDansLaBiblio = computed(() => !SANS_RECHERCHE.includes(section.value));
 const { toggle: toggleTheme } = useTheme();
 const { account: toriiAccount, connected: toriiConnected } = useTorii();

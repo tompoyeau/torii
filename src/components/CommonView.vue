@@ -67,15 +67,35 @@ function initials(name: string): string {
 }
 
 const selCount = computed(() => selected.value.size);
+
+/**
+ * Recherche LOCALE. Celle du bandeau filtre la bibliotheque, pas cette liste : elle est
+ * masquee ici (cf. `SANS_RECHERCHE` dans TopBar) et remplacee par celle-ci, qui porte sur
+ * ce que l ecran montre vraiment.
+ */
+const query = ref("");
+const visibles = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  if (!q) return shownGames.value;
+  return shownGames.value.filter((g) => g.title.toLowerCase().includes(q));
+});
 </script>
 
 <template>
   <div class="common">
     <div class="sec-head">
       <h2>Jeux en commun</h2>
-      <span class="n">{{ shownGames.length }} jeu{{ shownGames.length > 1 ? "x" : "" }}</span>
+      <span class="n">{{ visibles.length }} jeu{{ visibles.length > 1 ? "x" : "" }}</span>
       <span v-if="loading" class="spin" title="Actualisation…" />
       <span class="spacer" />
+      <input
+        v-if="shownGames.length"
+        v-model="query"
+        class="search"
+        type="search"
+        placeholder="Rechercher…"
+        aria-label="Rechercher parmi les jeux en commun"
+      />
       <button class="chip refresh" :disabled="loading" title="Recalculer" @click="refresh(true)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
         Actualiser
@@ -146,8 +166,12 @@ const selCount = computed(() => selected.value.size);
         <button class="btn-ghost" @click="clearSelection()">Réinitialiser</button>
       </div>
 
+      <div v-else-if="!visibles.length" class="empty small">
+        <p>Aucun jeu en commun ne correspond à « {{ query.trim() }} ».</p>
+      </div>
+
       <div v-else class="grid">
-        <div v-for="g in shownGames" :key="g.id" class="cell">
+        <div v-for="g in visibles" :key="g.id" class="cell">
           <GameCard :game="gameFor(g)" @open="openGame(gameFor(g).id)" />
           <div class="note" :title="owners(g).map((o) => o.name).join(', ')">
             <span class="avs">
@@ -230,4 +254,13 @@ const selCount = computed(() => selected.value.size);
 .btn-connect:hover { background: var(--accent-hover); }
 .btn-ghost { margin-top: 12px; padding: 7px 15px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); font-size: 13px; cursor: pointer; }
 .btn-ghost:hover { color: var(--text); border-color: var(--border-strong); }
+
+/* Recherche locale : meme dessin que celle de la bibliotheque d un ami — c est le meme
+   geste, il doit avoir la meme tete partout. */
+.search {
+  width: 220px; padding: 7px 12px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  font-size: 13px;
+}
+.search:focus { border-color: var(--accent); }
 </style>
