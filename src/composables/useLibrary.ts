@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import { fetchCachedGames, fetchGames, fromDto, mergeDuplicates } from "../data/games";
+import { estHorsLauncher } from "../data/platforms";
 import { relativeTime } from "../lib/covers";
 import {
   addManualGame,
@@ -187,6 +188,8 @@ export function useLibrary() {
       case "recent": return game.recent;
       case "favorite": return game.favorite;
       case "installed": return game.installed;
+      // Ajout manuel et detection automatique : une seule categorie a l ecran.
+      case "horsLauncher": return estHorsLauncher(game.platform);
       // Un jeu fusionné apparaît sous chacune de ses plateformes.
       default:
         return game.sources

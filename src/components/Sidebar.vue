@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
+import { estHorsLauncher } from "../data/platforms";
 import { useUi } from "../composables/useUi";
 import { getSettings } from "../lib/tauri";
 import type { LibraryFilter, PlatformId, Settings } from "../types";
@@ -47,22 +48,29 @@ const count = (f: LibraryFilter) =>
       case "favorite": return visible.value.filter((g) => g.favorite).length;
       case "installed": return visible.value.filter((g) => g.installed).length;
       case "hidden": return games.value.filter((g) => g.hidden).length;
+      case "horsLauncher":
+        return visible.value.filter((g) => estHorsLauncher(g.platform)).length;
       default: return visible.value.filter((g) =>
         g.sources ? g.sources.some((s) => s.platform === f) : g.platform === f,
       ).length;
     }
   });
 
-const platforms: { id: PlatformId; label: string }[] = [
-  { id: "steam", label: "Steam" },
-  { id: "epic", label: "Epic Games" },
-  { id: "gog", label: "GOG" },
-  { id: "riot", label: "Riot Games" },
-  { id: "ubisoft", label: "Ubisoft Connect" },
-  { id: "ea", label: "EA" },
-  { id: "battlenet", label: "Battle.net" },
-  { id: "manual", label: "Manuel" },
-  { id: "detected", label: "Hors launcher" },
+/**
+ * Les entrees de la liste « Plateformes ». `id` est le filtre applique, `icon` la
+ * plateforme dont on emprunte l icone : les deux coincident partout SAUF pour
+ * « Hors launcher », qui est une categorie regroupant deux plateformes et n en est
+ * donc pas une (cf. `HORS_LAUNCHER`).
+ */
+const platforms: { id: LibraryFilter; icon: PlatformId; label: string }[] = [
+  { id: "steam", icon: "steam", label: "Steam" },
+  { id: "epic", icon: "epic", label: "Epic Games" },
+  { id: "gog", icon: "gog", label: "GOG" },
+  { id: "riot", icon: "riot", label: "Riot Games" },
+  { id: "ubisoft", icon: "ubisoft", label: "Ubisoft Connect" },
+  { id: "ea", icon: "ea", label: "EA" },
+  { id: "battlenet", icon: "battlenet", label: "Battle.net" },
+  { id: "horsLauncher", icon: "manual", label: "Hors launcher" },
 ];
 
 </script>
@@ -131,7 +139,7 @@ const platforms: { id: PlatformId; label: string }[] = [
       <div class="nav-label">Plateformes</div>
       <button v-for="p in platforms" :key="p.id" class="nav-item plat"
               :class="{ active: section === 'library' && filter ===p.id }" @click="setFilter(p.id)">
-        <span class="tile plat-tile"><PlatformIcon :platform="p.id" /></span>
+        <span class="tile plat-tile"><PlatformIcon :platform="p.icon" /></span>
         {{ p.label }} <span class="count">{{ count(p.id).value }}</span>
       </button>
     </nav>

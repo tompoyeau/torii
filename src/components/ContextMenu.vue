@@ -4,6 +4,7 @@ import { useContextMenu } from "../composables/useContextMenu";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { useTorii } from "../composables/useTorii";
+import { estHorsLauncher } from "../data/platforms";
 import { openInstallDir, uninstallGame } from "../lib/tauri";
 
 const { ctx, closeContext } = useContextMenu();
@@ -40,7 +41,7 @@ const game = computed(() => ctx.game);
 // Pour les deux, « désinstaller » n'a pas de sens (on les retire d'ici) et leur fiche
 // se corrige à la main — le titre d'un jeu détecté est deviné, il peut tomber à côté.
 const isManual = computed(() =>
-  ["manual", "detected"].includes(game.value?.platform ?? ""),
+  estHorsLauncher(game.value?.platform),
 );
 
 function onPlay() {

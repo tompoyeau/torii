@@ -922,6 +922,31 @@ les amis. Le surveillant l'adopte désormais tout seul.
   27 déjà dans la bibliothèque, 0 écarté, 3 jeux détectés (Minecraft, Dolphin,
   Rainbow Six).
 
+### « Hors launcher » = une catégorie, deux plateformes (fait)
+
+Ajout manuel et détection automatique sont deux façons d'arriver au même endroit — un jeu
+qu'aucun launcher ne fournit. Ils ne font donc plus qu'**une entrée** dans la barre
+latérale, un seul libellé sur les cartes, une seule icône et une seule couleur.
+
+- 🔑 **Fusion d'AFFICHAGE seulement. Les identifiants `manual:` et `detected:` restent
+  distincts en base, et il ne faut pas y toucher** : ils décident de qui sait éditer et
+  supprimer le jeu (`manual::update` / `detected::forget`, qui n'ont pas le même effet —
+  le second inscrit l'exécutable chez les refusés), et un id de jeu détecté ne change
+  JAMAIS, sous peine d'orpheliner favoris, historique, présence et jeux muets.
+- `HORS_LAUNCHER` / `estHorsLauncher` (`data/platforms.ts`) : **une seule définition** des
+  membres de la catégorie. La barre latérale, son compteur, le filtre de la grille et les
+  menus « Modifier » / « Retirer » s'y réfèrent tous. Deux listes écrites à la main, et un
+  jeu finit par apparaître dans la catégorie sans y être éditable.
+- Le filtre `horsLauncher` n'est **pas** un `PlatformId` : la liste de la barre latérale
+  porte donc un `id` (le filtre) **et** un `icon` (la plateforme dont elle emprunte
+  l'icône). Ils coïncident partout sauf ici. ⚠️ `isPlatformView` (AppShell) reste faux pour
+  cette vue, donc pas de bouton « Installés uniquement » — sans objet, ces jeux le sont tous.
+- Rien à migrer : le filtre courant n'est jamais persisté sur disque (`DefaultFilter` se
+  limite à `all` / `recent` / `favorite` / `installed`).
+- ⚠️ Ce qu'on perd, assumé : l'icône radar disait « Torii l'a trouvé tout seul ». C'est une
+  information sur la mécanique de Torii, pas sur le jeu — et deux icônes de couleurs
+  différentes dans une catégorie unique se lisaient comme un défaut d'affichage.
+
 ### 🔑 Le sosie : un jeu de launcher pris pour un jeu hors launcher
 
 Le doublon le plus visible de Torii. On achète un jeu, on le lance depuis Steam dans la

@@ -7,7 +7,7 @@ import { useUi } from "../composables/useUi";
 import { useTorii } from "../composables/useTorii";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
-import { platformName } from "../data/platforms";
+import { estHorsLauncher, platformName } from "../data/platforms";
 import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
 import type { FriendLib, GameSource, SteamAchievements } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
@@ -160,7 +160,7 @@ async function onToggleMuted() {
 /** Un jeu que Torii est seul à connaître (ajouté à la main ou repéré hors launcher) :
  *  « désinstaller » = le retirer d'ici, et sa fiche se corrige à la main. */
 const isManual = computed(() =>
-  ["manual", "detected"].includes(game.value?.platform ?? ""),
+  estHorsLauncher(game.value?.platform),
 );
 
 /** Édite les informations saisies à la main (titre, exécutable, dossier, jaquette). */

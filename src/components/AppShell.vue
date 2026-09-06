@@ -102,6 +102,7 @@ const FILTER_LABELS: Record<string, string> = {
   favorite: "Favoris",
   installed: "Installés",
   hidden: "Masqués",
+  horsLauncher: "Hors launcher",
 };
 function title(f: LibraryFilter): string {
   return FILTER_LABELS[f] ?? platformName(f as never);

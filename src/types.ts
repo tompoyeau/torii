@@ -135,6 +135,9 @@ export type LibraryFilter =
   | "favorite"
   | "installed"
   | "hidden"
+  // Ajout manuel et detection automatique reunis : deux plateformes, une seule
+  // categorie dans la barre laterale (cf. `HORS_LAUNCHER`).
+  | "horsLauncher"
   | PlatformId;
 
 // --- Boutique (découverte de jeux à acheter, source CheapShark) ---------------
