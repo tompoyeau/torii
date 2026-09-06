@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Torii — ta bibliothèque de jeux, enfin réunie</title>
+    <meta
+      name="description"
+      content="Torii réunit tes jeux Steam, Epic, GOG, Ubisoft et ceux qui ne viennent d'aucun launcher dans une seule bibliothèque. Gratuit, pour Windows."
+    />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="styles.css" />
+
+    <!-- Partage : ce qui s'affiche quand le lien est colle dans Discord ou un message. -->
+    <meta property="og:title" content="Torii — ta bibliothèque de jeux, enfin réunie" />
+    <meta
+      property="og:description"
+      content="Tous tes jeux, quel que soit le launcher, dans une seule bibliothèque. Gratuit, pour Windows."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="captures/bibliotheque.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+
+  <body>
+    <header class="hero">
+      <img class="mark" src="torii.svg" alt="" width="96" height="96" />
+      <h1>Tous tes jeux.<br />Une seule porte.</h1>
+      <p class="lead">
+        Steam, Epic, GOG, Ubisoft, Riot — et même les jeux qui ne viennent d'aucun
+        launcher. Torii les réunit dans une bibliothèque, avec leurs jaquettes, leur temps
+        de jeu et ce que jouent tes amis.
+      </p>
+
+      <!--
+        Le bouton se remplit au chargement depuis l'API GitHub : le nom du fichier
+        contient le numero de version, il n'existe donc aucune URL fixe vers « le dernier
+        installeur ». Sans JavaScript ou en cas d'echec, le lien ci-dessous mene a la page
+        des versions, qui marche depuis toujours et marchera encore dans dix ans.
+      -->
+      <a
+        id="telecharger"
+        class="cta"
+        href="https://github.com/tompoyeau/torii/releases/latest"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5" />
+          <path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
+        </svg>
+        <span id="cta-texte">Télécharger pour Windows</span>
+      </a>
+      <p class="sous-cta">
+        <span id="meta">Windows 10 et 11 · 64 bits · gratuit</span>
+        <a id="lien-msi" class="discret" href="https://github.com/tompoyeau/torii/releases/latest">
+          ou télécharger le .msi
+        </a>
+      </p>
+    </header>
+
+    <main>
+      <section class="capture-large">
+        <img
+          src="captures/bibliotheque.jpg"
+          alt="La bibliothèque de Torii : une grille de jaquettes, une barre latérale par plateforme, et un jeu mis en avant en haut."
+          loading="lazy"
+        />
+      </section>
+
+      <section class="atouts">
+        <article>
+          <h2>Une bibliothèque, pas cinq</h2>
+          <p>
+            Torii lit tes launchers installés et tes comptes en ligne. Un jeu possédé sur
+            Steam <em>et</em> sur GOG n'apparaît qu'une fois, avec le choix du launcher au
+            moment de jouer.
+          </p>
+        </article>
+        <article>
+          <h2>Même les jeux hors launcher</h2>
+          <p>
+            Genshin, Dofus, un jeu du Game Pass, un exécutable posé sur le disque : Torii
+            les repère tout seuls quand tu y joues, retrouve leur vrai titre et leur
+            jaquette, et les range avec les autres.
+          </p>
+        </article>
+        <article>
+          <h2>Le partage familial Steam</h2>
+          <p>
+            Les jeux prêtés par ta famille apparaissent aussi, clairement identifiés — sans
+            jamais se faire passer pour des jeux que tu possèdes.
+          </p>
+        </article>
+        <article>
+          <h2>Tes amis, tous launchers confondus</h2>
+          <p>
+            Vois qui joue à quoi en ce moment, ce que vous avez en commun, et lance la même
+            partie même si vous ne l'avez pas sur le même launcher. Rien ne part tant que
+            tu ne l'as pas autorisé.
+          </p>
+        </article>
+        <article>
+          <h2>Le bon prix, avant d'acheter</h2>
+          <p>
+            Une boutique intégrée compare les prix entre revendeurs et suit ta wishlist
+            Steam pour te dire quand un jeu tombe à son plus bas historique.
+          </p>
+        </article>
+        <article>
+          <h2>Léger, et qui se fait oublier</h2>
+          <p>
+            Application native de quelques mégaoctets, pas un navigateur déguisé. Elle
+            surveille tes parties sans peser sur la machine pendant que tu joues.
+          </p>
+        </article>
+      </section>
+
+      <section class="captures-duo">
+        <figure>
+          <img
+            src="captures/fiche-jeu.jpg"
+            alt="La fiche d'un jeu : bannière, temps de jeu, description, captures d'écran et bouton Jouer."
+            loading="lazy"
+          />
+          <figcaption>La fiche d'un jeu, quel que soit son launcher.</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="captures/amis.jpg"
+            alt="La vue Amis : qui est connecté, à quoi il joue et depuis combien de temps."
+            loading="lazy"
+          />
+          <figcaption>Qui joue à quoi, en ce moment.</figcaption>
+        </figure>
+      </section>
+
+      <!--
+        Section volontairement presente et franche : l'installeur n'est pas signe par un
+        certificat payant, Windows affiche donc un avertissement. Le passer sous silence,
+        c'est laisser le visiteur croire a un probleme au pire moment — juste avant
+        d'installer.
+      -->
+      <section class="avertissement">
+        <h2>Windows va afficher un avertissement</h2>
+        <p>
+          Au lancement de l'installeur, Windows annonce qu'il a « protégé votre
+          ordinateur » et parle d'un éditeur inconnu. C'est normal : cet avertissement
+          apparaît pour toute application dont l'auteur n'a pas payé de certificat de
+          signature, et il n'a rien à voir avec le contenu du fichier.
+        </p>
+        <p>
+          Pour continuer : <strong>Informations complémentaires</strong> →
+          <strong>Exécuter quand même</strong>.
+        </p>
+        <p class="fin">
+          Le fichier que tu télécharges est construit publiquement par GitHub Actions à
+          partir du code du dépôt, et déposé automatiquement. Tu peux vérifier chaque
+          version&nbsp;:
+          <a href="https://github.com/tompoyeau/torii/releases">voir les versions publiées</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <img class="mark-mini" src="torii.svg" alt="" width="28" height="28" />
+      <p>
+        Torii — <span id="pied-version">une bibliothèque de jeux pour Windows</span>.
+      </p>
+      <nav>
+        <a href="https://github.com/tompoyeau/torii">Le code</a>
+        <a href="https://github.com/tompoyeau/torii/blob/main/CHANGELOG.md">Nouveautés</a>
+        <a href="https://github.com/tompoyeau/torii/issues">Signaler un problème</a>
+      </nav>
+    </footer>
+
+    <script src="telechargement.js"></script>
+  </body>
+</html>
