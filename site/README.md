@@ -63,6 +63,25 @@ npm run build:demo      # → site/demo/, à envoyer par FTP avec le reste
 dossier où l'on veut sans reconstruire. Avec un chemin absolu, un dossier renommé casse
 tous les liens vers les assets.
 
+🔑 **La démo n'est pas proposée sur un téléphone.** Les trois endroits qui y mènent — la
+ligne sous le bouton de téléchargement, la question de la FAQ et la section « essaie sans
+installer » — portent la classe `appel-demo`, masquée par
+`@media (pointer: coarse) and (max-width: 900px)`. C'est l'interface d'une application de
+bureau : sur un écran de téléphone elle n'est pas moins confortable, elle est inutilisable,
+et l'ouvrir donne du produit l'exacte mauvaise impression.
+
+Les **deux** conditions sont nécessaires : la largeur seule masquerait la démo à qui
+travaille dans une fenêtre étroite sur un ordinateur (il lui suffit d'élargir), et
+`pointer: coarse` seul écarterait les tablettes, où elle tient très bien.
+
+⚠️ La règle doit rester **en fin de feuille** : `.essai-libre` porte `display: grid` à
+spécificité égale, et l'écrase si on la place plus haut. Vérifié : la section restait
+affichée pendant que les deux autres appels disparaissaient.
+
+⚠️ Le lien `/demo/` reste accessible en direct, et la question correspondante reste dans le
+JSON-LD (les données structurées ne connaissent pas l'appareil). Si un jour la démo doit se
+défendre elle-même sur un téléphone, c'est dans `DemoBanner.vue` que ça se passe.
+
 🔑 **Aucun drapeau ne distingue la démo de l'application** : c'est le même build que
 `npm run dev`. Ce qui les sépare à l'exécution, c'est `hasTauriRuntime()` — la présence du
 pont natif. D'où le bandeau « Démo » (`DemoBanner.vue`), qui ne peut donc pas apparaître

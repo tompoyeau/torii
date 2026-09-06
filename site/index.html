@@ -91,7 +91,7 @@
           Deliberement en retrait du bouton principal : c'est une alternative, pas une
           concurrence — le telechargement reste l'action attendue.
         -->
-        <p class="sous-cta essai">
+        <p class="sous-cta essai appel-demo">
           <a class="cta-secondaire" href="demo/">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
               <path d="M8 5.5v13l11-6.5z" />
@@ -551,7 +551,7 @@
       <section class="faq" id="questions">
         <h2>Questions fréquentes</h2>
 
-        <details>
+        <details class="appel-demo">
           <summary>La démo du site, c'est vraiment l'application ?</summary>
           <p>
             Oui — le même code, compilé pour le navigateur. Seule la bibliothèque change :
@@ -655,7 +655,12 @@
         }
       </script>
 
-      <section class="essai-libre" id="demo">
+      <!--
+        ⚠️ `appel-demo` marque TOUT ce qui propose la démo : cette section, la ligne sous
+        le bouton de téléchargement et la question correspondante de la FAQ. Sur un
+        téléphone, ces trois endroits disparaissent — voir la règle dans `styles.css`.
+      -->
+      <section class="essai-libre appel-demo" id="demo">
         <div class="essai-texte">
           <p class="sur-titre">Avant d'installer quoi que ce soit</p>
           <h2>Essaie Torii sans l'installer</h2>

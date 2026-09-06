@@ -458,3 +458,26 @@ footer nav a:hover { color: var(--text); text-decoration: underline; }
     transform: none !important;
   }
 }
+
+/* --- La démo ne se propose pas sur un téléphone --------------------------------
+   La démo, c'est l'interface d'une application de bureau — barre latérale, grille de
+   jaquettes, fiche sur deux colonnes — compilée pour le navigateur. Sur un écran de
+   téléphone elle n'est pas « moins confortable », elle est inutilisable : l'ouvrir donne
+   une mauvaise première impression du produit, exactement l'inverse de ce qu'on cherche.
+   Mieux vaut ne rien proposer que proposer quelque chose qui déçoit.
+
+   🔑 LES DEUX CONDITIONS SONT NÉCESSAIRES. La largeur seule masquerait la démo à qui
+   travaille dans une fenêtre étroite sur un ordinateur — il lui suffit d'élargir, et la
+   démo lui est parfaitement accessible. `pointer: coarse` seul laisserait passer les
+   tablettes, où elle tient très bien. C'est la conjonction « doigt + petit écran » qui
+   décrit un téléphone, dans les deux orientations (~390 px debout, ~850 px couché).
+
+   ⚠️ EN FIN DE FEUILLE, ET PAS AILLEURS. `.essai-libre` porte `display: grid` à
+   spécificité égale : placée plus haut, la règle était écrasée et la section restait
+   affichée alors que les deux autres appels disparaissaient bien.
+
+   Le contenu reste dans le HTML : les données structurées et l'indexation ne changent
+   pas, seul l'affichage disparaît. */
+@media (pointer: coarse) and (max-width: 900px) {
+  .appel-demo { display: none; }
+}
