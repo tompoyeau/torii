@@ -1,30 +1,28 @@
 /* Torii — page de téléchargement.
-   La palette est celle de l'application (src/style.css) : la page doit ressembler à ce
-   qu'on va installer. Une seule feuille, aucune dépendance, aucune police distante — le
-   site tient sur un hébergement statique de 100 Mo et se charge sur n'importe quoi. */
+   Palette reprise de l'application (src/style.css) : la page doit ressembler à ce qu'on
+   va installer. Une seule feuille, aucune dépendance, aucune police distante. */
 
 :root {
   --bg: #131019;
-  --bg-grad: radial-gradient(1200px 700px at 78% -12%, #1e1830 0%, transparent 60%),
-             radial-gradient(900px 600px at 0% 6%, #1a1522 0%, transparent 55%);
+  --bg-grad: radial-gradient(1300px 800px at 78% -14%, #241c3d 0%, transparent 62%),
+             radial-gradient(1000px 700px at -8% 4%, #1c1524 0%, transparent 58%);
   --surface: #1b1823;
   --surface-2: #232030;
   --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.15);
   --text: #ece9f3;
   --text-dim: #a39daf;
-  /* Même valeur que dans l'app : calibrée pour tenir le contraste AA (4,6:1). */
-  --text-faint: #948fa1;
+  --text-faint: #948fa1;      /* calibré pour tenir le contraste AA, comme dans l'app */
   --accent: #ff6b57;
   --accent-hover: #ff8069;
   --accent-ink: #1a0f0c;
-  --accent-soft: rgba(255, 107, 87, 0.14);
-  --radius: 16px;
+  --accent-soft: rgba(255, 107, 87, 0.13);
+  --radius: 18px;
   --font: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --large: 1180px;
 }
 
 * { box-sizing: border-box; }
-
 html { scroll-behavior: smooth; }
 
 body {
@@ -35,53 +33,55 @@ body {
   background-image: var(--bg-grad);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 img { max-width: 100%; height: auto; display: block; }
-
 a { color: var(--accent); }
 a:hover { color: var(--accent-hover); }
-
-/* Le même anneau de focus que dans l'application : le site doit être utilisable au
-   clavier, comme elle. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
 
-/* --- En-tête ---------------------------------------------------------------- */
+h1, h2, h3 { letter-spacing: -0.025em; line-height: 1.12; }
+
+/* --- En-tête : texte à gauche, capture qui déborde à droite -------------------
+   La capture est volontairement coupée par le bord de l'écran : elle donne le format
+   de l'application sans qu'on ait à la réduire en vignette illisible. */
 
 .hero {
-  max-width: 780px;
+  max-width: var(--large);
   margin: 0 auto;
-  padding: 84px 24px 56px;
-  text-align: center;
+  padding: 76px 24px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 48px;
+  align-items: center;
 }
 .mark {
-  width: 96px; height: 96px;
-  border-radius: 22px;
-  box-shadow: 0 24px 60px -24px rgba(255, 107, 87, 0.55);
+  width: 88px; height: 88px; border-radius: 20px;
+  box-shadow: 0 22px 55px -22px rgba(255, 107, 87, 0.6);
 }
 .hero h1 {
-  margin: 30px 0 0;
-  font-size: clamp(38px, 7vw, 62px);
+  margin: 26px 0 0;
+  font-size: clamp(38px, 5.2vw, 58px);
   font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
 }
 .lead {
-  margin: 22px auto 38px;
-  max-width: 60ch;
-  font-size: clamp(16px, 2.2vw, 18.5px);
+  margin: 20px 0 32px;
+  font-size: clamp(15.5px, 1.5vw, 17.5px);
   color: var(--text-dim);
+  max-width: 46ch;
+}
+.hero-image img {
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: 0 50px 100px -40px rgba(0, 0, 0, 0.9);
 }
 
 .cta {
   display: inline-flex; align-items: center; gap: 11px;
-  padding: 16px 34px;
-  border-radius: 14px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 17px; font-weight: 700;
-  text-decoration: none;
+  padding: 16px 32px; border-radius: 14px;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 16.5px; font-weight: 700; text-decoration: none;
   box-shadow: 0 16px 38px -14px var(--accent);
   transition: background 0.15s, transform 0.12s;
 }
@@ -89,89 +89,144 @@ a:hover { color: var(--accent-hover); }
 .cta svg { width: 20px; height: 20px; flex: none; }
 
 .sous-cta {
-  margin: 16px 0 0;
-  font-size: 13.5px;
-  color: var(--text-faint);
-  display: flex; flex-direction: column; gap: 6px; align-items: center;
+  margin: 15px 0 0; font-size: 13.5px; color: var(--text-faint);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
 }
 .discret { color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border-strong); }
 .discret:hover { color: var(--text); }
 
-/* --- Captures --------------------------------------------------------------- */
+/* --- Bandeau de chiffres ------------------------------------------------------ */
 
-.capture-large, .captures-duo, .atouts, .avertissement {
-  max-width: 1080px;
-  margin: 0 auto;
+.bandeau {
+  max-width: var(--large);
+  margin: 84px auto 0;
+  padding: 26px 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 24px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.bandeau div { text-align: center; }
+.bandeau strong {
+  display: block; font-size: 27px; font-weight: 800; color: var(--accent);
+  letter-spacing: -0.03em;
+}
+.bandeau span { font-size: 13px; color: var(--text-faint); }
+
+/* --- Sections alternées ------------------------------------------------------- */
+
+.section {
+  max-width: var(--large);
+  margin: 96px auto;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 52px;
+  align-items: center;
+}
+/* Une section sur deux inverse l'ordre : sans ça, la page défile comme un formulaire. */
+.section.inverse .section-texte { order: 2; }
+
+.sur-titre {
+  margin: 0 0 10px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--accent);
+}
+.section h2 { margin: 0 0 16px; font-size: clamp(25px, 3vw, 33px); font-weight: 800; }
+.section p { margin: 0 0 14px; color: var(--text-dim); font-size: 15.5px; }
+.section .fin { margin-bottom: 0; }
+.section em { color: var(--text); font-style: normal; font-weight: 600; }
+.section strong { color: var(--text); }
+
+.puces { margin: 18px 0 0; padding: 0; list-style: none; }
+.puces li {
+  position: relative; padding-left: 24px; margin-bottom: 9px;
+  color: var(--text-dim); font-size: 14.5px;
+}
+.puces li::before {
+  content: ""; position: absolute; left: 4px; top: 9px;
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+}
+
+.section-image img {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 40px 90px -42px rgba(0, 0, 0, 0.9);
+}
+.section-image { margin: 0; }
+.section-image figcaption {
+  margin-top: 11px; font-size: 12.5px; color: var(--text-faint); text-align: center;
+}
+
+/* --- Comparaison -------------------------------------------------------------- */
+
+.comparaison {
+  max-width: var(--large);
+  margin: 110px auto;
   padding: 0 24px;
 }
-.capture-large { margin-bottom: 90px; }
-.capture-large img,
-.captures-duo img {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.85);
+.comparaison h2 {
+  margin: 0 0 12px; font-size: clamp(25px, 3vw, 33px); font-weight: 800; text-align: center;
 }
-
-.captures-duo {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 28px;
-  margin-bottom: 90px;
+.comparaison .intro {
+  margin: 0 auto 40px; max-width: 62ch; text-align: center;
+  color: var(--text-dim); font-size: 15.5px;
 }
-.captures-duo figure { margin: 0; }
-.captures-duo figcaption {
-  margin-top: 12px;
-  font-size: 13.5px;
-  color: var(--text-faint);
-  text-align: center;
+.grille-comparaison {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(275px, 1fr)); gap: 20px;
 }
-
-/* --- Ce que fait l'application ---------------------------------------------- */
-
-.atouts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 22px;
-  margin-bottom: 90px;
-}
-.atouts article {
+.grille-comparaison article {
   padding: 26px 24px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.atouts h2 {
-  margin: 0 0 10px;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+.grille-comparaison h3 { margin: 0 0 9px; font-size: 16.5px; font-weight: 700; }
+.grille-comparaison p { margin: 0; font-size: 14.5px; color: var(--text-dim); }
+
+/* --- FAQ ---------------------------------------------------------------------- */
+
+.faq { max-width: 800px; margin: 110px auto; padding: 0 24px; }
+.faq h2 {
+  margin: 0 0 32px; font-size: clamp(25px, 3vw, 33px); font-weight: 800; text-align: center;
 }
-.atouts p { margin: 0; font-size: 14.5px; color: var(--text-dim); }
-.atouts em { color: var(--text); font-style: normal; font-weight: 600; }
-
-/* --- L'avertissement Windows ------------------------------------------------ */
-
-.avertissement {
-  max-width: 720px;
-  margin-bottom: 90px;
-  padding: 30px 30px 26px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  border-left: 3px solid var(--accent);
+.faq details {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 0;
 }
-.avertissement h2 { margin: 0 0 12px; font-size: 18px; font-weight: 700; }
-.avertissement p { margin: 0 0 12px; font-size: 14.5px; color: var(--text-dim); }
-.avertissement strong { color: var(--text); }
-.avertissement .fin { margin-bottom: 0; font-size: 13.5px; color: var(--text-faint); }
+.faq summary {
+  padding: 17px 34px 17px 0; position: relative;
+  font-size: 15.5px; font-weight: 600; cursor: pointer; list-style: none;
+}
+.faq summary::-webkit-details-marker { display: none; }
+/* Le chevron pivote : sans repère visuel, on ne devine pas que la ligne s'ouvre. */
+.faq summary::after {
+  content: ""; position: absolute; right: 6px; top: 50%;
+  width: 9px; height: 9px; margin-top: -6px;
+  border-right: 2px solid var(--text-faint); border-bottom: 2px solid var(--text-faint);
+  transform: rotate(45deg); transition: transform 0.18s;
+}
+.faq details[open] summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.faq details p { margin: 0 0 18px; color: var(--text-dim); font-size: 14.5px; }
+.faq strong { color: var(--text); }
 
-/* --- Pied ------------------------------------------------------------------- */
+/* --- Appel final -------------------------------------------------------------- */
+
+.final {
+  max-width: 720px; margin: 0 auto; padding: 74px 24px 96px; text-align: center;
+}
+.final h2 { margin: 0 0 12px; font-size: clamp(25px, 3vw, 34px); font-weight: 800; }
+.final p { margin: 0 0 28px; color: var(--text-dim); font-size: 15.5px; }
+.final .note { margin: 20px 0 0; font-size: 12.5px; color: var(--text-faint); }
+.final strong { color: var(--text-dim); }
+
+/* --- Pied --------------------------------------------------------------------- */
 
 footer {
   border-top: 1px solid var(--border);
   padding: 34px 24px 48px;
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
-  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
 }
 .mark-mini { width: 28px; height: 28px; border-radius: 7px; opacity: 0.9; }
 footer p { margin: 0; font-size: 13.5px; color: var(--text-faint); }
@@ -179,14 +234,29 @@ footer nav { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center;
 footer nav a { font-size: 13.5px; color: var(--text-dim); text-decoration: none; }
 footer nav a:hover { color: var(--text); text-decoration: underline; }
 
-/* --- Thème clair ------------------------------------------------------------
-   Même principe que dans l'application : on ne redéfinit que les jetons, et l'accent
-   y est plus profond pour que le blanc posé dessus reste lisible. */
+/* --- Écrans étroits ------------------------------------------------------------
+   En dessous de 900 px, tout passe en une colonne — et `order` est remis à plat,
+   sinon une section inversée afficherait son image AVANT son titre. */
+@media (max-width: 900px) {
+  .hero, .section {
+    grid-template-columns: 1fr;
+    gap: 34px;
+    text-align: left;
+  }
+  .hero { padding-top: 52px; }
+  .section { margin: 68px auto; }
+  .section.inverse .section-texte { order: 0; }
+  .lead { max-width: none; }
+}
+
+/* --- Thème clair ---------------------------------------------------------------
+   Mêmes jetons que l'application, accent plus profond pour que le blanc posé dessus
+   reste lisible. */
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #f2f0f7;
-    --bg-grad: radial-gradient(1100px 620px at 80% -14%, #eae4f7 0%, transparent 60%),
-               radial-gradient(800px 520px at -5% 4%, #f6ecec 0%, transparent 55%);
+    --bg-grad: radial-gradient(1300px 800px at 80% -14%, #e9e2f8 0%, transparent 60%),
+               radial-gradient(900px 600px at -6% 4%, #f7ecec 0%, transparent 56%);
     --surface: #ffffff;
     --surface-2: #f7f5fb;
     --border: rgba(23, 17, 33, 0.1);
@@ -199,6 +269,7 @@ footer nav a:hover { color: var(--text); text-decoration: underline; }
     --accent-ink: #fff;
     --accent-soft: rgba(198, 49, 24, 0.1);
   }
+  .hero-image img, .section-image img { box-shadow: 0 40px 90px -45px rgba(40, 20, 60, 0.45); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,0 +1,5 @@
+# Torii — https://torii-app.fr
+User-agent: *
+Allow: /
+
+Sitemap: https://torii-app.fr/sitemap.xml

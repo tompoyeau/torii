@@ -37,8 +37,12 @@ function date(iso) {
 }
 
 async function remplirLeBouton() {
-  const bouton = document.getElementById("telecharger");
-  const texte = document.getElementById("cta-texte");
+  // Deux boutons identiques, en haut et en bas de page : le visiteur qui a lu jusqu'au
+  // bout ne doit pas avoir a remonter.
+  const boutons = ["telecharger", "telecharger-bas"].map((id) => document.getElementById(id));
+  const textes = ["cta-texte", "cta-texte-bas"].map((id) => document.getElementById(id));
+  const bouton = boutons[0];
+  const texte = textes[0];
   const meta = document.getElementById("meta");
   const lienMsi = document.getElementById("lien-msi");
   const piedVersion = document.getElementById("pied-version");
@@ -64,10 +68,15 @@ async function remplirLeBouton() {
 
   const version = (release.tag_name || "").replace(/^v/, "");
 
-  bouton.href = exe.browser_download_url;
-  // `download` demande au navigateur d'enregistrer plutôt que de naviguer.
-  bouton.setAttribute("download", "");
-  if (texte) texte.textContent = `Télécharger Torii ${version}`;
+  for (const b of boutons) {
+    if (!b) continue;
+    b.href = exe.browser_download_url;
+    // `download` demande au navigateur d'enregistrer plutôt que de naviguer.
+    b.setAttribute("download", "");
+  }
+  for (const t of textes) {
+    if (t) t.textContent = `Télécharger Torii ${version}`;
+  }
 
   if (meta) {
     meta.textContent = `Windows 10 et 11 · 64 bits · ${poids(exe.size)} · publié le ${date(
