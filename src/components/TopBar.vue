@@ -25,6 +25,18 @@ const { section, query, openAddGame, showFriends, openSettings, settingsOpen } =
  */
 const SANS_RECHERCHE = ["store", "friendLibrary", "friendProfile", "common", "wishlist"];
 const chercheDansLaBiblio = computed(() => !SANS_RECHERCHE.includes(section.value));
+
+/**
+ * Vide la recherche d un geste, et RESTITUE LE FOCUS au champ : sans ca, effacer au
+ * clavier laisse le focus sur une croix qui vient de disparaitre, donc nulle part.
+ * (La croix n existe que sur ce champ : les recherches locales sont en `type=search`,
+ * ou Chromium dessine la sienne.)
+ */
+const champ = ref<HTMLInputElement | null>(null);
+function effacerRecherche() {
+  query.value = "";
+  champ.value?.focus();
+}
 const { toggle: toggleTheme } = useTheme();
 const { account: toriiAccount, connected: toriiConnected } = useTorii();
 const { loading, reload } = useLibrary();
@@ -58,7 +70,17 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   <div class="topbar">
     <label v-if="chercheDansLaBiblio" class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-      <input v-model="query" type="text" placeholder="Rechercher dans la bibliothèque…" autocomplete="off" />
+      <input ref="champ" v-model="query" type="text" placeholder="Rechercher dans la bibliothèque…" autocomplete="off" />
+      <button
+        v-if="query"
+        type="button"
+        class="clear"
+        title="Effacer la recherche"
+        aria-label="Effacer la recherche"
+        @click="effacerRecherche"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
     </label>
     <div class="topbar-spacer" />
     <span v-if="loading" class="enrich-pill">
@@ -98,9 +120,20 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   background: linear-gradient(var(--bg) 60%, transparent); backdrop-filter: blur(6px);
 }
 .search { flex: 1; max-width: 420px; position: relative; display: flex; align-items: center; }
-.search svg { position: absolute; left: 13px; width: 16px; height: 16px; color: var(--text-faint); }
+/* ⚠️ Enfant DIRECT : la loupe. Sans le `>`, la regle attrapait aussi le SVG de la croix
+   et l envoyait se coller a gauche, par-dessus la loupe. */
+.search > svg { position: absolute; left: 13px; width: 16px; height: 16px; color: var(--text-faint); }
+.search .clear {
+  position: absolute; right: 8px;
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px;
+  background: none; border: none; color: var(--text-faint);
+}
+.search .clear svg { width: 15px; height: 15px; }
+.search .clear:hover { background: var(--surface-2); color: var(--text); }
 .search input {
-  width: 100%; padding: 10px 14px 10px 38px; background: var(--surface);
+  /* La place de la croix est reservee en permanence : sans ca le texte sauterait de
+     28 px au moment ou elle apparait, c est-a-dire des la premiere lettre tapee. */
+  width: 100%; padding: 10px 42px 10px 38px; background: var(--surface);
   border: 1px solid var(--border); border-radius: 11px; color: var(--text);
   font-size: 13.5px; font-family: inherit;
 }
