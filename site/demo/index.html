@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./torii.svg" />
+
+    <!--
+      Les jaquettes viennent du CDN de Steam. Sans cette ligne, la resolution DNS et la
+      poignee de main TLS avec ce domaine ne commencent qu'a la premiere image demandee —
+      soit apres l'analyse du HTML, du CSS et du JS. Les declarer ici les fait demarrer
+      tout de suite, en parallele du reste. Inoffensif dans l'application : la fenetre
+      native charge les memes jaquettes depuis le meme domaine.
+    -->
+    <link rel="preconnect" href="https://cdn.cloudflare.steamstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://cdn.cloudflare.steamstatic.com" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Torii — bibliothèque de jeux</title>
 
@@ -18,8 +28,8 @@
     -->
     <meta name="robots" content="noindex, follow" />
     <link rel="canonical" href="https://torii-app.fr/" />
-    <script type="module" crossorigin src="./assets/index-CS3lSZW5.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DWanO2Xe.css">
+    <script type="module" crossorigin src="./assets/index-Dpe94NOO.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-C4-PNYa-.css">
   </head>
 
   <body>

@@ -2,6 +2,7 @@
 import { onMounted, ref, computed } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { usePreferences } from "../composables/usePreferences";
+import { hasTauriRuntime } from "../lib/tauri";
 
 const { booted } = useLibrary();
 const { prefs } = usePreferences();
@@ -14,10 +15,19 @@ const { prefs } = usePreferences();
 const MIN_MS = 1700;
 /** Animations réduites : on ne retient personne, juste le temps d'un fondu. */
 const MIN_MS_SOBRE = 350;
+/**
+ * 🔑 Hors Tauri (démo en ligne), ce plancher n'a plus de raison d'être : il couvre le
+ * temps que met l'application à lire ses jeux sur le disque, et une démo n'a rien à
+ * lire — sa bibliothèque est déjà en mémoire. Le visiteur, lui, vient de cliquer
+ * « Essayer » : lui imposer 1,7 s de porte qui se construit, c'est la première chose
+ * qu'il retiendra de l'application. On garde juste de quoi ne pas clignoter.
+ */
+const MIN_MS_DEMO = 550;
 
 const tempsEcoule = ref(false);
 onMounted(() => {
-  setTimeout(() => (tempsEcoule.value = true), prefs.reduceMotion ? MIN_MS_SOBRE : MIN_MS);
+  const plancher = prefs.reduceMotion ? MIN_MS_SOBRE : hasTauriRuntime() ? MIN_MS : MIN_MS_DEMO;
+  setTimeout(() => (tempsEcoule.value = true), plancher);
 });
 
 // L'écran s'efface quand la bibliothèque est prête ET que la séquence est allée au bout.

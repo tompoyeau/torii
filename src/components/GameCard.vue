@@ -70,6 +70,7 @@ function toggleFavorite() {
         :src="coverSrc"
         alt=""
         loading="lazy"
+        decoding="async"
         @error="onCoverError"
       />
       <span class="cover-plat"><PlatformIcon :platform="game.platform" /></span>
@@ -126,36 +127,47 @@ function toggleFavorite() {
 /* Le fond de carte (rayon, ombre, survol, jaquette, voile, titre) vient de
    `.cover-card` dans style.css — partagé avec la Boutique et la Wishlist. Ici,
    uniquement ce qui est propre à la bibliothèque. */
+/* 🔑 PAS DE `mix-blend-mode` ICI. Il obligeait le navigateur a composer chaque carte
+   contre ce qu'il y a derriere, dans une passe separee — multiplie par le nombre de
+   jaquettes a l'ecran. Sur des rayures blanches a 6 % d'opacite, le mode « overlay »
+   donne un resultat que l'oeil ne distingue pas d'une simple superposition. */
 .cover::before {
   content: ""; position: absolute; inset: 0; z-index: 1;
-  background: repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 7px);
-  mix-blend-mode: overlay; opacity: 0.6;
+  background: repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px);
 }
 .cover-plat {
   position: absolute; top: 11px; left: 11px; z-index: 2; width: 26px; height: 26px;
   border-radius: 8px; display: grid; place-items: center;
-  background: rgba(12, 10, 18, 0.55); backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(12, 10, 18, 0.72); border: 1px solid rgba(255, 255, 255, 0.16);
 }
 .cover-plat :deep(.platform-icon) { width: 15px; height: 15px; }
 .cover-actions {
   position: absolute; top: 9px; right: 9px; z-index: 4; display: flex; gap: 6px;
 }
+/* ⚠️ LE FLOU N'EST POSE QU'AU SURVOL, et c'est le gros de l'economie. Ces boutons sont
+   en `opacity: 0` tant qu'on ne survole pas la carte — mais un `backdrop-filter` coute
+   meme invisible : il cree une couche que le compositeur doit preparer a chaque image.
+   Avec quatre elements floutes par carte, une grille de 26 jaquettes en portait plus de
+   cent. Deplacer la regle dans l'etat `:hover` n'en laisse qu'une poignee, sur la seule
+   carte regardee — a rendu strictement identique, puisqu'on ne voyait pas les autres. */
 .cover-act {
   width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; cursor: pointer;
-  background: rgba(12, 10, 18, 0.6); backdrop-filter: blur(6px);
+  background: rgba(12, 10, 18, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.16); color: #fff;
   opacity: 0; transform: scale(0.9); transition: opacity 0.18s, transform 0.18s, background 0.15s, color 0.15s;
 }
 .cover-act svg { width: 15px; height: 15px; }
+.card:hover .cover-act { backdrop-filter: blur(6px); }
 .cover-act:hover { background: rgba(40, 30, 55, 0.85); border-color: rgba(255, 255, 255, 0.35); }
 .card:hover .cover-act { opacity: 1; transform: scale(1); }
 /* Une étoile épinglée reste visible même hors survol, en couleur d'accent. */
 .cover-act.fav.on { opacity: 1; transform: scale(1); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
-.cover-act.fav.on:hover { background: color-mix(in srgb, var(--accent) 22%, rgba(12, 10, 18, 0.6)); }
+.cover-act.fav.on:hover { background: color-mix(in srgb, var(--accent) 22%, rgba(12, 10, 18, 0.72)); }
 .cover-hover {
   position: absolute; inset: 0; z-index: 3; display: grid; place-items: center;
-  background: rgba(12, 8, 20, 0.42); backdrop-filter: blur(2px); opacity: 0; transition: opacity 0.2s;
+  background: rgba(12, 8, 20, 0.42); opacity: 0; transition: opacity 0.2s;
 }
+.card:hover .cover-hover { backdrop-filter: blur(2px); }
 .cover-play {
   width: 54px; height: 54px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
   display: grid; place-items: center; transform: scale(0.8); transition: transform 0.2s;
@@ -178,7 +190,7 @@ function toggleFavorite() {
 .cover-fam {
   position: absolute; right: 10px; bottom: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 7px 2px 6px; border-radius: 99px; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
-  background: rgba(12, 10, 18, 0.62); backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(12, 10, 18, 0.78); border: 1px solid rgba(255, 255, 255, 0.18);
 }
 .cover-fam svg { width: 13px; height: 13px; }
 </style>
