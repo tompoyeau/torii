@@ -1094,6 +1094,17 @@ le jour où quelqu'un ajoute un `v-html` de trop.
   hachage. Et la politique appliquée telle quelle dans un navigateur ne produit **aucune
   violation** sur la grille, une fiche de jeu et les Paramètres.
 
+**✅ Vérifié sur un vrai binaire de production** (`npm run tauri build`, `dev=0`, lancé seul
+le 2026-09-06) : « démarrage » à 09:00:50, « bibliothèque synchronisée (848 jeux) » à
+09:00:55, et cinq fichiers de configuration réécrits — dont `library_cache_v1.json` **cinq
+secondes** après le lancement, contre sept au démarrage de référence. Le front atteint donc
+bien le natif à travers l'IPC sous la CSP de production.
+
+⚠️ **Reste non exercé : la portée `asset`.** Il n'y a aucun jeu manuel avec une jaquette
+locale sur la machine de dev, donc le protocole `asset` n'a jamais été sollicité. Si les
+motifs étaient faux, le symptôme serait une jaquette manquante sur un jeu ajouté à la main
+— jamais une application cassée.
+
 ### 🔑 `cargo build --release` NE teste PAS la CSP de production
 
 Piège coûteux, qui m'a fait annoncer à tort que la CSP cassait l'application. `tauri-build`
