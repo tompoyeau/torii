@@ -15,6 +15,7 @@ import ToriiSignInDialog from "./components/ToriiSignInDialog.vue";
 import UpdateBanner from "./components/UpdateBanner.vue";
 import Toast from "./components/Toast.vue";
 import SplashScreen from "./components/SplashScreen.vue";
+import DemoBanner from "./components/DemoBanner.vue";
 
 const { addGameOpen, closeAddGame, goBack, openGame } = useUi();
 const { notePlayed, noteDetected } = useLibrary();
@@ -104,5 +105,6 @@ onBeforeUnmount(() => {
     <UpdateBanner />
     <Toast />
     <SplashScreen />
+    <DemoBanner />
   </div>
 </template>

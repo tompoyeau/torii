@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import { friendsCommon, getSettings } from "../lib/tauri";
+import { avatarFictif } from "../lib/covers";
 import { useFriendLibrary } from "./useFriendLibrary";
 import { useLibrary } from "./useLibrary";
 import { useTorii } from "./useTorii";
@@ -283,18 +284,27 @@ export function useFriendsCommon() {
   };
 }
 
-// --- Données fictives (preview web hors Tauri) ---
+// --- Données fictives (preview web hors Tauri, et démo en ligne du site) ---
+//
+// ⚠️ PUBLIE. Mêmes règles que [MOCK_FRIENDS] dans `useFriends.ts` : aucune personne
+// réelle ici. Les identifiants et les pseudonymes sont les mêmes des deux côtés — un ami
+// vu dans « Amis » puis dans « En commun » doit être le même ami.
 const MOCK: { friends: FriendLib[]; games: CommonGame[] } = {
   friends: [
-    { steamId: "1", name: "Sterben", avatarUrl: "", private: false, commonCount: 3 },
-    { steamId: "2", name: "Zouze", avatarUrl: "", private: false, commonCount: 2 },
-    { steamId: "3", name: "therempard", avatarUrl: "", private: false, commonCount: 2 },
-    { steamId: "4", name: "Benator", avatarUrl: "", private: true, commonCount: 0 },
+    { steamId: "d1", name: "Kobalt", avatarUrl: avatarFictif("K", "#6d4bd6", "#c0399a"), private: false, commonCount: 3 },
+    { steamId: "d8", name: "loupio", avatarUrl: avatarFictif("L", "#2a5eb8", "#5ec8f0"), private: false, commonCount: 3 },
+    { steamId: "d10", name: "Grimald", avatarUrl: avatarFictif("G", "#2f7a45", "#8fd15a"), private: false, commonCount: 2 },
+    { steamId: "d11", name: "Poivrade", avatarUrl: avatarFictif("P", "#5c2f8c", "#9d6ae0"), private: true, commonCount: 0 },
   ],
   games: [
-    { id: "steam:730", title: "Counter-Strike 2", coverUrl: null, owners: ["1", "2", "3"] },
-    { id: "steam:945360", title: "Among Us", coverUrl: null, owners: ["1", "3"] },
-    { id: "steam:1145360", title: "Hades", coverUrl: null, owners: ["1", "2"] },
-    { id: "steam:271590", title: "GTA V", coverUrl: null, owners: ["2"] },
+    { id: "steam:1086940", title: "Baldur's Gate 3", coverUrl: JAQUETTE(1086940), owners: ["d1", "d8", "d10"] },
+    { id: "steam:553850", title: "HELLDIVERS 2", coverUrl: JAQUETTE(553850), owners: ["d1", "d8"] },
+    { id: "steam:548430", title: "Deep Rock Galactic", coverUrl: JAQUETTE(548430), owners: ["d1", "d10"] },
+    { id: "steam:646570", title: "Slay the Spire", coverUrl: JAQUETTE(646570), owners: ["d8"] },
   ],
 };
+
+/** Jaquette portrait servie publiquement par le CDN Steam, comme dans `data/games.ts`. */
+function JAQUETTE(appid: number): string {
+  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`;
+}

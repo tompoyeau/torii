@@ -12,7 +12,7 @@ l'espace client OVH.
 |---|---|
 | Serveur | `ftp.cluster121.hosting.ovh.net` (port 21) |
 | Destination | le dossier **`www`** |
-| À envoyer | tout le contenu de `site/`, en conservant `captures/` |
+| À envoyer | tout le contenu de `site/`, en conservant `captures/` et `demo/` |
 
 Le plus simple est FileZilla ou l'explorateur de fichiers de l'espace client. Tant que le
 domaine n'est pas rattaché (24 à 48 h après la commande), le site répond sur
@@ -48,17 +48,67 @@ CORS** : le navigateur refuse de les lire. L'API, elle, répond
 Et la page **fonctionne sans JavaScript** : les liens pointent alors vers la page des
 versions. Le script ne fait qu'améliorer.
 
+## La démo en ligne (`demo/`)
+
+`torii-app.fr/demo/` fait tourner **l'application elle-même**, compilée pour le navigateur,
+sur une bibliothèque fictive. Un visiteur peut l'essayer avant de télécharger un `.exe`
+d'un éditeur qu'il ne connaît pas — ce qui, pour une application non signée, lève l'un des
+deux freins (l'autre étant l'alerte SmartScreen).
+
+```bash
+npm run build:demo      # → site/demo/, à envoyer par FTP avec le reste
+```
+
+🔑 **`--base=./`, pas `--base=/demo/`.** Des chemins relatifs permettent de déposer le
+dossier où l'on veut sans reconstruire. Avec un chemin absolu, un dossier renommé casse
+tous les liens vers les assets.
+
+🔑 **Aucun drapeau ne distingue la démo de l'application** : c'est le même build que
+`npm run dev`. Ce qui les sépare à l'exécution, c'est `hasTauriRuntime()` — la présence du
+pont natif. D'où le bandeau « Démo » (`DemoBanner.vue`), qui ne peut donc pas apparaître
+par erreur dans l'application installée.
+
+⚠️ **Les données fictives sont PUBLIÉES.** Trois endroits en contiennent, et les trois
+portaient de vrais pseudonymes avant la mise en ligne de la démo :
+
+| Fichier | Contenu |
+|---|---|
+| `src/data/games.ts` | `MOCK_GAMES` — vrais jeux, vraies jaquettes (CDN Steam), stats inventées |
+| `src/composables/useFriends.ts` | `MOCK_FRIENDS` — amis fictifs, avatars générés |
+| `src/composables/useFriendsCommon.ts` | `MOCK` — les mêmes amis, vue « en commun » |
+
+Les pseudonymes et les couleurs d'avatar sont **les mêmes que sur les captures** du site :
+une personne doit se ressembler d'un écran à l'autre.
+
+La coquille `index.html` (racine du dépôt) porte un `noindex` : une application monopage
+n'offre qu'un `<div>` vide à un robot, et serait indexée comme une page sans contenu.
+
 ## Les captures
 
-Prises dans l'application réelle, puis retouchées avant publication :
+Prises dans l'application réelle, puis **anonymisées** avant publication.
 
-- `bibliotheque.jpg` — telle quelle (seul le pseudo du propriétaire y figure) ;
-- `amis.jpg` — **pseudos et avatars des amis remplacés** par des identités inventées ;
-- `fiche-jeu.jpg` — la section « Amis qui possèdent ce jeu » a été **retirée**.
+🔑 Les pseudonymes et les avatars des amis sont des **données personnelles de tiers** :
+ils n'ont pas consenti à figurer sur une page publique. Toute nouvelle capture doit
+repasser par cette étape. Les originaux ne sont **pas** dans le dépôt.
 
-🔑 Ce sont des données personnelles de tiers : les amis n'ont pas consenti à figurer sur
-une page publique. Toute nouvelle capture doit repasser par cette étape. Les originaux ne
-sont **pas** dans le dépôt.
+La méthode n'est pas le pavé noir — une capture barbouillée ne donne envie d'installer
+rien du tout. On détecte les pixels du texte, on les efface avec la couleur du fond, et on
+redessine un pseudonyme inventé dans la même police ; les avatars sont remplacés par des
+disques dégradés à initiale, identiques à ceux que Torii génère lui-même. Le résultat reste
+une capture vendeuse dans laquelle plus aucune personne réelle ne figure.
 
-Format : 1600 px de large, JPEG qualité 90 (~100 à 340 Ko pièce). L'hébergement est
+| Fichier | Vue | Anonymisé |
+|---|---|---|
+| `bibliotheque.jpg` | la bibliothèque complète (en-tête de page) | pseudo + avatar du propriétaire |
+| `grille.jpg` | la grille de jaquettes | — |
+| `hors-launcher.jpg` | la barre latérale, 8 plateformes | — |
+| `amis.jpg` | la vue Amis | **12 pseudos + 12 avatars** |
+| `commun.jpg` | le profil d'un ami, jeux en commun | 1 pseudo + 1 avatar |
+| `fiche-jeu.jpg` | la fiche d'un jeu | **9 pseudos + 9 avatars** (pastilles « amis qui possèdent ») |
+| `boutique.jpg` | la boutique et les prix | — (aucune personne) |
+
+⚠️ Deux personnages apparaissent sur plusieurs captures : leur nom **et** la couleur de
+leur avatar doivent rester identiques partout, sinon la mise en scène se trahit.
+
+Format : 1000 à 1700 px de large, JPEG qualité 82 (70 à 310 Ko pièce). L'hébergement est
 limité à 100 Mo.

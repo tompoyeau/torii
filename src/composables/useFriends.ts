@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import { getSettings, steamFriends } from "../lib/tauri";
+import { avatarFictif } from "../lib/covers";
 import type { Friend } from "../types";
 
 // État partagé (singleton).
@@ -66,12 +67,34 @@ export function useFriends() {
 
 // --- Données fictives (hors Tauri : preview) ---------------------------------
 
+/**
+ * Amis fictifs affiches hors Tauri.
+ *
+ * ⚠️ CETTE LISTE EST PUBLIEE. Elle alimente la demo en ligne du site : n'y mettre aucune
+ * personne reelle. Elle a longtemps contenu les vrais pseudonymes des amis du
+ * developpeur, ce qui revenait a publier les donnees personnelles de tiers sur une page
+ * ouverte a tous. Pseudonymes inventes, avatars generes, et rien d'autre.
+ *
+ * 🔑 Les memes noms et les memes couleurs figurent sur les captures d'ecran du site :
+ * une personne doit se ressembler d'un ecran a l'autre, sinon la demonstration sonne faux.
+ */
 const MOCK_FRIENDS: Friend[] = [
-  { steamId: "1", name: "Sterben", avatarUrl: "", state: "in-game", gameName: "NEON REQUIEM™", profileUrl: "#" },
-  { steamId: "2", name: "Ecrevisse", avatarUrl: "", state: "in-game", gameName: "Counter-Strike 2", profileUrl: "#" },
-  { steamId: "3", name: "Illusionnelle", avatarUrl: "", state: "online", gameName: null, profileUrl: "#" },
-  { steamId: "4", name: "Jordan", avatarUrl: "", state: "away", gameName: null, profileUrl: "#" },
-  { steamId: "5", name: "loginn", avatarUrl: "", state: "online", gameName: null, profileUrl: "#" },
-  { steamId: "6", name: "Marceline", avatarUrl: "", state: "offline", gameName: null, profileUrl: "#" },
-  { steamId: "7", name: "Nowé", avatarUrl: "", state: "offline", gameName: null, profileUrl: "#" },
+  { steamId: "d1", name: "Kobalt", avatarUrl: avatarFictif("K", "#6d4bd6", "#c0399a"), state: "in-game", gameName: "Sons Of The Forest", profileUrl: "#" },
+  { steamId: "d2", name: "grizel", avatarUrl: avatarFictif("G", "#1f7a8c", "#3fd0c9"), state: "in-game", gameName: "HELLDIVERS 2", profileUrl: "#" },
+  { steamId: "d3", name: "Marmotte", avatarUrl: avatarFictif("M", "#c25b2a", "#e8a33d"), state: "in-game", gameName: "Baldur's Gate 3", profileUrl: "#" },
+  { steamId: "d4", name: "Ambre", avatarUrl: avatarFictif("A", "#3b3f8c", "#7f86e0"), state: "in-game", gameName: "Deep Rock Galactic", profileUrl: "#" },
+  { steamId: "d5", name: "Orval2178", avatarUrl: avatarFictif("O", "#7a2f5f", "#d1568f"), state: "online", gameName: null, profileUrl: "#" },
+  { steamId: "d6", name: "Vantar.exe", avatarUrl: avatarFictif("V", "#25706b", "#57c1a8"), state: "online", gameName: null, profileUrl: "#" },
+  { steamId: "d7", name: "tibou", avatarUrl: avatarFictif("t", "#2f7a45", "#8fd15a"), state: "online", gameName: null, profileUrl: "#" },
+  { steamId: "d8", name: "loupio", avatarUrl: avatarFictif("L", "#2a5eb8", "#5ec8f0"), state: "online", gameName: null, profileUrl: "#" },
+  { steamId: "d9", name: "milo207", avatarUrl: avatarFictif("m", "#a8322f", "#e06a56"), state: "away", gameName: null, profileUrl: "#" },
+  { steamId: "d10", name: "Grimald", avatarUrl: avatarFictif("G", "#2f7a45", "#8fd15a"), state: "online", gameName: null, profileUrl: "#" },
+  { steamId: "d11", name: "Poivrade", avatarUrl: avatarFictif("P", "#5c2f8c", "#9d6ae0"), state: "online", gameName: null, profileUrl: "#" },
+  { steamId: "d12", name: "Falk", avatarUrl: avatarFictif("F", "#8c6a1f", "#dfc154"), state: "online", gameName: null, profileUrl: "#" },
+  { steamId: "d13", name: "Bigorneau", avatarUrl: avatarFictif("B", "#1f7a8c", "#3fd0c9"), state: "offline", gameName: null, profileUrl: "#" },
+  { steamId: "d14", name: "Ocelot", avatarUrl: avatarFictif("O", "#c25b2a", "#e8a33d"), state: "offline", gameName: null, profileUrl: "#" },
+  { steamId: "d15", name: "MrPistache", avatarUrl: avatarFictif("M", "#7a2f5f", "#d1568f"), state: "offline", gameName: null, profileUrl: "#" },
+  { steamId: "d16", name: "leperchoir", avatarUrl: avatarFictif("L", "#8c3b1f", "#d98246"), state: "offline", gameName: null, profileUrl: "#" },
+  { steamId: "d17", name: "Orphee", avatarUrl: avatarFictif("O", "#3b3f8c", "#7f86e0"), state: "offline", gameName: null, profileUrl: "#" },
+  { steamId: "d18", name: "Pilou", avatarUrl: avatarFictif("P", "#a8322f", "#e06a56"), state: "offline", gameName: null, profileUrl: "#" },
 ];

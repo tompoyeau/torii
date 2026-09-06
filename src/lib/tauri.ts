@@ -1,4 +1,5 @@
 import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import { avatarFictif } from "./covers";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -764,12 +765,18 @@ export async function appVersion(): Promise<string | null> {
 
 // --- Données fictives (preview web hors Tauri) -----------------------------------
 
+/**
+ * ⚠️ Ce profil est PUBLIE : il alimente la demo en ligne du site. Il portait le vrai
+ * pseudo et la vraie photo Steam du developpeur — donnees personnelles, mises en scene
+ * dans une fausse bibliotheque sur une page publique. Pseudo invente, avatar genere.
+ */
 const MOCK_PROFILE: SteamProfile = {
   steamId: "0",
-  name: "PomPoteau",
-  avatarUrl: "https://avatars.fastly.steamstatic.com/3604ac34b47c87e187d151f22aa17e107253ce34_full.jpg",
+  name: "PixelRonin",
+  avatarUrl: avatarFictif("P", "#6d4bd6", "#c0399a"),
   profileUrl: "#",
 };
+
 
 function mockAchievements(): SteamAchievements {
   const icon = (h: string) =>

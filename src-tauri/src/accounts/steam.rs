@@ -551,21 +551,21 @@ mod tests {
         <div class="selectable friend_block_v2 persona in-game  " id="fr_1" data-steamid="76561198206344635" data-miniprofile="246078907" data-search="sterben ; soundpad ; ">
           <a class="selectable_overlay" data-container="#fr_1" href="https://steamcommunity.com/id/lenyben"></a>
           <div class="player_avatar friend_block_link_overlay in-game"><img src="https://av/aaa_medium.jpg"></div>
-          <div class="friend_block_content">Sterben<br><span class="friend_small_text"><span class="friend_game_link">Soundpad</span></span></div>
+          <div class="friend_block_content">Kobalt<br><span class="friend_small_text"><span class="friend_game_link">Soundpad</span></span></div>
         </div>
         <div class="selectable friend_block_v2 persona online  " id="fr_2" data-steamid="76561198243042658" data-miniprofile="282776930" data-search="ecrevisse ;  ; ">
           <a class="selectable_overlay" data-container="#fr_2" href="https://steamcommunity.com/profiles/76561198243042658"></a>
           <div class="player_avatar friend_block_link_overlay online"><img src="https://av/bbb_medium.jpg"></div>
-          <div class="friend_block_content">Ecrevisse<br><span class="friend_small_text"></span></div>
+          <div class="friend_block_content">Bigorneau<br><span class="friend_small_text"></span></div>
         </div>"##;
         let f = parse_friends_page(html);
         assert_eq!(f.len(), 2);
         assert_eq!(f[0].steam_id, "76561198206344635");
-        assert_eq!(f[0].name, "Sterben");
+        assert_eq!(f[0].name, "Kobalt");
         assert_eq!(f[0].state, "in-game");
         assert_eq!(f[0].game_name.as_deref(), Some("Soundpad"));
         assert_eq!(f[0].avatar_url, "https://av/aaa_full.jpg"); // _medium → _full
-        assert_eq!(f[1].name, "Ecrevisse");
+        assert_eq!(f[1].name, "Bigorneau");
         assert_eq!(f[1].state, "online");
         assert_eq!(f[1].game_name, None);
     }
@@ -616,11 +616,11 @@ mod tests {
     #[test]
     fn parses_profile_page() {
         let html = r#"
-        <meta property="og:title" content="Steam Community :: PomPoteau">
+        <meta property="og:title" content="Steam Community :: PixelRonin">
         <meta property="og:image" content="https://av/3604ac_full.jpg">
-        <div class="persona_name"><span class="actual_persona_name">PomPoteau</span></div>"#;
+        <div class="persona_name"><span class="actual_persona_name">PixelRonin</span></div>"#;
         let p = parse_profile("76561198258753323", html).unwrap();
-        assert_eq!(p.name, "PomPoteau");
+        assert_eq!(p.name, "PixelRonin");
         assert_eq!(p.avatar_url, "https://av/3604ac_full.jpg");
         assert_eq!(p.profile_url, "https://steamcommunity.com/profiles/76561198258753323/");
     }

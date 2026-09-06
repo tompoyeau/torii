@@ -85,6 +85,21 @@
             ou télécharger le .msi
           </a>
         </p>
+
+        <!--
+          Deuxieme porte d'entree, pour qui n'installe pas un .exe inconnu sur parole.
+          Deliberement en retrait du bouton principal : c'est une alternative, pas une
+          concurrence — le telechargement reste l'action attendue.
+        -->
+        <p class="sous-cta essai">
+          <a class="cta-secondaire" href="demo/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M8 5.5v13l11-6.5z" />
+            </svg>
+            Essayer la démo dans le navigateur
+          </a>
+          <span class="dim">sans rien installer</span>
+        </p>
       </div>
 
       <div class="hero-image">
@@ -123,7 +138,7 @@
           </ul>
         </div>
         <figure class="section-image">
-          <img src="captures/grille.jpg" width="1500" height="596" loading="lazy"
+          <img src="captures/grille.jpg" width="1500" height="520" loading="lazy"
                alt="Grille de jaquettes de jeux avec leur plateforme, leur temps de jeu et leur état d'installation." />
         </figure>
       </section>
@@ -143,8 +158,8 @@
           </p>
         </div>
         <figure class="section-image">
-          <img src="captures/hero.jpg" width="1600" height="333" loading="lazy"
-               alt="Barre latérale de Torii avec les plateformes et la catégorie « Hors launcher »." />
+          <img src="captures/hors-launcher.jpg" width="1000" height="400" loading="lazy"
+               alt="Barre latérale de Torii : Steam, Epic Games, GOG, Riot Games, Ubisoft Connect, EA, Battle.net et la catégorie « Hors launcher », chacune avec son nombre de jeux." />
         </figure>
       </section>
 
@@ -164,9 +179,52 @@
           </p>
         </div>
         <figure class="section-image">
-          <img src="captures/amis.jpg" width="1600" height="960" loading="lazy"
+          <img src="captures/amis.jpg" width="1600" height="888" loading="lazy"
                alt="La vue Amis : qui est connecté, à quoi il joue, et sur quel launcher." />
-          <figcaption>Les pseudonymes de cette capture sont fictifs.</figcaption>
+          <figcaption>Pseudonymes et avatars fictifs.</figcaption>
+        </figure>
+      </section>
+
+      <section class="section inverse" id="commun">
+        <div class="section-texte">
+          <p class="sur-titre">À quoi on joue ce soir ?</p>
+          <h2>Ce que vous avez en commun</h2>
+          <p>
+            Torii croise ta bibliothèque avec celle de tes amis et sort la liste des jeux
+            que vous possédez <em>tous les deux</em>. Fini les « tu l'as, toi ? » à
+            rallonge avant de trouver quoi lancer.
+          </p>
+          <p class="fin">
+            Coche plusieurs amis d'un coup : tu obtiens ce que le groupe entier peut
+            lancer ensemble, ce soir, sans que personne n'ait à racheter quoi que ce soit.
+          </p>
+        </div>
+        <figure class="section-image">
+          <img src="captures/commun.jpg" width="1600" height="682" loading="lazy"
+               alt="Le profil d'un ami dans Torii : son nombre de jeux, ceux qu'il a en commun avec toi, et sa bibliothèque." />
+          <figcaption>Pseudonyme et avatar fictifs.</figcaption>
+        </figure>
+      </section>
+
+      <section class="section" id="fiche">
+        <div class="section-texte">
+          <p class="sur-titre">Chaque jeu, sa page</p>
+          <h2>Plus qu'une vignette dans une grille</h2>
+          <p>
+            Bannière, description <strong>en français</strong>, genre, développeur, taille
+            sur le disque, captures d'écran, succès débloqués, temps de jeu et nombre de
+            joueurs connectés en ce moment. Le tout sans quitter Torii.
+          </p>
+          <ul class="puces">
+            <li>Les amis qui possèdent le jeu, d'un coup d'œil</li>
+            <li>Succès Steam et progression</li>
+            <li>Un bouton « Jouer » qui lance le bon launcher tout seul</li>
+          </ul>
+        </div>
+        <figure class="section-image">
+          <img src="captures/fiche-jeu.jpg" width="1700" height="896" loading="lazy"
+               alt="La fiche d'un jeu dans Torii : bannière, description en français, amis qui le possèdent, captures d'écran, temps de jeu et succès." />
+          <figcaption>Pseudonymes et avatars fictifs.</figcaption>
         </figure>
       </section>
 
@@ -185,8 +243,8 @@
           </p>
         </div>
         <figure class="section-image">
-          <img src="captures/fiche-jeu.jpg" width="1600" height="960" loading="lazy"
-               alt="La fiche d'un jeu dans Torii : bannière, temps de jeu, description en français et captures." />
+          <img src="captures/boutique.jpg" width="1600" height="902" loading="lazy"
+               alt="La boutique intégrée de Torii : jeux en promotion avec leur remise, leur prix et le revendeur le moins cher." />
         </figure>
       </section>
 
@@ -251,6 +309,16 @@
         <h2>Questions fréquentes</h2>
 
         <details>
+          <summary>La démo du site, c'est vraiment l'application ?</summary>
+          <p>
+            Oui — le même code, compilé pour le navigateur. Seule la bibliothèque change :
+            celle de la démo est inventée. Tout ce qui doit parler à Windows (lancer un
+            jeu, lire tes launchers, se connecter à un compte) reste évidemment sans effet
+            dans un onglet. <a href="demo/">Ouvrir la démo</a>.
+          </p>
+        </details>
+
+        <details>
           <summary>Torii est-il gratuit ?</summary>
           <p>
             Oui, entièrement, et sans publicité. Le téléchargement ne demande pas de compte.
@@ -312,6 +380,11 @@
           "mainEntity": [
             {
               "@type": "Question",
+              "name": "Peut-on essayer Torii sans l'installer ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Oui : une démo tourne directement dans le navigateur sur torii-app.fr. C'est la même application, posée sur une bibliothèque de jeux fictive. Seules les actions qui touchent à Windows — lancer un jeu, lire les launchers installés, connecter un compte — y sont sans effet." }
+            },
+            {
+              "@type": "Question",
               "name": "Torii est-il gratuit ?",
               "acceptedAnswer": { "@type": "Answer", "text": "Oui, entièrement, et sans publicité. Le téléchargement ne demande pas de compte." }
             },
@@ -338,6 +411,31 @@
           ]
         }
       </script>
+
+      <section class="essai-libre" id="demo">
+        <div class="essai-texte">
+          <p class="sur-titre">Avant d'installer quoi que ce soit</p>
+          <h2>Essaie Torii sans l'installer</h2>
+          <p>
+            La démo, c'est l'application elle-même, telle quelle, dans ton navigateur —
+            posée sur une bibliothèque inventée d'une trentaine de vrais jeux. Clique dans
+            la grille, ouvre une fiche, change de thème, fouille les amis.
+          </p>
+          <p class="fin">
+            Ce qui touche à ta machine — lancer un jeu, connecter un compte — n'y fait
+            rien, forcément&nbsp;: il n'y a pas de machine derrière.
+          </p>
+          <a class="cta" href="demo/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M8 5.5v13l11-6.5z" />
+            </svg>
+            Ouvrir la démo
+          </a>
+        </div>
+        <div class="essai-image">
+          <img src="captures/bibliotheque.jpg" width="1700" height="1020" loading="lazy" alt="" />
+        </div>
+      </section>
 
       <section class="final">
         <h2>Prêt à ranger ta bibliothèque ?</h2>
@@ -367,5 +465,6 @@
     </footer>
 
     <script src="telechargement.js"></script>
+    <script src="animations.js"></script>
   </body>
 </html>

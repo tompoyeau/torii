@@ -276,3 +276,134 @@ footer nav a:hover { color: var(--text); text-decoration: underline; }
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
+
+/* --- Bouton secondaire : essayer plutôt que télécharger ------------------------ */
+
+.essai { margin-top: 10px; }
+.cta-secondaire {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 11px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text); font-size: 13.5px; font-weight: 600; text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+.cta-secondaire:hover {
+  color: var(--text); background: var(--surface-2);
+  border-color: var(--accent); transform: translateY(-1px);
+}
+.cta-secondaire svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+.sous-cta .dim { color: var(--text-faint); }
+
+/* --- Bloc « essayer sans installer » ------------------------------------------
+   Un encadré plein plutôt qu'une section de plus : à ce stade de la page, le visiteur
+   a fini de lire et il faut une rupture visuelle, pas un septième paragraphe. */
+
+.essai-libre {
+  max-width: var(--large);
+  margin: 110px auto 0;
+  padding: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 44px;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 26px;
+  background:
+    radial-gradient(760px 420px at 88% 8%, var(--accent-soft) 0%, transparent 64%),
+    var(--surface);
+  overflow: hidden;
+}
+.essai-libre h2 { margin: 0 0 16px; font-size: clamp(25px, 3vw, 33px); font-weight: 800; }
+.essai-libre p { margin: 0 0 14px; color: var(--text-dim); font-size: 15.5px; }
+.essai-libre .fin { margin-bottom: 26px; }
+.essai-libre em { color: var(--text); font-style: normal; font-weight: 600; }
+
+/* L'image déborde du cadre : elle suggère une fenêtre qu'on n'a pas fini d'ouvrir,
+   ce qui est exactement ce que propose le bouton d'à côté. */
+.essai-image { margin: -80px -120px -80px 0; }
+.essai-image img {
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.85);
+  transform: rotate(-1.4deg);
+}
+
+@media (max-width: 900px) {
+  .essai-libre { grid-template-columns: 1fr; gap: 30px; padding: 30px 24px; margin-top: 68px; }
+  .essai-image { margin: 0; }
+  .essai-image img { transform: none; }
+}
+
+/* --- Mise en mouvement ---------------------------------------------------------
+   🔑 L'état masqué est conditionné à la classe `js`, posée par un script en tête de
+   page. Sans JavaScript — ou si le script échoue — aucune règle ne s'applique et la
+   page reste entièrement lisible. Masquer d'abord et révéler ensuite, c'est prendre
+   le risque d'une page blanche définitive au moindre pépin. */
+
+.js .reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.65s cubic-bezier(0.2, 0.7, 0.2, 1),
+              transform 0.65s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.js .reveal.vu { opacity: 1; transform: none; }
+
+/* Décalage en cascade à l'intérieur d'un même bloc : les puces et les cartes arrivent
+   l'une après l'autre plutôt qu'en bloc, ce qui guide l'œil de haut en bas. */
+.js .reveal.vu > * { animation: aParaitre 0.5s both; }
+.js .reveal.vu > :nth-child(2) { animation-delay: 0.06s; }
+.js .reveal.vu > :nth-child(3) { animation-delay: 0.12s; }
+.js .reveal.vu > :nth-child(4) { animation-delay: 0.18s; }
+.js .reveal.vu > :nth-child(5) { animation-delay: 0.24s; }
+.js .reveal.vu > :nth-child(6) { animation-delay: 0.3s; }
+@keyframes aParaitre { from { opacity: 0; transform: translateY(10px); } }
+
+/* Entrée de l'en-tête, au chargement. Les images sont volontairement exclues :
+   une capture qui glisse pendant que la police se charge donne une page qui tremble. */
+.hero-texte > * { animation: monteEnTete 0.7s both cubic-bezier(0.2, 0.8, 0.2, 1); }
+.hero-texte > :nth-child(2) { animation-delay: 0.08s; }
+.hero-texte > :nth-child(3) { animation-delay: 0.16s; }
+.hero-texte > :nth-child(4) { animation-delay: 0.24s; }
+.hero-texte > :nth-child(5) { animation-delay: 0.32s; }
+.hero-texte > :nth-child(6) { animation-delay: 0.4s; }
+@keyframes monteEnTete { from { opacity: 0; transform: translateY(16px); } }
+
+.hero-image img { animation: arriveCapture 0.9s 0.15s both cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes arriveCapture { from { opacity: 0; transform: translateY(26px) scale(0.985); } }
+
+/* La marque respire : un halo lent, seul mouvement permanent de la page. */
+.mark { animation: souffle 7s 1.2s ease-in-out infinite; }
+@keyframes souffle {
+  0%, 100% { box-shadow: 0 22px 55px -22px rgba(255, 107, 87, 0.6); }
+  50% { box-shadow: 0 26px 70px -22px rgba(255, 107, 87, 0.85); }
+}
+
+/* Les captures se soulèvent au survol : elles deviennent des objets, pas des images. */
+.section-image img, .essai-image img {
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s;
+}
+.section-image img:hover { transform: translateY(-6px) scale(1.008); }
+.essai-image img:hover { transform: rotate(-1.4deg) translateY(-6px); }
+
+.grille-comparaison article {
+  transition: transform 0.22s, border-color 0.22s, background 0.22s;
+}
+.grille-comparaison article:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.bandeau strong { transition: transform 0.25s; }
+.bandeau div:hover strong { transform: scale(1.06); }
+
+/* ⚠️ Filet de sécurité. La règle globale plus haut coupe transitions et animations en
+   mouvement réduit ; sans ce rappel, tout ce qui est masqué au départ le resterait,
+   faute de transition pour l'en révéler. On rend visible, sans mouvement. */
+@media (prefers-reduced-motion: reduce) {
+  .js .reveal, .js .reveal.vu > *, .hero-texte > *, .hero-image img {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
