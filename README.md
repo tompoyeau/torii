@@ -3,8 +3,8 @@
 > Nom de code du dépôt : `ludo` (crate Rust, package npm). Le produit s'appelle **Torii**,
 > en référence aux portails 鳥居 des sanctuaires japonais — la porte d'entrée vers tes jeux.
 
-Bibliothèque de jeux multi-plateformes — une alternative à Playnite avec une interface
-moderne. Application **Tauri 2 + Vue 3 + TypeScript**, pour Windows.
+Bibliothèque de jeux multi-plateformes : tous tes jeux réunis au même endroit, quel que
+soit le launcher. Application **Tauri 2 + Vue 3 + TypeScript**, pour Windows.
 
 Agrège les jeux **installés** (fichiers locaux) et **possédés** (comptes en ligne),
 y compris toute la **bibliothèque familiale Steam**.
