@@ -4,6 +4,10 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.20.0
+- **Les fiches de jeux perdues à cause d'une coupure réseau reviennent.** Quand la connexion lâchait au mauvais moment, Torii retenait « ce jeu n'existe pas » au lieu de « je n'ai pas pu demander » — et ne rouvrait plus jamais la question : le jeu restait sans description, sans genre et sans jaquette, définitivement. C'est corrigé depuis un moment pour les nouveaux, mais les fiches déjà perdues le restaient. Elles sont maintenant recherchées à nouveau, une fois, au prochain lancement. Les fiches que tu as déjà ne sont pas retéléchargées : seules les manquantes le sont.
+- **Un bouton « Signaler un problème »**, dans Paramètres → À propos & maintenance. Il ouvre un rapport déjà rempli avec ta version de Torii et te rappelle où trouver le journal. Jusqu'ici, rencontrer un bug et savoir où le dire étaient deux choses différentes.
+
 ## 0.19.0
 - **Un jeu acheté puis lancé depuis son launcher n'apparaît plus en double.** Tu achètes un jeu sur Steam, tu le lances dans la foulée : Torii ne l'avait pas encore vu passer et le rangeait dans « Hors launcher ». Le scan suivant ajoutait le vrai jeu Steam à côté — le même jeu, deux fois, définitivement. Torii vérifie maintenant s'il ne s'agit pas d'un jeu tout juste installé avant de conclure, et les doublons déjà présents disparaissent d'eux-mêmes au prochain scan.
 - **« Manuel » et « Hors launcher » ne font plus qu'une catégorie.** Deux entrées dans la barre latérale pour la même idée — un jeu qu'aucun launcher ne fournit — et deux libellés différents sur des cartes voisines. Il n'y en a plus qu'une.
