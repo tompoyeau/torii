@@ -50,14 +50,51 @@ type MetaCache = HashMap<String, Option<IgdbMeta>>;
 
 fn cache_file(dir: &Path) -> PathBuf {
     // Versionné : incrémenter si le schéma `IgdbMeta` ou la stratégie de correspondance change.
+    dir.join("igdb_meta_cache_v2.json")
+}
+
+/// Le cache d'avant la distinction panne / absence (cf. `Reponse`).
+fn cache_file_v1(dir: &Path) -> PathBuf {
     dir.join("igdb_meta_cache_v1.json")
 }
 
-fn load_cache(dir: &Path) -> MetaCache {
-    std::fs::read_to_string(cache_file(dir))
+fn lire(chemin: &Path) -> Option<MetaCache> {
+    std::fs::read_to_string(chemin)
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+}
+
+/// Lit le cache, en réparant au passage les dégâts de l'ancienne version.
+///
+/// 🔑 POURQUOI UNE MIGRATION ET PAS UN SIMPLE CHANGEMENT DE NUMÉRO. Avant que `Reponse`
+/// ne distingue « IGDB a répondu » de « IGDB est injoignable », une coupure réseau était
+/// mémorisée comme une absence : le jeu était marqué `None` et n'était **plus jamais**
+/// recherché — le cache n'expire pas. Le correctif empêche de nouvelles pertes, il ne
+/// répare pas celles déjà inscrites sur le disque des joueurs.
+///
+/// Repartir de zéro (`v2` vide) réparerait tout, mais ferait re-télécharger la totalité
+/// des fiches à tout le monde, d'un coup, à travers le proxy — cher pour lui, long pour
+/// eux, et inutile : les fiches trouvées sont bonnes. Or les dégâts ont tous la même
+/// forme, `Some(None)`. On garde donc **toutes les entrées résolues** et on jette les
+/// seules « introuvables ». Les jeux réellement absents d'IGDB seront cherchés une fois
+/// de plus, puis remémorisés — c'est le prix, et il est payé une seule fois.
+///
+/// ⚠️ `v1` est conservé volontairement : si l'écriture de `v2` est interrompue, la
+/// relecture échoue et la migration se rejoue depuis `v1` au lancement suivant. Sans lui,
+/// ce cas dégénérerait en cache vide, donc exactement le re-téléchargement massif qu'on
+/// cherche à éviter. « Vider le cache » supprime les deux, comme n'importe quel autre.
+fn load_cache(dir: &Path) -> MetaCache {
+    if let Some(cache) = lire(&cache_file(dir)) {
+        return cache;
+    }
+    match lire(&cache_file_v1(dir)) {
+        Some(v1) => {
+            let repare: MetaCache = v1.into_iter().filter(|(_, meta)| meta.is_some()).collect();
+            save_cache(dir, &repare);
+            repare
+        }
+        None => MetaCache::default(),
+    }
 }
 
 fn save_cache(dir: &Path, cache: &MetaCache) {
@@ -601,5 +638,35 @@ mod tests {
         lot[0].1.genre = Some(clean_genre("Role-playing (RPG)"));
         traduire_lot(&mut lot);
         assert_eq!(lot[0].1.genre.as_deref(), Some("Jeu de rôle"));
+    }
+
+    /// La migration `v1` → `v2` doit garder ce qui a été trouvé et oublier les
+    /// « introuvables » — c'est là que sont les fiches perdues par une panne réseau.
+    #[test]
+    fn la_migration_garde_les_fiches_et_oublie_les_introuvables() {
+        let dir = std::env::temp_dir().join(format!("torii-igdb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut v1 = MetaCache::new();
+        v1.insert(
+            "steam:1".into(),
+            Some(IgdbMeta { genre: Some("RPG".into()), ..Default::default() }),
+        );
+        v1.insert("steam:2".into(), None); // peut-être une panne, on ne peut pas savoir
+        std::fs::write(cache_file_v1(&dir), serde_json::to_string(&v1).unwrap()).unwrap();
+
+        let migre = load_cache(&dir);
+        assert_eq!(migre.len(), 1, "seule la fiche trouvée survit");
+        assert!(migre.contains_key("steam:1"));
+        assert!(!migre.contains_key("steam:2"), "l'introuvable doit être re-cherché");
+
+        assert!(cache_file(&dir).exists(), "la v2 est écrite dès la première lecture");
+        assert!(cache_file_v1(&dir).exists(), "la v1 reste, filet en cas d'écriture coupée");
+
+        // Deuxième lecture : on repart de la v2, et l'introuvable ne ressuscite pas.
+        assert_eq!(load_cache(&dir).len(), 1);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
