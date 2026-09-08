@@ -63,10 +63,26 @@ name = "RL_CODE_GLOBAL"
 namespace_id = "2003"
 simple = { limit = 20, period = 60 }
 
-# Ménage nocturne : codes de connexion périmés et sessions abandonnées. Ce sont les deux
-# seules tables dont la taille dépend du nombre de TENTATIVES et non du nombre de comptes.
+# Deux déclencheurs, deux métiers.
+#
+# « 17 4 * * * » — ménage nocturne : codes de connexion périmés et sessions abandonnées.
+# Ce sont les deux seules tables dont la taille dépend du nombre de TENTATIVES et non du
+# nombre de comptes.
+#
+# « 7 * * * * » — relevé du service (table `stats`). Horaire et pas quotidien : les cumuls
+# se moquent de l'heure, mais la présence simultanée non. Relevée une seule fois par nuit
+# elle vaudrait zéro tous les jours ; relevée toutes les heures, on obtient le vrai pic
+# quotidien pour 24 écritures — contre 100 000 offertes.
+#
+# ⚠️ La chaîne horaire est recopiée dans `RELEVE_CRON` (src/index.js), qui s'en sert pour
+# savoir s'il doit AUSSI faire le ménage. Si les deux divergent, le ménage tourne à chaque
+# passage — trois `DELETE` idempotents de plus, sans conséquence. C'est le sens choisi
+# exprès : reconnaître le cron du ménage aurait fait qu'une divergence l'arrête à jamais.
 [triggers]
-crons = ["17 4 * * *"]
+crons = ["17 4 * * *", "7 * * * *"]
 
-# Les secrets (PEPPER, EMAIL_FROM, RESEND_API_KEY, DEV_CODES) ne sont PAS ici :
-# `wrangler secret put`.
+# Les secrets (PEPPER, EMAIL_FROM, RESEND_API_KEY, DEV_CODES, ADMIN_TOKEN) ne sont PAS
+# ici : `wrangler secret put`.
+#
+# ADMIN_TOKEN ouvre le panneau de suivi (`/admin`). Absent, la route se comporte comme
+# une URL inconnue — fermée par défaut, jamais ouverte par défaut.

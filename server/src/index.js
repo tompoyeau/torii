@@ -29,6 +29,7 @@ import {
   rotateCode, suggestions,
 } from "./social.js";
 import { forgetAll, forgetLibrary, libraryIndex, readLibrary, uploadLibrary } from "./library.js";
+import { pageAdmin, releverStats, statsAdmin } from "./admin.js";
 
 /**
  * Plafond absolu du corps d'une requête, toutes routes confondues — la plus généreuse est
@@ -36,6 +37,19 @@ import { forgetAll, forgetLibrary, libraryIndex, readLibrary, uploadLibrary } fr
  * Chaque route resserre ensuite pour son propre usage (cf. `body` dans `lib.js`).
  */
 const MAX_CORPS_API = 4 * 1024 * 1024;
+
+/**
+ * Le déclencheur horaire du relevé, tel qu'écrit dans `wrangler.toml`.
+ *
+ * 🔑 POURQUOI ON RECONNAÎT CELUI-LÀ ET PAS L'AUTRE. `scheduled` doit distinguer deux
+ * passages : l'horaire (relevé seul) et le nocturne (relevé + ménage). Tester « est-ce le
+ * cron du ménage ? » paraissait plus direct — mais si la chaîne cessait un jour de
+ * correspondre, le ménage ne tournerait **plus jamais**, sans que rien ne le signale, et
+ * les tables de tentatives gonfleraient en silence. En reconnaissant l'horaire, la même
+ * divergence fait tourner le ménage trop souvent : trois `DELETE` idempotents de plus par
+ * jour, c'est-à-dire rien. On choisit le sens dans lequel la panne est bénigne.
+ */
+const RELEVE_CRON = "7 * * * *";
 
 /** Routes accessibles sans jeton de session. */
 const PUBLIC = {
@@ -122,6 +136,17 @@ export default {
 
     const key = `${request.method} ${path}`;
 
+    /**
+     * Le panneau de suivi. Il ne passe ni par `PUBLIC` ni par `PRIVATE` parce qu'il ne
+     * s'authentifie pas de la même façon : pas une session de joueur, mais un secret de
+     * serveur (`ADMIN_TOKEN`).
+     *
+     * La page est servie sans jeton — elle ne contient aucune donnée, seulement le code
+     * qui va les demander. Les chiffres, eux, sont derrière le secret.
+     */
+    if (key === "GET /admin") return pageAdmin();
+    if (key === "GET /v1/admin/stats") return await run(statsAdmin, request, env);
+
     const open = PUBLIC[key];
     if (open) {
       /**
@@ -175,7 +200,12 @@ export default {
    * dépend du nombre de TENTATIVES, pas du nombre de comptes.
    */
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(menage(env));
+    // Le relevé tourne à chaque passage — c'est l'horaire qui donne un vrai pic de
+    // présence, qu'une mesure unique à 4 h du matin manquerait. Le ménage, lui, ne
+    // s'exécute pas sur le passage horaire : il supprime, et rien ne se gagne à le faire
+    // douze fois par jour (cf. `RELEVE_CRON` pour le sens du test).
+    ctx.waitUntil(releverStats(env));
+    if (event.cron !== RELEVE_CRON) ctx.waitUntil(menage(env));
   },
 };
 

@@ -127,3 +127,18 @@ CREATE TABLE IF NOT EXISTS libraries (
 );
 -- Pas d'index supplémentaire : la clé primaire commence par `account_id`, donc « les
 -- appareils de cette personne » est déjà une recherche par préfixe.
+
+-- Relevé quotidien du service : une ligne par jour UTC, écrite par le cron. Rien
+-- n'enregistrait l'histoire (la présence expire, les comptes ne font que grossir), donc
+-- on connaissait l'état sans jamais connaître la pente — or c'est la pente qui dit s'il
+-- faut passer au plan payant, et quand. Que des décomptes : jamais qui, jamais quoi.
+CREATE TABLE IF NOT EXISTS stats (
+  jour         TEXT PRIMARY KEY,   -- AAAA-MM-JJ en UTC
+  comptes      INTEGER NOT NULL,
+  biblios      INTEGER NOT NULL,
+  actifs_7j    INTEGER NOT NULL,   -- comptes vus dans les 7 derniers jours
+  -- 🔑 Le PIC du jour, pas la valeur au moment du relevé : c'est lui qui se compare au
+  -- plafond de présence simultanée. Une mesure unique par nuit vaudrait zéro.
+  pic_en_ligne INTEGER NOT NULL,
+  releve_at    INTEGER NOT NULL
+);
