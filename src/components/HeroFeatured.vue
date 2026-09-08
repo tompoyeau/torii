@@ -1,12 +1,33 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
-const { spotlight, launchOrInstall } = useLibrary();
+const { spotlight, launchOrInstall, ensureEnriched } = useLibrary();
 const { openGame } = useUi();
 
 const game = computed(() => spotlight.value[0] ?? null);
+
+/**
+ * 🔑 LA VEDETTE DOIT DEMANDER SES MÉTADONNÉES, COMME LA FICHE.
+ *
+ * L'enrichissement (bannière paysage, genre, description) est **à la demande** : rien
+ * n'est chargé tant qu'on n'ouvre pas une fiche. La vedette, elle, affichait ce qui se
+ * trouvait déjà là — c'est-à-dire rien pour un jeu jamais ouvert. D'où des jeux
+ * parfaitement pourvus chez IGDB, PUBG en tête, qui montraient un dégradé ici et leur
+ * bannière une fois la fiche ouverte : le même jeu, deux résultats, selon qu'on avait
+ * cliqué dessus un jour ou pas.
+ *
+ * Le coût est d'un seul jeu, celui mis en avant. `ensureEnriched` ne s'exécute qu'une
+ * fois par jeu et n'écrase jamais une donnée déjà présente.
+ */
+watch(
+  () => game.value?.id,
+  (id) => {
+    if (id) ensureEnriched(id);
+  },
+  { immediate: true },
+);
 
 /** Lance le jeu (installé) ou l'installe (non installé). */
 function play() {

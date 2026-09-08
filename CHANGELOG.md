@@ -4,6 +4,13 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.20.1
+- **Les jaquettes retrouvent leur netteté.** Une trame diagonale blanche s'était posée sur toutes les vignettes de la bibliothèque — un effet de texture qui devait rester invisible et qui, à la faveur d'une optimisation, s'était mis à se voir. Il redevient imperceptible, sans reperdre la fluidité gagnée.
+- **Le jeu mis en avant a enfin sa bannière.** Un jeu que tu n'avais jamais ouvert s'affichait sur un simple dégradé, alors que sa fiche, elle, montrait bien son image. Les deux vont maintenant chercher la même chose.
+- **Les jeux qu'on ne trouvait pas sous leur nom commercial sont reconnus.** Overwatch 2 en est l'exemple : la base de données ne connaît ce jeu que sous le nom « Overwatch », avec « Overwatch 2 » en second nom — il restait donc sans jaquette ni description, pour toujours. Les seconds noms sont désormais pris en compte, et les fiches manquantes se rattrapent toutes seules au prochain lancement.
+- **Un jeu détecté ne peut plus prendre le nom d'un DLC.** « Overwatch 2: Invasion Bundle » ressemble assez à « Overwatch 2 » pour tromper la reconnaissance automatique : les extensions et bundles en sont maintenant écartés.
+- **Les accents ne font plus échouer la reconnaissance.** « Hadès » et « Hades » désignaient deux jeux différents pour Torii, à une lettre près.
+
 ## 0.20.0
 - **Les fiches de jeux perdues à cause d'une coupure réseau reviennent.** Quand la connexion lâchait au mauvais moment, Torii retenait « ce jeu n'existe pas » au lieu de « je n'ai pas pu demander » — et ne rouvrait plus jamais la question : le jeu restait sans description, sans genre et sans jaquette, définitivement. C'est corrigé depuis un moment pour les nouveaux, mais les fiches déjà perdues le restaient. Elles sont maintenant recherchées à nouveau, une fois, au prochain lancement. Les fiches que tu as déjà ne sont pas retéléchargées : seules les manquantes le sont.
 - **Un bouton « Signaler un problème »**, dans Paramètres → À propos & maintenance. Il ouvre un rapport déjà rempli avec ta version de Torii et te rappelle où trouver le journal. Jusqu'ici, rencontrer un bug et savoir où le dire étaient deux choses différentes.

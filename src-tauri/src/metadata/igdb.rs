@@ -11,6 +11,8 @@
 //!     en masse (jusqu'à 500 jeux/requête).
 //!   - **Autres launchers** : match exact du nom (`where name = "…"`), repli `search`
 //!     avec sélection du nom normalisé (évite les DLC/jeux voisins remontés par `search`).
+//!     La comparaison porte sur le nom principal **et les noms alternatifs** : IGDB
+//!     n'ouvre pas toujours une fiche par titre commercial (cf. `nom_correspond`).
 
 use crate::models::GameDto;
 use serde::{Deserialize, Serialize};
@@ -27,9 +29,9 @@ const STEAM_CHUNK: usize = 400; // < 500 résultats/requête
 const NONSTEAM_BATCH: usize = 12; // taille des lots émis au front
 
 /// Champs IGDB récupérés pour chaque jeu (partagés entre les deux chemins).
-const FIELDS: &str = "fields id, name, genres.name, summary, cover.image_id, \
-artworks.image_id, screenshots.image_id, involved_companies.company.name, \
-involved_companies.developer, first_release_date;";
+const FIELDS: &str = "fields id, name, alternative_names.name, parent_game, genres.name, \
+summary, cover.image_id, artworks.image_id, screenshots.image_id, \
+involved_companies.company.name, involved_companies.developer, first_release_date;";
 
 /// Métadonnées descriptives d'un jeu, issues d'IGDB.
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -50,13 +52,17 @@ type MetaCache = HashMap<String, Option<IgdbMeta>>;
 
 fn cache_file(dir: &Path) -> PathBuf {
     // Versionné : incrémenter si le schéma `IgdbMeta` ou la stratégie de correspondance change.
-    dir.join("igdb_meta_cache_v2.json")
+    dir.join("igdb_meta_cache_v3.json")
 }
 
-/// Le cache d'avant la distinction panne / absence (cf. `Reponse`).
-fn cache_file_v1(dir: &Path) -> PathBuf {
-    dir.join("igdb_meta_cache_v1.json")
-}
+/// Les caches des versions précédentes, du plus récent au plus ancien.
+///
+/// `v1` : d'avant la distinction panne / absence (cf. `Reponse`) — ses « introuvables »
+/// contiennent des pannes réseau prises pour des absences.
+/// `v2` : d'avant la reconnaissance des noms alternatifs (cf. `nom_correspond`) et le
+/// pliage des accents (cf. `norm`) — ses « introuvables » contiennent des jeux qu'IGDB
+/// connaît sous un alias, et d'autres qui ne différaient que par une lettre accentuée.
+const ANCIENS_CACHES: [&str; 2] = ["igdb_meta_cache_v2.json", "igdb_meta_cache_v1.json"];
 
 fn lire(chemin: &Path) -> Option<MetaCache> {
     std::fs::read_to_string(chemin)
@@ -64,37 +70,38 @@ fn lire(chemin: &Path) -> Option<MetaCache> {
         .and_then(|t| serde_json::from_str(&t).ok())
 }
 
-/// Lit le cache, en réparant au passage les dégâts de l'ancienne version.
+/// Lit le cache, en réparant au passage les dégâts des versions précédentes.
 ///
-/// 🔑 POURQUOI UNE MIGRATION ET PAS UN SIMPLE CHANGEMENT DE NUMÉRO. Avant que `Reponse`
-/// ne distingue « IGDB a répondu » de « IGDB est injoignable », une coupure réseau était
-/// mémorisée comme une absence : le jeu était marqué `None` et n'était **plus jamais**
-/// recherché — le cache n'expire pas. Le correctif empêche de nouvelles pertes, il ne
-/// répare pas celles déjà inscrites sur le disque des joueurs.
+/// 🔑 POURQUOI UNE MIGRATION ET PAS UN SIMPLE CHANGEMENT DE NUMÉRO. Un cache qui n'expire
+/// jamais garde ses erreurs pour toujours. Deux fois déjà, un jeu s'est retrouvé marqué
+/// « introuvable » à tort : une coupure réseau prise pour une absence, puis un titre
+/// commercial qu'IGDB ne connaît que comme alias. Dans les deux cas le jeu n'était **plus
+/// jamais** recherché, donc sans jaquette ni description, définitivement.
 ///
-/// Repartir de zéro (`v2` vide) réparerait tout, mais ferait re-télécharger la totalité
-/// des fiches à tout le monde, d'un coup, à travers le proxy — cher pour lui, long pour
-/// eux, et inutile : les fiches trouvées sont bonnes. Or les dégâts ont tous la même
-/// forme, `Some(None)`. On garde donc **toutes les entrées résolues** et on jette les
-/// seules « introuvables ». Les jeux réellement absents d'IGDB seront cherchés une fois
-/// de plus, puis remémorisés — c'est le prix, et il est payé une seule fois.
+/// Repartir de zéro réparerait tout, mais ferait re-télécharger la totalité des fiches à
+/// tout le monde, d'un coup, à travers le proxy — cher pour lui, long pour eux, et inutile
+/// puisque les fiches trouvées sont bonnes. Or les dégâts ont toujours la même forme,
+/// `Some(None)`. On garde donc **toutes les entrées résolues** et on ne jette que les
+/// « introuvables ». Les jeux réellement absents d'IGDB seront cherchés une fois de plus
+/// puis remémorisés : le prix est payé une seule fois, par les seuls jeux concernés.
 ///
-/// ⚠️ `v1` est conservé volontairement : si l'écriture de `v2` est interrompue, la
-/// relecture échoue et la migration se rejoue depuis `v1` au lancement suivant. Sans lui,
-/// ce cas dégénérerait en cache vide, donc exactement le re-téléchargement massif qu'on
-/// cherche à éviter. « Vider le cache » supprime les deux, comme n'importe quel autre.
+/// ⚠️ LES ANCIENS FICHIERS SONT CONSERVÉS, et ce n'est pas de la négligence : si
+/// l'écriture du nouveau est interrompue, sa relecture échoue et la migration se rejoue
+/// depuis le précédent au lancement suivant. Sans eux, ce cas dégénérerait en cache vide —
+/// exactement le re-téléchargement massif qu'on cherche à éviter. « Vider le cache » les
+/// supprime tous, comme n'importe quel autre fichier de cache.
 fn load_cache(dir: &Path) -> MetaCache {
     if let Some(cache) = lire(&cache_file(dir)) {
         return cache;
     }
-    match lire(&cache_file_v1(dir)) {
-        Some(v1) => {
-            let repare: MetaCache = v1.into_iter().filter(|(_, meta)| meta.is_some()).collect();
+    for ancien in ANCIENS_CACHES {
+        if let Some(vieux) = lire(&dir.join(ancien)) {
+            let repare: MetaCache = vieux.into_iter().filter(|(_, meta)| meta.is_some()).collect();
             save_cache(dir, &repare);
-            repare
+            return repare;
         }
-        None => MetaCache::default(),
     }
+    MetaCache::default()
 }
 
 fn save_cache(dir: &Path, cache: &MetaCache) {
@@ -208,11 +215,78 @@ fn unix_to_year(ts: i64) -> i64 {
 }
 
 /// Normalise un nom pour comparaison : minuscules, alphanumérique seul.
+/// Replie une lettre accentuée sur sa forme ASCII. `None` si elle n'en a pas.
+///
+/// Table écrite à la main plutôt qu'une dépendance de normalisation Unicode : on ne
+/// couvre que le latin, c'est-à-dire l'alphabet dans lequel les jeux sont titrés, et
+/// trente lignes valent mieux qu'une caisse de plus à compiler dans le binaire.
+fn plier(c: char) -> Option<&'static str> {
+    Some(match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => "a",
+        'æ' => "ae",
+        'ç' => "c",
+        'è' | 'é' | 'ê' | 'ë' => "e",
+        'ì' | 'í' | 'î' | 'ï' => "i",
+        'ñ' => "n",
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' => "o",
+        'œ' => "oe",
+        'ù' | 'ú' | 'û' | 'ü' => "u",
+        'ý' | 'ÿ' => "y",
+        'ß' => "ss",
+        _ => return None,
+    })
+}
+
+/// Réduit un titre à sa forme comparable : minuscules, sans ponctuation, sans accents.
+///
+/// 🔑 LES ACCENTS COMPTENT, ET C'EST CONTRE-INTUITIF. Les fiches IGDB sont titrées en
+/// anglais, les launchers rendent parfois le titre localisé : « Hadès » côté Epic contre
+/// « Hades » côté IGDB, et la correspondance échouait sur un seul caractère. Le jeu était
+/// alors mémorisé « introuvable » — définitivement, le cache n'expirant pas.
+///
+/// ⚠️ Toucher à cette fonction change la stratégie de correspondance : le cache doit être
+/// versionné en même temps (cf. `cache_file`), sinon les jeux déjà marqués introuvables le
+/// restent et la correction ne sert à personne.
 fn norm(s: &str) -> String {
-    s.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(|c| c.to_lowercase())
-        .collect()
+    let mut out = String::with_capacity(s.len());
+    // Minuscules d'abord : la table de pliage n'a ainsi que les formes minuscules à
+    // couvrir, et « É » passe par « é » sans qu'on ait à l'écrire deux fois.
+    for c in s.chars().flat_map(|c| c.to_lowercase()) {
+        if !c.is_alphanumeric() {
+            continue;
+        }
+        match plier(c) {
+            Some(ascii) => out.push_str(ascii),
+            None => out.push(c),
+        }
+    }
+    out
+}
+
+/// Vrai si `cible` (déjà normalisée) correspond au nom principal du jeu **ou à l'un de
+/// ses noms alternatifs**.
+///
+/// 🔑 POURQUOI LES ALTERNATIFS COMPTENT AUTANT QUE LE NOM PRINCIPAL. IGDB ne crée pas
+/// toujours une entrée par titre commercial : quand une suite remplace son aîné sur les
+/// mêmes serveurs, elle hérite de la fiche existante et l'ancien titre reste le nom
+/// principal. « Overwatch 2 » n'existe ainsi nulle part comme nom de jeu — l'entrée
+/// s'appelle « Overwatch » et porte « Overwatch 2 » en nom alternatif. Ne comparer que le
+/// nom principal condamnait ces jeux : le match exact ne trouvait rien, et la recherche
+/// ne ramenait que des DLC (« Overwatch 2: Invasion Bundle »…), tous écartés à juste
+/// titre. Le jeu restait donc sans jaquette et sans description, définitivement.
+///
+/// ⚠️ Cela n'assouplit RIEN : on exige toujours une égalité stricte après normalisation,
+/// simplement sur un jeu de noms plus complet. Les DLC continuent d'être rejetés.
+fn nom_correspond(g: &Value, cible: &str) -> bool {
+    if g["name"].as_str().map(norm).as_deref() == Some(cible) {
+        return true;
+    }
+    g["alternative_names"]
+        .as_array()
+        .is_some_and(|noms| {
+            noms.iter()
+                .any(|n| n["name"].as_str().map(norm).as_deref() == Some(cible))
+        })
 }
 
 /// Nettoie un titre pour l'insérer dans une chaîne Apicalypse (retire guillemets et ™®©).
@@ -396,10 +470,21 @@ pub fn recognize(guess: &str) -> Option<(String, IgdbMeta)> {
     let mut fallback: Option<&Value> = None;
     for g in &arr {
         let Some(name) = g["name"].as_str() else { continue };
-        let key = norm(name);
-        if key == target {
+        // Le nom alternatif compte ici aussi : un jeu détecté sous son titre commercial
+        // (« Overwatch 2 ») doit tomber sur l'entrée qui le porte en alias.
+        if nom_correspond(g, &target) {
             return Some((name.to_string(), parse_meta(g)));
         }
+        // ⚠️ LE REPLI N'ACCEPTE QUE DES JEUX DE PLEIN DROIT. Il se contente d'une
+        // inclusion d'un nom dans l'autre — assez lâche pour qu'un DLC l'emporte : le
+        // normalisé de « Overwatch 2: Invasion Bundle » CONTIENT celui d'« Overwatch 2 »,
+        // et le jeu détecté aurait pris le nom, la jaquette et la description du DLC.
+        // `parent_game` est le marqueur : vérifié chez IGDB, les jeux de base n'en ont
+        // pas, les DLC, extensions et bundles en portent toujours un.
+        if !g["parent_game"].is_null() {
+            continue;
+        }
+        let key = norm(name);
         if fallback.is_none() && (key.contains(&target) || target.contains(&key)) {
             fallback = Some(g);
         }
@@ -434,7 +519,7 @@ fn name_meta(title: &str) -> Issue {
         Reponse::Corps(Value::Array(arr)) => {
             std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
             for g in &arr {
-                if g["name"].as_str().map(norm).as_deref() == Some(target.as_str()) {
+                if nom_correspond(g, &target) {
                     return Issue::Trouve(parse_meta(g));
                 }
             }
@@ -453,7 +538,7 @@ fn name_meta(title: &str) -> Issue {
         Reponse::Corps(Value::Array(arr)) => {
             std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
             for g in &arr {
-                if g["name"].as_str().map(norm).as_deref() == Some(target.as_str()) {
+                if nom_correspond(g, &target) {
                     return Issue::Trouve(parse_meta(g));
                 }
             }
@@ -640,6 +725,44 @@ mod tests {
         assert_eq!(lot[0].1.genre.as_deref(), Some("Jeu de rôle"));
     }
 
+    /// Un jeu dont le titre commercial n'est qu'un ALIAS chez IGDB doit être reconnu.
+    /// Cas réel : « Overwatch 2 » n'existe pas comme nom de jeu — l'entrée s'appelle
+    /// « Overwatch » et le porte en `alternative_names`. Sans ça, la recherche ne ramène
+    /// que des DLC (« Overwatch 2: Invasion Bundle »), tous écartés, et le jeu reste sans
+    /// jaquette pour toujours.
+    #[test]
+    fn un_nom_alternatif_vaut_le_nom_principal() {
+        let jeu = serde_json::json!({
+            "name": "Overwatch",
+            "alternative_names": [{ "name": "Overwatch II" }, { "name": "Overwatch 2" }],
+        });
+        assert!(nom_correspond(&jeu, &norm("Overwatch 2")), "l'alias doit suffire");
+        assert!(nom_correspond(&jeu, &norm("Overwatch")), "le nom principal aussi");
+
+        // ⚠️ Et rien d'autre : la règle reste une égalité stricte, les DLC sont rejetés.
+        let dlc = serde_json::json!({ "name": "Overwatch 2: Invasion Bundle" });
+        assert!(!nom_correspond(&dlc, &norm("Overwatch 2")), "un DLC ne passe pas");
+
+        // Un jeu sans alias ne doit pas faire échouer la lecture du champ absent.
+        let nu = serde_json::json!({ "name": "Hadès" });
+        assert!(nom_correspond(&nu, &norm("HADÈS")));
+        assert!(!nom_correspond(&nu, &norm("Hadès II")));
+    }
+
+    /// Un titre localisé et son équivalent anglais ne doivent plus se manquer pour un
+    /// accent : les launchers rendent parfois « Hadès » là où IGDB dit « Hades ».
+    #[test]
+    fn les_accents_ne_font_pas_echouer_la_correspondance() {
+        assert_eq!(norm("Hadès"), norm("Hades"));
+        assert_eq!(norm("Pokémon Écarlate"), "pokemonecarlate");
+        assert_eq!(norm("CŒUR & âme"), "coeurame");
+        assert_eq!(norm("Straße"), "strasse");
+        // La casse et la ponctuation restent neutralisées comme avant.
+        assert_eq!(norm("PUBG: Battlegrounds"), "pubgbattlegrounds");
+        // ⚠️ Et deux jeux différents ne deviennent pas égaux au passage.
+        assert_ne!(norm("Hadès"), norm("Hadès II"));
+    }
+
     /// La migration `v1` → `v2` doit garder ce qui a été trouvé et oublier les
     /// « introuvables » — c'est là que sont les fiches perdues par une panne réseau.
     #[test]
@@ -654,7 +777,7 @@ mod tests {
             Some(IgdbMeta { genre: Some("RPG".into()), ..Default::default() }),
         );
         v1.insert("steam:2".into(), None); // peut-être une panne, on ne peut pas savoir
-        std::fs::write(cache_file_v1(&dir), serde_json::to_string(&v1).unwrap()).unwrap();
+        std::fs::write(dir.join(ANCIENS_CACHES[1]), serde_json::to_string(&v1).unwrap()).unwrap();
 
         let migre = load_cache(&dir);
         assert_eq!(migre.len(), 1, "seule la fiche trouvée survit");
@@ -662,7 +785,7 @@ mod tests {
         assert!(!migre.contains_key("steam:2"), "l'introuvable doit être re-cherché");
 
         assert!(cache_file(&dir).exists(), "la v2 est écrite dès la première lecture");
-        assert!(cache_file_v1(&dir).exists(), "la v1 reste, filet en cas d'écriture coupée");
+        assert!(dir.join(ANCIENS_CACHES[1]).exists(), "l'ancien reste, filet en cas d'écriture coupée");
 
         // Deuxième lecture : on repart de la v2, et l'introuvable ne ressuscite pas.
         assert_eq!(load_cache(&dir).len(), 1);

@@ -127,13 +127,19 @@ function toggleFavorite() {
 /* Le fond de carte (rayon, ombre, survol, jaquette, voile, titre) vient de
    `.cover-card` dans style.css — partagé avec la Boutique et la Wishlist. Ici,
    uniquement ce qui est propre à la bibliothèque. */
-/* 🔑 PAS DE `mix-blend-mode` ICI. Il obligeait le navigateur a composer chaque carte
-   contre ce qu'il y a derriere, dans une passe separee — multiplie par le nombre de
-   jaquettes a l'ecran. Sur des rayures blanches a 6 % d'opacite, le mode « overlay »
-   donne un resultat que l'oeil ne distingue pas d'une simple superposition. */
+/* 🔑 PAS DE `mix-blend-mode` ICI. Il obligeait le navigateur à composer chaque carte
+   contre ce qu'il y a derrière, dans une passe séparée — multiplié par le nombre de
+   jaquettes à l'écran. L'économie est réelle et on la garde.
+   ⚠️ MAIS L'OPACITÉ, ELLE, N'ÉTAIT PAS DÉCORATIVE. En retirant le mode de fusion on
+   avait aussi retiré `opacity: 0.6` et remonté l'alpha : les rayures passaient de
+   0,06 × 0,6 = 0,036 à 0,05 effectif, et surtout d'une fusion qui les noyait dans
+   l'image à une superposition franche. Le résultat était un filigrane blanc bien
+   visible sur toutes les jaquettes. L'alpha est donc ramené à la valeur EFFECTIVE
+   d'origine, écrite directement dans la couleur — pas dans une `opacity` séparée, qui
+   créerait une couche de composition et rendrait l'économie précédente. */
 .cover::before {
   content: ""; position: absolute; inset: 0; z-index: 1;
-  background: repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px);
+  background: repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.036) 0 1px, transparent 1px 7px);
 }
 .cover-plat {
   position: absolute; top: 11px; left: 11px; z-index: 2; width: 26px; height: 26px;
