@@ -1,0 +1,56 @@
+Torii — Tous droits réservés
+Copyright (c) 2026 tompoyeau
+
+Le code source de ce projet est PUBLIC, mais il n'est PAS libre : le publier
+sert à ce qu'on puisse le lire, le vérifier et voir comment l'application est
+faite. Cela ne donne aucun droit de réutilisation.
+
+
+CE QUI EST PERMIS
+
+  - Lire, consulter et étudier le code, ici ou après un clone local.
+  - Installer et utiliser Torii, gratuitement, y compris dans un cadre
+    professionnel.
+  - Citer des extraits courts pour en parler, l'expliquer ou le critiquer.
+  - Signaler un problème ou proposer une correction : en proposant une
+    contribution, tu acceptes qu'elle soit intégrée sous cette même licence.
+
+
+CE QUI NE L'EST PAS, SANS ACCORD ÉCRIT PRÉALABLE
+
+  - Copier, redistribuer ou republier tout ou partie du code.
+  - En produire une œuvre dérivée, un fork publié, ou une application
+    concurrente qui en reprend le code.
+  - Réutiliser le nom « Torii », l'icône ou l'identité visuelle du projet.
+  - Vendre, louer ou intégrer ce code dans un produit, gratuit ou payant.
+
+Pour tout usage sortant du cadre ci-dessus, demande : ouvre une issue sur
+https://github.com/tompoyeau/torii/issues
+
+
+PORTÉE
+
+Cette licence couvre le code écrit pour ce projet et ses ressources propres.
+Elle ne couvre PAS les dépendances tierces (npm, cargo), qui restent régies par
+leurs licences respectives, ni les données, jaquettes et métadonnées provenant
+de services extérieurs (Steam, IGDB, et les autres), qui appartiennent à leurs
+détenteurs et sont soumises à leurs propres conditions.
+
+
+ABSENCE DE GARANTIE
+
+Le logiciel est fourni « en l'état », sans garantie d'aucune sorte, expresse ou
+implicite. L'auteur ne peut être tenu responsable d'un dommage, d'une perte de
+données ou d'un préjudice quelconque lié à son utilisation.
+
+
+-------------------------------------------------------------------------------
+
+ENGLISH SUMMARY (the French text above prevails)
+
+All rights reserved. This source code is published for reading and inspection
+only. You may install and use Torii free of charge, but you may not copy,
+modify, redistribute, fork publicly, or reuse any part of this code, its name or
+its visual identity without prior written permission. Third-party dependencies
+and data from external services keep their own licences and terms. Provided
+"as is", without warranty of any kind.

@@ -121,3 +121,9 @@ cargo run --example owned <CLE> # jeux possédés via clé API
 
 Approche des jeux possédés et de la bibliothèque familiale inspirée de
 [Playnite](https://github.com/JosefNemec/Playnite) (open source, MIT).
+
+## Licence
+
+**Tous droits réservés** — voir [LICENSE](LICENSE). Le code est public pour être lu et
+vérifié, pas pour être réutilisé : Torii s'installe et s'utilise librement, mais copier,
+modifier ou redistribuer le code demande un accord écrit préalable.
