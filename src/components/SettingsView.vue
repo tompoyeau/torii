@@ -9,7 +9,7 @@ import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
-import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openLog, setAutostart, setWindowPrefs } from "../lib/tauri";
+import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openExternal, openLog, setAutostart, setWindowPrefs } from "../lib/tauri";
 import PlatformIcon from "./PlatformIcon.vue";
 import AccountsSettings from "./AccountsSettings.vue";
 import ToriiPanel from "./ToriiPanel.vue";
@@ -300,6 +300,35 @@ const updateLabel = computed(() => {
     default: return "Torii est à jour.";
   }
 });
+/**
+ * Ouvre un rapport de problème pré-rempli, hors de l'application.
+ *
+ * 🔑 POURQUOI PRÉ-REMPLIR. Un rapport sans version ni plateforme coûte un aller-retour à
+ * tout le monde, et la moitié n'ont pas de deuxième tour : la personne a déjà désinstallé.
+ * La version part donc toute seule, et le texte rappelle où trouver le journal — dont le
+ * bouton est juste au-dessus, ce qui n'est pas un hasard.
+ *
+ * ⚠️ Les sauts de ligne doivent être encodés (`encodeURIComponent`), sinon GitHub ne reçoit
+ * que la première ligne du corps.
+ */
+function onSignaler() {
+  const corps = [
+    "**Ce qui se passe**", "", "", "**Ce que tu attendais**", "", "",
+    "**Comment le reproduire**", "", "",
+    "---", "",
+    // Hors Tauri (la démo du site), il n'y a pas de version à donner : le dire clairement
+    // vaut mieux qu'un « ? » qui ressemble à un bug, et identifie le rapport pour ce
+    // qu'il est — quelqu'un qui essaie dans un onglet, pas une installation en panne.
+    version.value ? `Torii ${version.value} · Windows` : "Démo web (pas d'installation)",
+    "",
+    "Pense à joindre le journal : Paramètres → À propos & maintenance →",
+    "« Ouvrir le journal », puis copie son contenu ici.",
+  ].join("\n");
+  openExternal(
+    `https://github.com/tompoyeau/torii/issues/new?body=${encodeURIComponent(corps)}`,
+  );
+}
+
 async function onClearCache() {
   if (cacheBusy.value) return;
   cacheBusy.value = true;
@@ -604,6 +633,19 @@ function unhide(id: string) {
                 </span>
               </div>
               <button class="ghost-btn" @click="openLog()">Ouvrir le journal</button>
+            </div>
+
+            <div class="divider" />
+
+            <div class="pref">
+              <div class="row-text">
+                <span class="row-title">Signaler un problème</span>
+                <span class="row-sub">
+                  Ouvre un rapport pré-rempli avec ta version de Torii. C'est le seul moyen
+                  qu'un bug arrive jusqu'à quelqu'un qui peut le corriger.
+                </span>
+              </div>
+              <button class="ghost-btn" @click="onSignaler()">Signaler</button>
             </div>
           </template>
 
