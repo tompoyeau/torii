@@ -74,7 +74,22 @@ function toggleFavorite() {
         @error="onCoverError"
       />
       <span class="cover-plat"><PlatformIcon :platform="game.platform" /></span>
+      <!-- 🔑 MASQUER À GAUCHE, FAVORIS À DROITE — et l'ordre du DOM est l'ordre à l'écran.
+           L'étoile est le seul des deux boutons qui reste affiché hors survol (`.fav.on`
+           garde `opacity: 1`) ; le bouton masquer, lui, est invisible mais occupe quand
+           même sa place. En dernière position, l'étoile épinglée se cale donc dans le
+           coin de la jaquette, au lieu d'en être écartée par un bouton qu'on ne voit
+           pas. -->
       <div v-if="actions" class="cover-actions">
+        <button
+          class="cover-act"
+          :title="game.hidden ? 'Réafficher' : 'Masquer ce jeu'"
+          :aria-label="game.hidden ? 'Réafficher' : 'Masquer ce jeu'"
+          @click.stop="toggleHidden"
+        >
+          <svg v-if="game.hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg>
+        </button>
         <button
           class="cover-act fav"
           :class="{ on: game.favorite }"
@@ -84,15 +99,6 @@ function toggleFavorite() {
           @click.stop="toggleFavorite"
         >
           <svg viewBox="0 0 24 24" :fill="game.favorite ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg>
-        </button>
-        <button
-          class="cover-act"
-          :title="game.hidden ? 'Réafficher' : 'Masquer ce jeu'"
-          :aria-label="game.hidden ? 'Réafficher' : 'Masquer ce jeu'"
-          @click.stop="toggleHidden"
-        >
-          <svg v-if="game.hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
-          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg>
         </button>
       </div>
       <span class="cover-scrim" />
