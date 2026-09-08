@@ -29,6 +29,20 @@ pub fn appdetails(appid: &str) -> Option<GameMeta> {
     }
     let data = entry.get("data")?;
 
+    // ⚠️ UN DLC N'EST PAS UN JEU, ET SA FICHE NE DOIT PAS SE FAIRE PASSER POUR LA SIENNE.
+    // Ce chemin sert aussi à DEVINER le jeu par son titre (cf. `fetch` dans `mod.rs`),
+    // et une recherche peut tomber sur un lot de pièces ou une extension. On refuse donc
+    // les types explicitement autres que « game ».
+    // 🔑 Refus explicite et non liste blanche : si Steam ajoute un type demain, ou si le
+    // champ manque, on garde la métadonnée. Perdre une description parce qu'un champ a
+    // bougé serait pire que le mal qu'on soigne.
+    if matches!(
+        data["type"].as_str(),
+        Some("dlc" | "music" | "video" | "demo" | "hardware" | "mod" | "episode")
+    ) {
+        return None;
+    }
+
     let genre = data["genres"]
         .as_array()
         .map(|arr| {
@@ -130,6 +144,13 @@ pub fn search_appid(title: &str) -> Option<String> {
 }
 
 /// Recherche stricte : ne renvoie un appid que si un résultat a un nom assez proche.
+///
+/// 🔑 DEUX PASSES, ET L'ORDRE COMPTE. Le nom exact est cherché dans TOUTE la liste avant
+/// d'envisager une simple inclusion. En une seule passe, c'est le classement de Steam qui
+/// décidait : un bundle placé avant le jeu l'emportait, parce que « overwatch21000pieces… »
+/// contient « overwatch2 ». La fiche d'Overwatch 2 affichait ainsi la description, l'image
+/// et l'année d'un lot de pièces. L'inclusion reste utile — un titre Steam porte souvent
+/// un suffixe d'édition — mais elle ne doit passer qu'après.
 fn search_exact(title: &str) -> Option<String> {
     let url = format!(
         "https://store.steampowered.com/api/storesearch/?term={}&cc=fr&l=french",
@@ -137,12 +158,24 @@ fn search_exact(title: &str) -> Option<String> {
     );
     let root = get_json(&url)?;
     let want = normalize(title);
-    for item in root["items"].as_array()? {
-        let (Some(id), Some(name)) = (item["id"].as_u64(), item["name"].as_str()) else {
-            continue;
-        };
-        let got = normalize(name);
-        if got == want || (want.len() > 4 && got.contains(&want)) {
+    let items = root["items"].as_array()?;
+
+    let noms = || {
+        items.iter().filter_map(|item| {
+            match (item["id"].as_u64(), item["name"].as_str()) {
+                (Some(id), Some(name)) => Some((id, normalize(name))),
+                _ => None,
+            }
+        })
+    };
+
+    for (id, got) in noms() {
+        if got == want {
+            return Some(id.to_string());
+        }
+    }
+    for (id, got) in noms() {
+        if want.len() > 4 && got.contains(&want) {
             return Some(id.to_string());
         }
     }
