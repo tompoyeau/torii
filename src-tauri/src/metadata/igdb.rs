@@ -9,10 +9,12 @@
 //! Deux chemins de correspondance (validés en test réel, 92 % de couverture) :
 //!   - **Steam** : match EXACT par appid via `external_games` (`external_game_source = 1`),
 //!     en masse (jusqu'à 500 jeux/requête).
-//!   - **Autres launchers** : match exact du nom (`where name = "…"`), repli `search`
-//!     avec sélection du nom normalisé (évite les DLC/jeux voisins remontés par `search`).
-//!     La comparaison porte sur le nom principal **et les noms alternatifs** : IGDB
-//!     n'ouvre pas toujours une fiche par titre commercial (cf. `nom_correspond`).
+//!   - **Autres launchers** : match exact sur le nom **ou un nom alternatif**
+//!     (`where name ~ "…" | alternative_names.name ~ "…"`), repli `search` avec sélection
+//!     du nom normalisé (évite les DLC/jeux voisins remontés par `search`).
+//!     🔑 L'alias est INTERROGÉ, pas seulement comparé : IGDB n'ouvre pas toujours une
+//!     fiche par titre commercial, et sa recherche ne remonte pas l'entrée qui porte
+//!     l'alias — « Overwatch 2 » ne ramène que des DLC (cf. `name_meta`).
 
 use crate::models::GameDto;
 use serde::{Deserialize, Serialize};
@@ -52,17 +54,23 @@ type MetaCache = HashMap<String, Option<IgdbMeta>>;
 
 fn cache_file(dir: &Path) -> PathBuf {
     // Versionné : incrémenter si le schéma `IgdbMeta` ou la stratégie de correspondance change.
-    dir.join("igdb_meta_cache_v3.json")
+    dir.join("igdb_meta_cache_v4.json")
 }
 
 /// Les caches des versions précédentes, du plus récent au plus ancien.
 ///
 /// `v1` : d'avant la distinction panne / absence (cf. `Reponse`) — ses « introuvables »
 /// contiennent des pannes réseau prises pour des absences.
-/// `v2` : d'avant la reconnaissance des noms alternatifs (cf. `nom_correspond`) et le
-/// pliage des accents (cf. `norm`) — ses « introuvables » contiennent des jeux qu'IGDB
-/// connaît sous un alias, et d'autres qui ne différaient que par une lettre accentuée.
-const ANCIENS_CACHES: [&str; 2] = ["igdb_meta_cache_v2.json", "igdb_meta_cache_v1.json"];
+/// `v2` : d'avant le pliage des accents (cf. `norm`) — ses « introuvables » contiennent
+/// des jeux qui ne différaient de leur fiche que par une lettre accentuée.
+/// `v3` : d'avant l'INTERROGATION des noms alternatifs. La v3 savait déjà les comparer,
+/// mais IGDB ne les renvoyait pas : ses « introuvables » contiennent tous les jeux qu'IGDB
+/// ne connaît que sous un alias, Overwatch 2 en tête.
+const ANCIENS_CACHES: [&str; 3] = [
+    "igdb_meta_cache_v3.json",
+    "igdb_meta_cache_v2.json",
+    "igdb_meta_cache_v1.json",
+];
 
 fn lire(chemin: &Path) -> Option<MetaCache> {
     std::fs::read_to_string(chemin)
@@ -513,8 +521,19 @@ fn name_meta(title: &str) -> Issue {
     }
     let target = norm(&clean);
 
-    // 1) Correspondance exacte du nom (précis quand la casse coïncide).
-    let body = format!("{FIELDS} where name = \"{clean}\"; limit 3;");
+    // 1) Correspondance exacte du nom **ou d'un nom alternatif**, insensible à la casse.
+    //
+    // 🔑 POURQUOI L'ALIAS EST INTERROGÉ ICI, ET PAS SEULEMENT COMPARÉ PLUS BAS. Comparer
+    // les alias des résultats ne sert à rien s'ils n'y sont pas : `search "Overwatch 2"`
+    // renvoie quinze DLC et **jamais** l'entrée 125174, qui porte pourtant cet alias.
+    // Vérifié contre l'API. Il faut donc le DEMANDER à IGDB, pas l'espérer.
+    //
+    // ⚠️ `~` est un égal insensible à la casse, PAS un « contient » : « overwatch » ne
+    // ramène que les entrées nommées ainsi, aucun bundle. Vérifié aussi — c'est ce qui
+    // permet d'élargir la recherche sans rouvrir la porte aux DLC.
+    let body = format!(
+        "{FIELDS} where name ~ \"{clean}\" | alternative_names.name ~ \"{clean}\"; limit 5;"
+    );
     match query("games", &body) {
         Reponse::Corps(Value::Array(arr)) => {
             std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
@@ -777,7 +796,7 @@ mod tests {
             Some(IgdbMeta { genre: Some("RPG".into()), ..Default::default() }),
         );
         v1.insert("steam:2".into(), None); // peut-être une panne, on ne peut pas savoir
-        std::fs::write(dir.join(ANCIENS_CACHES[1]), serde_json::to_string(&v1).unwrap()).unwrap();
+        std::fs::write(dir.join(ANCIENS_CACHES[2]), serde_json::to_string(&v1).unwrap()).unwrap();
 
         let migre = load_cache(&dir);
         assert_eq!(migre.len(), 1, "seule la fiche trouvée survit");
@@ -785,7 +804,7 @@ mod tests {
         assert!(!migre.contains_key("steam:2"), "l'introuvable doit être re-cherché");
 
         assert!(cache_file(&dir).exists(), "la v2 est écrite dès la première lecture");
-        assert!(dir.join(ANCIENS_CACHES[1]).exists(), "l'ancien reste, filet en cas d'écriture coupée");
+        assert!(dir.join(ANCIENS_CACHES[2]).exists(), "l'ancien reste, filet en cas d'écriture coupée");
 
         // Deuxième lecture : on repart de la v2, et l'introuvable ne ressuscite pas.
         assert_eq!(load_cache(&dir).len(), 1);

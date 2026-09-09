@@ -4,6 +4,9 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
 Ajoute une section en tête avant de tagger une nouvelle version.
 
+## 0.20.3
+- **Overwatch 2 retrouve sa fiche : jaquette, description, captures et genre.** Les deux versions précédentes avaient chacune écarté une mauvaise réponse sans réussir à trouver la bonne. La raison : la base de données ne connaît ce jeu que sous le nom « Overwatch », et sa recherche ne remonte jamais cette fiche-là quand on lui demande « Overwatch 2 » — elle ne renvoie que des extensions. Torii demande donc maintenant explicitement les autres noms d'un jeu, au lieu d'espérer les voir passer. Les jeux restés sans fiche pour cette raison se rattrapent tout seuls au prochain lancement.
+
 ## 0.20.2
 - **Plus aucune trame sur les jaquettes.** La version précédente avait ramené ces traits blancs à leur discrétion d'origine ; ils restaient visibles pour qui les avait remarqués. Ils sont simplement retirés : une jaquette est une image finie, elle n'a pas besoin qu'on la retouche.
 - **Les fiches qui affichaient un DLC sont enfin réparées.** La 0.20.1 corrigeait bien la recherche, mais la mauvaise réponse restait mémorisée sur ton disque — Overwatch 2 continuait donc de montrer une description de lot de pièces. Les fiches devinées à partir du titre sont maintenant reprises ; celles de Steam et GOG, qui ne peuvent pas se tromper de jeu, sont conservées telles quelles.
