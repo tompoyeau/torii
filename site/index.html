@@ -15,7 +15,7 @@
     <title>Torii — regroupe tes jeux Steam, Epic et GOG dans une seule bibliothèque</title>
     <meta
       name="description"
-      content="Torii réunit Steam, Epic, GOG, Ubisoft, EA et Battle.net dans une seule bibliothèque de jeux, avec jaquettes, temps de jeu et présence de tes amis. Gratuit, en français, pour Windows 10 et 11."
+      content="Torii réunit Steam, Epic, GOG, Ubisoft, EA et Battle.net dans une seule bibliothèque, et compare le prix d'un jeu chez les boutiques officielles comme chez les revendeurs. Gratuit, en français, pour Windows 10 et 11."
     />
     <link rel="canonical" href="https://torii-app.fr/" />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -48,7 +48,7 @@
         "inLanguage": "fr",
         "url": "https://torii-app.fr/",
         "downloadUrl": "https://github.com/tompoyeau/torii/releases/latest",
-        "softwareVersion": "0.19.0",
+        "softwareVersion": "0.20.3",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
         "description": "Bibliothèque de jeux unifiée pour Windows : Steam, Epic, GOG, Ubisoft, EA, Battle.net et les jeux hors launcher, avec le partage familial Steam, la présence des amis et un comparateur de prix."
       }
@@ -124,8 +124,12 @@
       <!-- Les chiffres du produit, en une ligne : ce que la page doit prouver d'emblée. -->
       <section class="bandeau" aria-label="En bref">
         <div><strong>8</strong><span>launchers réunis</span></div>
+        <!-- ⚠️ Pas de nombre de vendeurs ici : le « 60+ » du code vient d'un commentaire,
+             pas d'une source vérifiable, et une page publique n'est pas l'endroit où
+             avancer un chiffre qu'on ne peut pas défendre. -->
+        <div><strong>€</strong><span>prix comparés avant d'acheter</span></div>
         <div><strong>0 €</strong><span>gratuit, sans compte obligatoire</span></div>
-        <div><strong>~5 Mo</strong><span>application native, pas un navigateur</span></div>
+        <div><strong>~5 Mo</strong><span>application native, pas un onglet</span></div>
         <div><strong>FR</strong><span>interface et descriptions en français</span></div>
       </section>
 
@@ -194,7 +198,60 @@
         </div>
       </section>
 
-      <section class="section inverse" id="hors-launcher">
+      <section class="section inverse" id="prix">
+        <div class="section-texte">
+          <p class="sur-titre">Avant d'acheter</p>
+          <h2>Le même jeu, à son meilleur prix</h2>
+          <p>
+            Une boutique est intégrée à Torii. Pour un jeu donné, elle compare ce que
+            demandent <strong>des dizaines de vendeurs</strong> — les boutiques officielles des
+            launchers comme les revendeurs de clés — et place le
+            <em>plus bas prix jamais atteint</em> à côté du prix du jour. Tu sais donc si
+            l'offre est vraiment bonne, pas seulement si elle affiche une remise.
+          </p>
+          <ul class="puces">
+            <li>Des prix en euros, pas une conversion approximative</li>
+            <li>La disponibilité affichée : une bonne affaire en rupture n'en est pas une</li>
+            <li>Ta wishlist Steam suivie, avec une alerte quand un jeu tombe au plus bas</li>
+            <li>Les vendeurs qui ne t'inspirent pas confiance, tu les masques</li>
+          </ul>
+          <p class="fin">
+            <strong>Torii ne vend rien</strong> et ne prend rien au passage : le bouton
+            d'achat ouvre la boutique du vendeur, chez lui. Et les jeux prêtés par ta
+            famille via le partage Steam apparaissent aussi — inutile d'acheter ce que tu
+            peux déjà lancer.
+          </p>
+        </div>
+
+        <!-- La courbe d'un prix, son plus bas marqué, et les revendeurs comparés. -->
+        <div class="section-illu">
+          <div class="illu-cadre">
+            <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
+              <rect x="30" y="24" width="400" height="252" rx="16" class="cadre" />
+              <path
+                class="aire"
+                d="M56 92 110 76 164 108 218 96 272 130 326 176 380 148 404 160 404 194 56 194Z"
+              />
+              <path class="accent" d="M56 92 110 76 164 108 218 96 272 130 326 176 380 148 404 160" />
+              <path class="fin" d="M56 194h348" />
+              <path class="fin" d="M326 128v34" />
+              <rect x="292" y="100" width="68" height="26" rx="13" class="cadre" />
+              <rect x="304" y="109" width="44" height="8" rx="4" class="plein" opacity="0.85" />
+              <circle class="aire" cx="326" cy="176" r="16" />
+              <circle class="plein" cx="326" cy="176" r="6" />
+
+              <circle class="cadre" cx="64" cy="222" r="9" />
+              <rect x="84" y="216" width="118" height="11" rx="5.5" class="barre" />
+              <rect x="330" y="216" width="74" height="11" rx="5.5" class="plein" />
+              <circle class="cadre" cx="64" cy="252" r="9" />
+              <rect x="84" y="246" width="96" height="11" rx="5.5" class="barre-faible" />
+              <rect x="344" y="246" width="60" height="11" rx="5.5" class="barre-faible" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="hors-launcher">
         <div class="section-texte">
           <p class="sur-titre">Sans launcher, ni raccourci à créer</p>
           <h2>Même les jeux hors launcher</h2>
@@ -245,7 +302,7 @@
         </div>
       </section>
 
-      <section class="section" id="amis">
+      <section class="section inverse" id="amis">
         <div class="section-texte">
           <p class="sur-titre">Jouer ensemble</p>
           <h2>Tes amis, tous launchers confondus</h2>
@@ -313,7 +370,7 @@
         </div>
       </section>
 
-      <section class="section inverse" id="commun">
+      <section class="section" id="commun">
         <div class="section-texte">
           <p class="sur-titre">À quoi on joue ce soir ?</p>
           <h2>Ce que vous avez en commun</h2>
@@ -367,7 +424,7 @@
         </div>
       </section>
 
-      <section class="section" id="fiche">
+      <section class="section inverse" id="fiche">
         <div class="section-texte">
           <p class="sur-titre">Chaque jeu, sa page</p>
           <h2>Plus qu'une vignette dans une grille</h2>
@@ -422,48 +479,6 @@
         </div>
       </section>
 
-      <section class="section inverse" id="prix">
-        <div class="section-texte">
-          <p class="sur-titre">Avant d'acheter</p>
-          <h2>Le bon prix, et le partage familial</h2>
-          <p>
-            Une boutique intégrée compare les prix entre revendeurs et suit ta wishlist
-            Steam pour te dire quand un jeu tombe à son plus bas historique.
-          </p>
-          <p class="fin">
-            Et les jeux prêtés par ta famille via le partage Steam apparaissent aussi,
-            clairement identifiés — sans jamais se faire passer pour des jeux que tu
-            possèdes.
-          </p>
-        </div>
-
-        <!-- La courbe d'un prix, son plus bas marqué, et les revendeurs comparés. -->
-        <div class="section-illu">
-          <div class="illu-cadre">
-            <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
-              <rect x="30" y="24" width="400" height="252" rx="16" class="cadre" />
-              <path
-                class="aire"
-                d="M56 92 110 76 164 108 218 96 272 130 326 176 380 148 404 160 404 194 56 194Z"
-              />
-              <path class="accent" d="M56 92 110 76 164 108 218 96 272 130 326 176 380 148 404 160" />
-              <path class="fin" d="M56 194h348" />
-              <path class="fin" d="M326 128v34" />
-              <rect x="292" y="100" width="68" height="26" rx="13" class="cadre" />
-              <rect x="304" y="109" width="44" height="8" rx="4" class="plein" opacity="0.85" />
-              <circle class="aire" cx="326" cy="176" r="16" />
-              <circle class="plein" cx="326" cy="176" r="6" />
-
-              <circle class="cadre" cx="64" cy="222" r="9" />
-              <rect x="84" y="216" width="118" height="11" rx="5.5" class="barre" />
-              <rect x="330" y="216" width="74" height="11" rx="5.5" class="plein" />
-              <circle class="cadre" cx="64" cy="252" r="9" />
-              <rect x="84" y="246" width="96" height="11" rx="5.5" class="barre-faible" />
-              <rect x="344" y="246" width="60" height="11" rx="5.5" class="barre-faible" />
-            </svg>
-          </div>
-        </div>
-      </section>
 
       <!--
         Cette section porte les termes que les gens tapent — « regrouper ses jeux »,
@@ -518,10 +533,10 @@
               <path d="M20.6 12.6l-8 8a2 2 0 0 1-2.8 0l-6.2-6.2a2 2 0 0 1-.6-1.4V5a2 2 0 0 1 2-2h7.9a2 2 0 0 1 1.4.6l6.3 6.2a2 2 0 0 1 0 2.8z" />
               <circle cx="7.6" cy="7.6" r="1.5" />
             </svg>
-            <h3>Comparateur de prix</h3>
+            <h3>Comparateur de prix intégré</h3>
             <p>
-              Wishlist Steam suivie, prix comparés entre revendeurs, et alerte quand un jeu
-              atteint son plus bas historique.
+              Les vendeurs comparés pour un même jeu, le plus bas prix historique en
+              regard, la wishlist Steam suivie et une alerte quand un titre y retombe.
             </p>
           </article>
           <article>
