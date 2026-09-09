@@ -133,20 +133,14 @@ function toggleFavorite() {
 /* Le fond de carte (rayon, ombre, survol, jaquette, voile, titre) vient de
    `.cover-card` dans style.css — partagé avec la Boutique et la Wishlist. Ici,
    uniquement ce qui est propre à la bibliothèque. */
-/* 🔑 PAS DE `mix-blend-mode` ICI. Il obligeait le navigateur à composer chaque carte
-   contre ce qu'il y a derrière, dans une passe séparée — multiplié par le nombre de
-   jaquettes à l'écran. L'économie est réelle et on la garde.
-   ⚠️ MAIS L'OPACITÉ, ELLE, N'ÉTAIT PAS DÉCORATIVE. En retirant le mode de fusion on
-   avait aussi retiré `opacity: 0.6` et remonté l'alpha : les rayures passaient de
-   0,06 × 0,6 = 0,036 à 0,05 effectif, et surtout d'une fusion qui les noyait dans
-   l'image à une superposition franche. Le résultat était un filigrane blanc bien
-   visible sur toutes les jaquettes. L'alpha est donc ramené à la valeur EFFECTIVE
-   d'origine, écrite directement dans la couleur — pas dans une `opacity` séparée, qui
-   créerait une couche de composition et rendrait l'économie précédente. */
-.cover::before {
-  content: ""; position: absolute; inset: 0; z-index: 1;
-  background: repeating-linear-gradient(125deg, rgba(255, 255, 255, 0.036) 0 1px, transparent 1px 7px);
-}
+/* 🔑 PAS DE VOILE RAYÉ SUR LES JAQUETTES, ET C'EST DÉFINITIF.
+   Un `.cover::before` posait ici une trame diagonale blanche, censée donner du grain.
+   Elle a d'abord été rendue trop visible par une optimisation qui lui a retiré son mode
+   de fusion, puis ramenée à son opacité d'origine — mais la vraie réponse était ailleurs :
+   personne n'en voulait. Une texture décorative sur l'illustration d'un jeu se remarque
+   toujours à la longue, et une jaquette est déjà une image finie ; on ne la retouche pas.
+   ⚠️ Ne pas la réintroduire « en plus discret » : c'est le chemin qu'on vient de parcourir
+   deux fois. Bonus, une règle et une couche de composition en moins par carte. */
 .cover-plat {
   position: absolute; top: 11px; left: 11px; z-index: 2; width: 26px; height: 26px;
   border-radius: 8px; display: grid; place-items: center;
