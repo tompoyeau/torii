@@ -1,3 +1,4 @@
+import { etiquetteIntl, t } from "../i18n";
 /** Hash déterministe simple (djb2) pour dériver une couleur stable par jeu. */
 function hash(seed: string): number {
   let h = 5381;
@@ -34,14 +35,26 @@ export function avatarFictif(initiale: string, de: string, vers: string): string
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-/** Formate un horodatage Unix (secondes) en libellé relatif court en français. */
+/**
+ * Formate un horodatage Unix (secondes) en libellé relatif court : « il y a 3 j »,
+ * « hier », « 2 wk. ago ».
+ *
+ * 🔑 `Intl.RelativeTimeFormat` et non plus un gabarit « il y a … » : l'anglais place le
+ * nombre devant (« 3 days ago ») et dit « yesterday » là où le français dit « hier ».
+ * `numeric: "auto"` donne ces mots-là tout seul pour la veille.
+ *
+ * ⚠️ Le libellé est calculé au chargement de la bibliothèque et rangé dans le jeu
+ * (`lastPlayed`) : changer de langue en cours de session ne le retraduit pas. C'est la
+ * même limite que pour les descriptions, et le même remède — le redémarrage proposé
+ * dans les Paramètres.
+ */
 export function relativeTime(unixSeconds: number): string {
   const diff = Date.now() / 1000 - unixSeconds;
   const day = 86400;
-  if (diff < 3600) return "il y a moins d'une heure";
-  if (diff < day) return `il y a ${Math.round(diff / 3600)} h`;
-  if (diff < 2 * day) return "hier";
-  if (diff < 7 * day) return `il y a ${Math.round(diff / day)} j`;
-  if (diff < 30 * day) return `il y a ${Math.round(diff / (7 * day))} sem`;
-  return `il y a ${Math.round(diff / (30 * day))} mois`;
+  if (diff < 3600) return t("bibliotheque.temps.moinsDUneHeure");
+  const rtf = new Intl.RelativeTimeFormat(etiquetteIntl.value, { style: "short", numeric: "auto" });
+  if (diff < day) return rtf.format(-Math.round(diff / 3600), "hour");
+  if (diff < 7 * day) return rtf.format(-Math.max(1, Math.round(diff / day)), "day");
+  if (diff < 30 * day) return rtf.format(-Math.round(diff / (7 * day)), "week");
+  return rtf.format(-Math.round(diff / (30 * day)), "month");
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
+import { t } from "../i18n";
 import { useUi } from "../composables/useUi";
 import { useLibrary } from "../composables/useLibrary";
 import { useTorii } from "../composables/useTorii";
@@ -48,18 +49,19 @@ interface AccountDef {
   isConnected: (s: Settings) => boolean;
 }
 
-const ACCOUNTS: AccountDef[] = [
+/**
+ * ⚠️ `computed` : les textes des cartes doivent suivre la langue. Les clés et les
+ * fonctions de connexion, elles, ne changent pas — `state` reste indexé par `key`.
+ */
+const ACCOUNTS = computed<AccountDef[]>(() => [
   {
     key: "steam",
     name: "Steam",
     short: "Steam",
     color: "var(--steam)",
-    hint:
-      "Connecte-toi à ton compte Steam pour importer toute ta bibliothèque " +
-      "(installés ou non) et ta wishlist. Aucune clé, aucun mot de passe transmis à Torii — " +
-      "tu te connectes dans la fenêtre officielle de Steam.",
-    syncedHint: "Bibliothèque synchronisée.",
-    connectLabel: "Se connecter avec Steam",
+    hint: t("comptes.launchers.aideSteam"),
+    syncedHint: t("comptes.launchers.synchronisee"),
+    connectLabel: t("comptes.launchers.seConnecter", { nom: "Steam" }),
     connect: connectSteam,
     disconnect: disconnectSteam,
     isConnected: (s) => s.steamConnected,
@@ -69,12 +71,9 @@ const ACCOUNTS: AccountDef[] = [
     name: "Epic Games",
     short: "Epic",
     color: "var(--epic)",
-    hint:
-      "Connecte-toi à ton compte Epic pour importer toute ta bibliothèque " +
-      "(installés ou non). Aucun mot de passe transmis à Torii — tu te " +
-      "connectes dans la fenêtre officielle d'Epic Games.",
-    syncedHint: "Bibliothèque Epic synchronisée.",
-    connectLabel: "Se connecter avec Epic",
+    hint: t("comptes.launchers.aide", { nom: "Epic", fenetre: t("comptes.launchers.fenetreEpic") }),
+    syncedHint: t("comptes.launchers.synchroniseeDe", { nom: "Epic" }),
+    connectLabel: t("comptes.launchers.seConnecter", { nom: "Epic" }),
     connect: connectEpic,
     disconnect: disconnectEpic,
     isConnected: (s) => s.epicConnected,
@@ -84,12 +83,9 @@ const ACCOUNTS: AccountDef[] = [
     name: "EA",
     short: "EA",
     color: "var(--ea)",
-    hint:
-      "Connecte-toi à ton compte EA pour importer toute ta bibliothèque " +
-      "(installés ou non). Aucun mot de passe transmis à Torii — tu te " +
-      "connectes dans la fenêtre officielle d'EA.",
-    syncedHint: "Bibliothèque EA synchronisée.",
-    connectLabel: "Se connecter avec EA",
+    hint: t("comptes.launchers.aide", { nom: "EA", fenetre: t("comptes.launchers.fenetreEa") }),
+    syncedHint: t("comptes.launchers.synchroniseeDe", { nom: "EA" }),
+    connectLabel: t("comptes.launchers.seConnecter", { nom: "EA" }),
     resyncReconnects: true,
     connect: connectEa,
     disconnect: disconnectEa,
@@ -100,12 +96,9 @@ const ACCOUNTS: AccountDef[] = [
     name: "Battle.net",
     short: "Battle.net",
     color: "var(--battlenet)",
-    hint:
-      "Connecte-toi à ton compte Battle.net pour importer ta bibliothèque " +
-      "Blizzard. Aucun mot de passe transmis à Torii — tu te connectes dans la " +
-      "fenêtre officielle de Battle.net.",
-    syncedHint: "Bibliothèque Battle.net synchronisée.",
-    connectLabel: "Se connecter avec Battle.net",
+    hint: t("comptes.launchers.aideBattlenet"),
+    syncedHint: t("comptes.launchers.synchroniseeDe", { nom: "Battle.net" }),
+    connectLabel: t("comptes.launchers.seConnecter", { nom: "Battle.net" }),
     resyncReconnects: true,
     connect: connectBattlenet,
     disconnect: disconnectBattlenet,
@@ -116,17 +109,14 @@ const ACCOUNTS: AccountDef[] = [
     name: "GOG",
     short: "GOG",
     color: "var(--gog)",
-    hint:
-      "Connecte-toi à ton compte GOG pour importer toute ta bibliothèque " +
-      "(installés ou non). Aucun mot de passe transmis à Torii — tu te " +
-      "connectes dans la fenêtre officielle de GOG.",
-    syncedHint: "Bibliothèque GOG synchronisée.",
-    connectLabel: "Se connecter avec GOG",
+    hint: t("comptes.launchers.aide", { nom: "GOG", fenetre: t("comptes.launchers.fenetreGog") }),
+    syncedHint: t("comptes.launchers.synchroniseeDe", { nom: "GOG" }),
+    connectLabel: t("comptes.launchers.seConnecter", { nom: "GOG" }),
     connect: connectGog,
     disconnect: disconnectGog,
     isConnected: (s) => s.gogConnected,
   },
-];
+]);
 
 /** État d'affichage d'une carte. */
 interface AccountState {
@@ -137,7 +127,7 @@ interface AccountState {
 
 const state = reactive<Record<string, AccountState>>(
   Object.fromEntries(
-    ACCOUNTS.map((a) => [a.key, { connected: false, busy: false, message: "" }]),
+    ACCOUNTS.value.map((a) => [a.key, { connected: false, busy: false, message: "" }]),
   ),
 );
 
@@ -145,7 +135,7 @@ const showAdvanced = ref(false);
 const steamKey = ref("");
 
 function applySettings(s: Settings) {
-  for (const a of ACCOUNTS) state[a.key].connected = a.isConnected(s);
+  for (const a of ACCOUNTS.value) state[a.key].connected = a.isConnected(s);
 }
 
 onMounted(async () => {
@@ -156,14 +146,14 @@ onMounted(async () => {
 async function onConnect(a: AccountDef) {
   const st = state[a.key];
   st.busy = true;
-  st.message = `Connexion… une fenêtre ${a.short} s'est ouverte, connecte-toi.`;
+  st.message = t("comptes.launchers.connexion", { nom: a.short });
   try {
     const s = await a.connect();
     applySettings(s);
     // Steam vient d'être connecté : si un compte Torii est déjà ouvert, le SteamID doit
     // y remonter maintenant, pas au prochain démarrage.
     if (a.key === "steam") void reconcilierSteam();
-    st.message = `Compte ${a.short} connecté — actualisation de la bibliothèque…`;
+    st.message = t("comptes.launchers.connecte", { nom: a.short });
     reload();
     // On ferme pour laisser voir la progression (barre du haut).
     closeSettings();
@@ -179,7 +169,7 @@ function onResync(a: AccountDef) {
     void onConnect(a);
     return;
   }
-  state[a.key].message = "Resynchronisation…";
+  state[a.key].message = t("comptes.launchers.resynchronisation");
   reload();
   closeSettings();
 }
@@ -190,7 +180,7 @@ async function onDisconnect(a: AccountDef) {
   const s = await a.disconnect();
   applySettings(s);
   if (a.key === "steam") steamKey.value = "";
-  st.message = `Compte ${a.short} déconnecté.`;
+  st.message = t("comptes.launchers.deconnecte", { nom: a.short });
   st.busy = false;
   reload();
 }
@@ -204,10 +194,10 @@ async function onSaveKey() {
   if (s) {
     applySettings(s);
     steamKey.value = "";
-    st.message = "Clé enregistrée — actualisation…";
+    st.message = t("comptes.launchers.cleEnregistree");
     reload();
   } else {
-    st.message = "Indisponible hors de l'application Torii.";
+    st.message = t("comptes.launchers.horsApplication");
   }
 }
 </script>
@@ -215,7 +205,7 @@ async function onSaveKey() {
 <template>
   <div>
     <section class="group">
-      <div class="group-label">Comptes — jeux possédés (installés ou non)</div>
+      <div class="group-label">{{ t("comptes.launchers.groupe") }}</div>
 
       <LauncherAccount
         v-for="a in ACCOUNTS"
@@ -227,7 +217,7 @@ async function onSaveKey() {
         :hint="a.hint"
         :synced-hint="a.syncedHint"
         :connect-label="a.connectLabel"
-        :resync-busy-label="a.resyncReconnects ? 'Actualisation…' : undefined"
+        :resync-busy-label="a.resyncReconnects ? t('comptes.launchers.actualisation') : undefined"
         :message="state[a.key].message"
         @connect="onConnect(a)"
         @resync="onResync(a)"
@@ -236,13 +226,13 @@ async function onSaveKey() {
         <!-- Steam : connexion par clé API, chemin avancé replié. -->
         <template v-if="a.key === 'steam'" #extra>
           <button class="advanced-toggle" @click="showAdvanced = !showAdvanced">
-            {{ showAdvanced ? "▾" : "▸" }} Utiliser une clé API (avancé)
+            {{ showAdvanced ? "▾" : "▸" }} {{ t("comptes.launchers.cleAvancee") }}
           </button>
           <div v-if="showAdvanced" class="row advanced">
             <input
               v-model="steamKey"
               type="password"
-              placeholder="Clé API Steam (32 caractères)"
+              :placeholder="t('comptes.launchers.cleChamp')"
               autocomplete="off"
               @keyup.enter="onSaveKey"
             />
@@ -251,14 +241,14 @@ async function onSaveKey() {
               :disabled="state.steam.busy || !steamKey.trim()"
               @click="onSaveKey"
             >
-              Enregistrer
+              {{ t("comptes.launchers.enregistrer") }}
             </button>
           </div>
         </template>
       </LauncherAccount>
     </section>
 
-    <p class="footnote">Les identifiants sont stockés localement, sur cette machine uniquement.</p>
+    <p class="footnote">{{ t("comptes.launchers.stockage") }}</p>
   </div>
 </template>
 

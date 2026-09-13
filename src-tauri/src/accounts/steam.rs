@@ -433,8 +433,11 @@ pub struct GameAchievements {
 /// Nécessite le cookie de session (couvre aussi les profils privés, c'est le nôtre).
 /// `None` = jeu sans succès ou page indisponible.
 pub fn achievements(steam_id: &str, appid: u64, cookie: &str) -> Option<GameAchievements> {
+    // ⚠️ Les noms et descriptions de succès sont traduits par Steam : ils suivent donc la
+    // langue de l'interface, comme les descriptions de jeux.
+    let langue = crate::locale::steam_langue();
     let url = format!(
-        "https://steamcommunity.com/profiles/{steam_id}/stats/{appid}/achievements/?l=french"
+        "https://steamcommunity.com/profiles/{steam_id}/stats/{appid}/achievements/?l={langue}"
     );
     let html = fetch_text(&url, cookie, "https://steamcommunity.com/")?;
     let items = parse_achievements(&html);

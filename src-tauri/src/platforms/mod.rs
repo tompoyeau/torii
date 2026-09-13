@@ -195,12 +195,12 @@ pub fn launch(platform: &str, target: &str) -> Result<(), String> {
         "battlenet" => launch_battlenet(target),
         // Riot : on lance via RiotClientServices.exe --launch-product=<id>.
         "riot" => {
-            let client = riot::client_path().ok_or("Riot Client introuvable.")?;
+            let client = riot::client_path().ok_or(crate::locale::tr("Riot Client introuvable.", "Riot Client not found."))?;
             Command::new(&client)
                 .args(["--launch-product", target, "--launch-patchline", "live"])
                 .spawn()
                 .map(|_| ())
-                .map_err(|e| format!("Impossible de lancer le jeu Riot : {e}"))
+                .map_err(|e| if crate::locale::en() { format!("Couldn't launch the Riot game: {e}") } else { format!("Impossible de lancer le jeu Riot : {e}") })
         }
         // GOG installé et jeux manuels : on lance directement l'exécutable.
         _ => launch_executable(target),
@@ -236,7 +236,7 @@ pub fn install(platform: &str, target: &str, config_dir: &Path) -> Result<(), St
         // l'install s'il n'est pas installé) — fiable que le client soit ouvert ou non.
         "battlenet" => launch_battlenet(target),
         // Riot / manuel : pas d'installation à distance (jeux déjà installés / ajoutés à la main).
-        _ => Err(format!("Installation non prise en charge pour {platform}.")),
+        _ => Err(if crate::locale::en() { format!("Installing isn't supported for {platform}.") } else { format!("Installation non prise en charge pour {platform}.") }),
     }
 }
 
@@ -263,18 +263,18 @@ pub fn uninstall(platform: &str, target: &str, install_dir: Option<&str>) -> Res
         // GOG Galaxy n'expose pas de deeplink de désinstallation : on lance l'uninstaller
         // Inno Setup (`unins000.exe`) présent dans le dossier d'installation (il confirme).
         "gog" => {
-            let dir = install_dir.ok_or("Dossier d'installation GOG inconnu.")?;
+            let dir = install_dir.ok_or(crate::locale::tr("Dossier d'installation GOG inconnu.", "Unknown GOG install folder."))?;
             let uninstaller = Path::new(dir).join("unins000.exe");
             if uninstaller.exists() {
                 Command::new(&uninstaller)
                     .current_dir(dir)
                     .spawn()
                     .map(|_| ())
-                    .map_err(|e| format!("Impossible de lancer la désinstallation GOG : {e}"))
+                    .map_err(|e| if crate::locale::en() { format!("Couldn't start the GOG uninstaller: {e}") } else { format!("Impossible de lancer la désinstallation GOG : {e}") })
             } else {
                 // Repli : ouvre le dossier pour une désinstallation manuelle.
                 tauri_plugin_opener::open_path(dir, None::<&str>)
-                    .map_err(|e| format!("Désinstallateur GOG introuvable ({e}))"))
+                    .map_err(|e| if crate::locale::en() { format!("GOG uninstaller not found ({e})") } else { format!("Désinstallateur GOG introuvable ({e})") })
             }
         }
         // Battle.net n'expose aucune commande CLI de désinstallation par jeu, mais l'option
@@ -288,8 +288,8 @@ pub fn uninstall(platform: &str, target: &str, install_dir: Option<&str>) -> Res
         // d'installation pour laisser l'utilisateur passer par l'outil du launcher.
         _ => match install_dir {
             Some(dir) => tauri_plugin_opener::open_path(dir, None::<&str>)
-                .map_err(|e| format!("Impossible d'ouvrir le dossier du jeu : {e}")),
-            None => Err(format!("Désinstallation non prise en charge pour {platform}.")),
+                .map_err(|e| if crate::locale::en() { format!("Couldn't open the game folder: {e}") } else { format!("Impossible d'ouvrir le dossier du jeu : {e}") }),
+            None => Err(if crate::locale::en() { format!("Uninstalling isn't supported for {platform}.") } else { format!("Désinstallation non prise en charge pour {platform}.") }),
         },
     }
 }
@@ -401,7 +401,7 @@ fn launch_via_wmi(exe: &Path, uri: &str) -> Result<(), String> {
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("Lancement Epic via WMI impossible : {e}"))
+        .map_err(|e| if crate::locale::en() { format!("Couldn't launch Epic through WMI: {e}") } else { format!("Lancement Epic via WMI impossible : {e}") })
 }
 
 /// Ouvre une URI de protocole enregistré (steam://, com.epicgames.launcher://…) via
@@ -449,7 +449,7 @@ fn open_uri(uri: &str) -> Result<(), String> {
     if code > 32 {
         Ok(())
     } else {
-        Err(format!("Impossible d'ouvrir {uri} (ShellExecuteW code {code})"))
+        Err(if crate::locale::en() { format!("Couldn't open {uri} (ShellExecuteW code {code})") } else { format!("Impossible d'ouvrir {uri} (ShellExecuteW code {code})") })
     }
 }
 
@@ -484,7 +484,7 @@ fn launch_executable(exe: &str) -> Result<(), String> {
         }
         _ => {
             return tauri_plugin_opener::open_path(exe, None::<&str>)
-                .map_err(|e| format!("Impossible de lancer {exe} : {e}"));
+                .map_err(|e| if crate::locale::en() { format!("Couldn't launch {exe}: {e}") } else { format!("Impossible de lancer {exe} : {e}") });
         }
     };
     if let Some(dir) = dir {
@@ -492,7 +492,7 @@ fn launch_executable(exe: &str) -> Result<(), String> {
     }
     cmd.spawn()
         .map(|_| ())
-        .map_err(|e| format!("Impossible de lancer {exe} : {e}"))
+        .map_err(|e| if crate::locale::en() { format!("Couldn't launch {exe}: {e}") } else { format!("Impossible de lancer {exe} : {e}") })
 }
 
 /// Taille totale d'un dossier (métadonnées uniquement, récursif).

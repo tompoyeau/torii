@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { ref } from "vue";
 import { wishlistAdd, wishlistIds, wishlistRemove } from "../lib/tauri";
 import { showToast } from "./useToast";
@@ -45,7 +46,7 @@ async function toggle(item: { gameId: string; title: string; coverUrl?: string |
     pending.set(id, false);
     removeLocal(id); // disparition immédiate de la grille
     await wishlistRemove(id);
-    showToast(`« ${item.title} » retiré de ta wishlist`);
+    showToast(t("boutique.wishlist.retire", { titre: item.title }));
   } else {
     next.add(id);
     ids.value = next;
@@ -56,8 +57,8 @@ async function toggle(item: { gameId: string; title: string; coverUrl?: string |
     const onSteam = await wishlistAdd(id, item.title, item.coverUrl ?? null);
     showToast(
       onSteam
-        ? `« ${item.title} » ajouté à ta wishlist, Steam compris`
-        : `« ${item.title} » ajouté à ta wishlist`,
+        ? t("boutique.wishlist.ajouteSteam", { titre: item.title })
+        : t("boutique.wishlist.ajoute", { titre: item.title }),
     );
   }
 }

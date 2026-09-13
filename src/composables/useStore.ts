@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+import { instantGamingPertinent } from "../i18n/regions";
 import { ref } from "vue";
 import {
   clearExcludedStores as clearExcludedStoresBackend,
@@ -318,15 +320,17 @@ function mockGame(gameId: string): StoreGame {
     coverUrl: it.coverUrl,
     heroUrl: it.coverUrl, // (mock : réutilise la jaquette)
     cheapestEver: r2(it.price * 0.8),
+    // Même règle que Rust (`locale::zone_euro`) : pas d'Instant Gaming hors zone euro,
+    // sinon la démo montrerait une offre que l'application réelle ne propose jamais.
     prices: [
       { storeName: "Instant Gaming", price: r2(it.price - 2), retailPrice: it.normalPrice, savings: it.savings + 5, buyUrl: "https://www.instant-gaming.com/" },
       { storeName: it.storeName, price: it.price, retailPrice: it.normalPrice, savings: it.savings, buyUrl: it.buyUrl },
       { storeName: "Steam", price: r2(it.price + 3), retailPrice: it.normalPrice, savings: Math.max(0, it.savings - 8), buyUrl: "https://store.steampowered.com/" },
       { storeName: "Epic Games Store", price: r2(it.price + 5), retailPrice: it.normalPrice, savings: Math.max(0, it.savings - 12), buyUrl: "https://store.epicgames.com/" },
-    ],
-    description: "Un titre encensé par la critique. Explore un monde façonné à la main, affine ton style au fil des heures et laisse-toi porter par sa direction artistique.",
-    genre: "Action-RPG",
-    developer: "Studio Fictif",
+    ].filter((p) => instantGamingPertinent.value || p.storeName !== "Instant Gaming"),
+    description: t("demo.descriptionBoutique"),
+    genre: t("demo.genres.actionRpg"),
+    developer: t("demo.studioFictif"),
     year: 2023,
     screenshots: [],
   };

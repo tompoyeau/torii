@@ -9,7 +9,10 @@ import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
-import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openExternal, openLog, setAutostart, setWindowPrefs } from "../lib/tauri";
+import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openExternal, openLog, relaunchApp, setAutostart, setWindowPrefs } from "../lib/tauri";
+import { etiquetteIntl, LANGUES, langueCourante, langueParDefaut, t, type Langue } from "../i18n";
+import { deviseAttendue, instantGamingPertinent, nomDeRegion, REGIONS, regionDuSysteme, type CodeRegion } from "../i18n/regions";
+import { ilYA } from "../lib/format";
 import PlatformIcon from "./PlatformIcon.vue";
 import AccountsSettings from "./AccountsSettings.vue";
 import ToriiPanel from "./ToriiPanel.vue";
@@ -46,13 +49,7 @@ const otherDevices = computed(
 );
 
 /** « il y a 3 min » — un horodatage brut ne dit rien à quelqu'un qui vérifie un envoi. */
-function sinceLabel(timestamp: number): string {
-  const s = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
-  if (s < 90) return "à l'instant";
-  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
-  return `il y a ${Math.round(s / 86400)} j`;
-}
+const sinceLabel = (timestamp: number): string => ilYA(timestamp);
 
 async function withLibrary(action: () => Promise<unknown>) {
   libraryError.value = null;
@@ -67,7 +64,7 @@ const onToggleLibrarySync = () =>
   withLibrary(async () => {
     const on = !toriiPrefs.value.syncLibrary;
     await setLibrarySync(on);
-    showToast(on ? "Bibliothèque synchronisée." : "Synchronisation coupée, bibliothèque effacée du serveur.");
+    showToast(on ? t("reglages.torii.bibliotheque.activee") : t("reglages.torii.bibliotheque.coupee"));
   });
 
 const onToggleShareLibrary = () =>
@@ -76,7 +73,9 @@ const onToggleShareLibrary = () =>
 const onSyncLibraryNow = () =>
   withLibrary(async () => {
     const res = await syncLibraryNow();
-    showToast(res.uploaded ? `Bibliothèque envoyée (${res.gameCount} jeux).` : "Rien à envoyer.");
+    showToast(res.uploaded
+      ? t("reglages.torii.bibliotheque.envoyee", { n: res.gameCount })
+      : t("reglages.torii.bibliotheque.rienAEnvoyer"));
   });
 
 const onForgetDevice = (deviceId: string) => withLibrary(() => forgetDevice(deviceId));
@@ -104,7 +103,7 @@ async function withDevices(action: () => Promise<unknown>) {
 const onRevokeDevice = (id: string, nom: string) =>
   withDevices(async () => {
     await revokeDevice(id);
-    showToast(`« ${nom} » a été déconnecté.`);
+    showToast(t("reglages.torii.appareils.deconnecte", { nom }));
   });
 
 const onRevokeOthers = () =>
@@ -112,7 +111,7 @@ const onRevokeOthers = () =>
     const combien = otherSessions.value.length;
     await revokeOtherDevices();
     revokeAllOpen.value = false;
-    showToast(combien > 1 ? `${combien} appareils déconnectés.` : "L'autre appareil a été déconnecté.");
+    showToast(t("reglages.torii.appareils.deconnectes", { n: combien }));
   });
 
 /** Pseudo en cours d'édition (non enregistré tant qu'on ne valide pas). */
@@ -133,18 +132,24 @@ async function onSavePseudo() {
   pseudoBusy.value = true;
   try {
     await setDisplayName(pseudoDraft.value.trim());
-    showToast("Pseudo mis à jour.");
+    showToast(t("reglages.torii.pseudo.misAJour"));
   } finally {
     pseudoBusy.value = false;
   }
 }
 
-/** Les trois niveaux de partage, du plus ouvert au plus discret. */
-const PRESENCE_MODES = [
-  { key: "detailed" as const, label: "Jeu visible", hint: "Tes amis voient à quoi tu joues et depuis quand." },
-  { key: "online" as const, label: "En ligne", hint: "Ils te savent connecté, sans savoir à quoi tu joues." },
-  { key: "offline" as const, label: "Invisible", hint: "Personne ne voit rien. Tu vois toujours tes amis." },
-];
+/**
+ * Les trois niveaux de partage, du plus ouvert au plus discret.
+ *
+ * ⚠️ `computed`, pas une constante : un tableau de libellés calculé une fois au
+ * chargement garderait la langue du démarrage, et ne suivrait pas un changement fait
+ * dans ce même écran. Même raison pour toutes les listes de choix ci-dessous.
+ */
+const PRESENCE_MODES = computed(() => [
+  { key: "detailed" as const, label: t("reglages.torii.presence.detaille"), hint: t("reglages.torii.presence.detailleAide") },
+  { key: "online" as const, label: t("reglages.torii.presence.enLigne"), hint: t("reglages.torii.presence.enLigneAide") },
+  { key: "offline" as const, label: t("reglages.torii.presence.invisible"), hint: t("reglages.torii.presence.invisibleAide") },
+]);
 const { friends: steamFriends, refresh: refreshSteamFriends } = useFriends();
 
 /** Délais d'inactivité proposés avant de passer « absent ». */
@@ -153,7 +158,7 @@ const AWAY_DELAYS = [5, 10, 20, 30] as const;
 /** Renouvelle le code d'ami ; l'ancien cesse aussitôt de fonctionner. */
 async function onRotateCode() {
   await rotateCode();
-  showToast("Nouveau code d'ami : l'ancien ne fonctionne plus.");
+  showToast(t("reglages.torii.code.renouvele"));
 }
 
 /** Jeux réduits au silence, résolus en titres depuis la bibliothèque. */
@@ -223,7 +228,7 @@ async function onDeleteAccount() {
   try {
     await toriiDeleteAccount();
     deleteOpen.value = false;
-    showToast("Ton compte Torii a été supprimé.");
+    showToast(t("reglages.torii.suppression.fait"));
   } catch (e) {
     deleteError.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -251,31 +256,31 @@ const { theme, setTheme } = useTheme();
 const { settingsOpen, settingsCategory, setSettingsCategory, closeSettings } = useUi();
 const { status: updateStatus, version: updateVersion, check: checkUpdate, install: installUpdate } = useUpdater();
 
-const CATEGORIES = [
-  { key: "general", label: "Paramètres généraux", group: "Application" },
-  { key: "about", label: "À propos & maintenance", group: "Application" },
-  { key: "hidden", label: "Jeux masqués", group: "Bibliothèque & Boutique" },
-  { key: "stores", label: "Revendeurs masqués", group: "Bibliothèque & Boutique" },
-  { key: "accounts", label: "Comptes & launchers", group: "Comptes" },
-  { key: "torii", label: "Réseau Torii", group: "Comptes" },
-] as const;
+const CATEGORIES = computed(() => [
+  { key: "general", label: t("reglages.categories.general"), group: t("reglages.groupes.application") },
+  { key: "about", label: t("reglages.categories.apropos"), group: t("reglages.groupes.application") },
+  { key: "hidden", label: t("reglages.categories.masques"), group: t("reglages.groupes.bibliotheque") },
+  { key: "stores", label: t("reglages.categories.revendeurs"), group: t("reglages.groupes.bibliotheque") },
+  { key: "accounts", label: t("reglages.categories.comptes"), group: t("reglages.groupes.comptes") },
+  { key: "torii", label: t("reglages.categories.torii"), group: t("reglages.groupes.comptes") },
+] as const);
 
 // --- Choix pour les préférences (segmented) --------------------------------
-const START_FILTERS = [
-  { key: "all", label: "Tous" },
-  { key: "favorite", label: "Favoris" },
-  { key: "installed", label: "Installés" },
-] as const;
-const START_SORTS = [
-  { key: "recent", label: "Récemment joué" },
-  { key: "alpha", label: "A → Z" },
-  { key: "playtime", label: "Temps de jeu" },
-] as const;
-const DENSITIES = [
-  { key: "compact", label: "Compact" },
-  { key: "normal", label: "Normal" },
-  { key: "large", label: "Grand" },
-] as const;
+const START_FILTERS = computed(() => [
+  { key: "all", label: t("reglages.general.vue.tous") },
+  { key: "favorite", label: t("reglages.general.vue.favoris") },
+  { key: "installed", label: t("reglages.general.vue.installes") },
+] as const);
+const START_SORTS = computed(() => [
+  { key: "recent", label: t("reglages.general.vue.recent") },
+  { key: "alpha", label: t("reglages.general.vue.alpha") },
+  { key: "playtime", label: t("reglages.general.vue.tempsDeJeu") },
+] as const);
+const DENSITIES = computed(() => [
+  { key: "compact", label: t("reglages.general.densite.compact") },
+  { key: "normal", label: t("reglages.general.densite.normal") },
+  { key: "large", label: t("reglages.general.densite.grand") },
+] as const);
 
 // --- À propos & maintenance -------------------------------------------------
 useScrollLock(settingsOpen);
@@ -292,12 +297,12 @@ onMounted(async () => {
 });
 const updateLabel = computed(() => {
   switch (updateStatus.value) {
-    case "checking": return "Vérification…";
-    case "available": return `Mise à jour disponible : ${updateVersion.value ?? ""}`;
-    case "downloading": return "Téléchargement…";
-    case "ready": return "Installée — redémarrage…";
-    case "error": return "Erreur de vérification.";
-    default: return "Torii est à jour.";
+    case "checking": return t("reglages.apropos.maj.verification");
+    case "available": return t("reglages.apropos.maj.disponible", { version: updateVersion.value ?? "" });
+    case "downloading": return t("reglages.apropos.maj.telechargement");
+    case "ready": return t("reglages.apropos.maj.installee");
+    case "error": return t("reglages.apropos.maj.erreur");
+    default: return t("reglages.apropos.maj.aJour");
   }
 });
 /**
@@ -313,16 +318,17 @@ const updateLabel = computed(() => {
  */
 function onSignaler() {
   const corps = [
-    "**Ce qui se passe**", "", "", "**Ce que tu attendais**", "", "",
-    "**Comment le reproduire**", "", "",
+    t("reglages.apropos.signaler.rapport.cequisepasse"), "", "",
+    t("reglages.apropos.signaler.rapport.attendu"), "", "",
+    t("reglages.apropos.signaler.rapport.reproduire"), "", "",
     "---", "",
     // Hors Tauri (la démo du site), il n'y a pas de version à donner : le dire clairement
     // vaut mieux qu'un « ? » qui ressemble à un bug, et identifie le rapport pour ce
     // qu'il est — quelqu'un qui essaie dans un onglet, pas une installation en panne.
-    version.value ? `Torii ${version.value} · Windows` : "Démo web (pas d'installation)",
+    version.value ? `Torii ${version.value} · Windows` : t("reglages.apropos.signaler.rapport.demo"),
     "",
-    "Pense à joindre le journal : Paramètres → À propos & maintenance →",
-    "« Ouvrir le journal », puis copie son contenu ici.",
+    t("reglages.apropos.signaler.rapport.journal1"),
+    t("reglages.apropos.signaler.rapport.journal2"),
   ].join("\n");
   openExternal(
     `https://github.com/tompoyeau/torii/issues/new?body=${encodeURIComponent(corps)}`,
@@ -336,14 +342,14 @@ async function onClearCache() {
   const n = await clearCaches();
   cacheBusy.value = false;
   cacheMsg.value = n == null
-    ? "Indisponible hors de l'application."
-    : `Cache vidé (${n} fichier${n > 1 ? "s" : ""}). Les données seront re-téléchargées au besoin.`;
+    ? t("reglages.apropos.cache.indisponible")
+    : t("reglages.apropos.cache.vide", { n });
 }
 // Groupes ordonnés (pour les libellés de section du rail).
 const groups = computed(() => {
   const seen: string[] = [];
-  for (const c of CATEGORIES) if (!seen.includes(c.group)) seen.push(c.group);
-  return seen.map((g) => ({ label: g, items: CATEGORIES.filter((c) => c.group === g) }));
+  for (const c of CATEGORIES.value) if (!seen.includes(c.group)) seen.push(c.group);
+  return seen.map((g) => ({ label: g, items: CATEGORIES.value.filter((c) => c.group === g) }));
 });
 
 // --- Lancement au démarrage de Windows -------------------------------------
@@ -403,15 +409,51 @@ const themeChoice = computed<ThemeChoice>(() => theme.value ?? "system");
 function pickTheme(c: ThemeChoice) {
   setTheme(c === "system" ? null : c);
 }
-const THEMES: { key: ThemeChoice; label: string }[] = [
-  { key: "system", label: "Système" },
-  { key: "light", label: "Clair" },
-  { key: "dark", label: "Sombre" },
-];
+const THEMES = computed<{ key: ThemeChoice; label: string }[]>(() => [
+  { key: "system", label: t("reglages.general.theme.systeme") },
+  { key: "light", label: t("reglages.general.theme.clair") },
+  { key: "dark", label: t("reglages.general.theme.sombre") },
+]);
+
+// --- Langue et région -------------------------------------------------------
+
+/**
+ * Le bouton allumé du sélecteur. Une langue jamais choisie (`null`) s'affiche comme la
+ * langue par défaut qu'elle produit — pas comme « Suivre Windows », qui est un choix.
+ */
+const langueChoisie = computed<Langue | "system">(() => prefs.language ?? langueParDefaut());
+
+/**
+ * La langue affichée au chargement de l'application.
+ *
+ * 🔑 Sert à savoir s'il faut proposer de redémarrer. L'interface bascule tout de suite,
+ * mais les descriptions et genres des jeux déjà en mémoire ont été chargés dans l'ancienne
+ * langue et n'en changeront qu'au prochain lancement. On ne le signale que si la langue
+ * **effective** a changé : passer de « Suivre Windows » à « Français » sur un Windows
+ * français ne change rien à l'écran, et proposer un redémarrage serait absurde.
+ */
+const langueAuDemarrage = langueCourante.value;
+const langueAChange = computed(() => langueCourante.value !== langueAuDemarrage);
+
+function choisirLangue(choix: Langue | "system") {
+  prefs.language = choix;
+}
+
+const regionChoisie = computed<CodeRegion | "system">(() => prefs.region ?? "system");
+function choisirRegion(choix: string) {
+  prefs.region = choix === "system" ? null : (choix as CodeRegion);
+}
+
+/** Les régions, triées par leur nom dans la langue affichée — pas par code pays. */
+const regionsTriees = computed(() =>
+  [...REGIONS].sort((a, b) =>
+    nomDeRegion(a.code).localeCompare(nomDeRegion(b.code), etiquetteIntl.value),
+  ),
+);
 
 // --- Jeux masqués -----------------------------------------------------------
 const hiddenGames = computed(() =>
-  games.value.filter((g) => g.hidden).sort((a, b) => a.title.localeCompare(b.title, "fr")),
+  games.value.filter((g) => g.hidden).sort((a, b) => a.title.localeCompare(b.title, etiquetteIntl.value)),
 );
 function unhide(id: string) {
   void setHidden(id, false);
@@ -420,10 +462,10 @@ function unhide(id: string) {
 
 <template>
   <div v-if="settingsOpen" class="overlay" @click.self="closeSettings">
-    <div ref="modale" class="dialog" role="dialog" aria-modal="true" tabindex="-1" aria-label="Paramètres">
+    <div ref="modale" class="dialog" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('reglages.titre')">
       <!-- Rail de navigation -->
       <aside class="snav">
-        <div class="snav-title">Paramètres</div>
+        <div class="snav-title">{{ t("reglages.titre") }}</div>
         <template v-for="grp in groups" :key="grp.label">
           <div class="snav-group">{{ grp.label }}</div>
           <button
@@ -442,14 +484,76 @@ function unhide(id: string) {
 
       <!-- Contenu -->
       <section class="spane">
-        <button class="close" aria-label="Fermer" @click="closeSettings">
+        <button class="close" :aria-label="t('commun.fermer')" @click="closeSettings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
 
         <div class="spane-inner">
           <!-- Paramètres généraux -->
           <template v-if="settingsCategory === 'general'">
-            <h2 class="pane-title">Paramètres généraux</h2>
+            <h2 class="pane-title">{{ t("reglages.categories.general") }}</h2>
+
+            <!--
+              🔑 LANGUE ET RÉGION EN TÊTE, et pas au milieu des réglages d'affichage. C'est
+              ce qu'un nouvel utilisateur cherche en premier quand l'application ne parle
+              pas sa langue — et il le cherche sans pouvoir lire les intitulés.
+            -->
+            <div class="pref">
+              <div class="row-text">
+                <span class="row-title">{{ t("reglages.langue.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.langue.description") }}</span>
+              </div>
+              <div class="segmented">
+                <button class="seg" :class="{ on: langueChoisie === 'system' }" @click="choisirLangue('system')">
+                  {{ t("reglages.langue.systeme") }}
+                </button>
+                <!--
+                  ⚠️ Le nom de chaque langue est écrit DANS cette langue (« English »,
+                  « Français »), jamais traduit. Quelqu'un bloqué dans une interface qu'il
+                  ne lit pas doit pouvoir reconnaître la sienne.
+                -->
+                <button
+                  v-for="l in LANGUES"
+                  :key="l.code"
+                  class="seg"
+                  :class="{ on: langueChoisie === l.code }"
+                  :lang="l.code"
+                  @click="choisirLangue(l.code)"
+                >
+                  {{ l.nom }}
+                </button>
+              </div>
+            </div>
+            <div v-if="langueAChange" class="row-note">
+              <span>{{ t("reglages.langue.appliquer") }}</span>
+              <button class="ghost-btn" @click="relaunchApp()">{{ t("reglages.langue.redemarrer") }}</button>
+            </div>
+
+            <div class="divider" />
+
+            <div class="pref">
+              <div class="row-text">
+                <span class="row-title">{{ t("reglages.region.titre") }}</span>
+                <span class="row-sub">
+                  {{ t("reglages.region.description") }} {{ t("reglages.region.note") }}
+                  <template v-if="!instantGamingPertinent"> {{ t("prix.revendeurIndisponible") }}</template>
+                </span>
+              </div>
+              <div class="region">
+                <select
+                  class="region-select"
+                  :value="regionChoisie"
+                  :aria-label="t('reglages.region.titre')"
+                  @change="choisirRegion(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="system">{{ t("reglages.region.systeme", { pays: nomDeRegion(regionDuSysteme()) }) }}</option>
+                  <option v-for="r in regionsTriees" :key="r.code" :value="r.code">{{ nomDeRegion(r.code) }}</option>
+                </select>
+                <span class="region-devise">{{ t("reglages.region.devise", { devise: deviseAttendue }) }}</span>
+              </div>
+            </div>
+
+            <div class="divider" />
 
             <button
               class="pref toggle-row"
@@ -459,8 +563,8 @@ function unhide(id: string) {
               @click="onToggleAutostart"
             >
               <div class="row-text">
-                <span class="row-title">Lancer au démarrage de Windows</span>
-                <span class="row-sub">Torii s'ouvrira automatiquement à l'ouverture de ta session.</span>
+                <span class="row-title">{{ t("reglages.general.autostart.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.autostart.sous") }}</span>
               </div>
               <span class="switch" :class="{ on: autostart }"><span class="knob" /></span>
             </button>
@@ -469,8 +573,8 @@ function unhide(id: string) {
 
             <button class="pref toggle-row" role="switch" :aria-checked="startMinimized" @click="toggleStartMinimized">
               <div class="row-text">
-                <span class="row-title">Démarrer minimisé</span>
-                <span class="row-sub">Se lance réduit dans la zone de notification (à côté de l'horloge).</span>
+                <span class="row-title">{{ t("reglages.general.minimise.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.minimise.sous") }}</span>
               </div>
               <span class="switch" :class="{ on: startMinimized }"><span class="knob" /></span>
             </button>
@@ -479,12 +583,8 @@ function unhide(id: string) {
 
             <button class="pref toggle-row" role="switch" :aria-checked="closeToTray" @click="toggleCloseToTray">
               <div class="row-text">
-                <span class="row-title">Fermer réduit dans la zone de notification</span>
-                <span class="row-sub">
-                  Activé par défaut : Torii continue de repérer tes parties une fois la
-                  fenêtre fermée. Décoche pour que la croix quitte vraiment l'application —
-                  « Quitter » reste disponible par clic droit sur l'icône près de l'horloge.
-                </span>
+                <span class="row-title">{{ t("reglages.general.tray.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.tray.sous") }}</span>
               </div>
               <span class="switch" :class="{ on: closeToTray }"><span class="knob" /></span>
             </button>
@@ -498,8 +598,8 @@ function unhide(id: string) {
               @click="prefs.returnOnGameExit = !prefs.returnOnGameExit"
             >
               <div class="row-text">
-                <span class="row-title">Revenir à la fermeture d'un jeu</span>
-                <span class="row-sub">Torii se minimise au lancement d'un jeu, puis revient au premier plan sur sa fiche quand tu le fermes. (Jeux installés lancés depuis Torii.)</span>
+                <span class="row-title">{{ t("reglages.general.retourJeu.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.retourJeu.sous") }}</span>
               </div>
               <span class="switch" :class="{ on: prefs.returnOnGameExit }"><span class="knob" /></span>
             </button>
@@ -508,18 +608,19 @@ function unhide(id: string) {
 
             <div class="pref">
               <div class="row-text">
-                <span class="row-title">Thème</span>
-                <span class="row-sub">Apparence de l'application.</span>
+                <span class="row-title">{{ t("reglages.general.theme.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.theme.sous") }}</span>
               </div>
               <div class="segmented">
+                <!-- ⚠️ Pas `t` comme variable de boucle : elle masquerait la fonction de traduction. -->
                 <button
-                  v-for="t in THEMES"
-                  :key="t.key"
+                  v-for="th in THEMES"
+                  :key="th.key"
                   class="seg"
-                  :class="{ on: themeChoice === t.key }"
-                  @click="pickTheme(t.key)"
+                  :class="{ on: themeChoice === th.key }"
+                  @click="pickTheme(th.key)"
                 >
-                  {{ t.label }}
+                  {{ th.label }}
                 </button>
               </div>
             </div>
@@ -528,8 +629,8 @@ function unhide(id: string) {
 
             <div class="pref wrap">
               <div class="row-text">
-                <span class="row-title">Vue par défaut</span>
-                <span class="row-sub">Filtre, tri et affichage au démarrage de la bibliothèque.</span>
+                <span class="row-title">{{ t("reglages.general.vue.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.vue.sous") }}</span>
               </div>
               <div class="controls">
                 <div class="segmented">
@@ -539,8 +640,8 @@ function unhide(id: string) {
                   <button v-for="s in START_SORTS" :key="s.key" class="seg" :class="{ on: prefs.defaultSort === s.key }" @click="prefs.defaultSort = s.key">{{ s.label }}</button>
                 </div>
                 <div class="segmented">
-                  <button class="seg" :class="{ on: !prefs.listView }" @click="prefs.listView = false">Grille</button>
-                  <button class="seg" :class="{ on: prefs.listView }" @click="prefs.listView = true">Liste</button>
+                  <button class="seg" :class="{ on: !prefs.listView }" @click="prefs.listView = false">{{ t("reglages.general.vue.grille") }}</button>
+                  <button class="seg" :class="{ on: prefs.listView }" @click="prefs.listView = true">{{ t("reglages.general.vue.liste") }}</button>
                 </div>
               </div>
             </div>
@@ -549,8 +650,8 @@ function unhide(id: string) {
 
             <div class="pref">
               <div class="row-text">
-                <span class="row-title">Densité de la bibliothèque</span>
-                <span class="row-sub">Taille des jaquettes dans la grille.</span>
+                <span class="row-title">{{ t("reglages.general.densite.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.densite.sous") }}</span>
               </div>
               <div class="segmented">
                 <button v-for="d in DENSITIES" :key="d.key" class="seg" :class="{ on: prefs.density === d.key }" @click="prefs.density = d.key">{{ d.label }}</button>
@@ -566,8 +667,8 @@ function unhide(id: string) {
               @click="prefs.reduceMotion = !prefs.reduceMotion"
             >
               <div class="row-text">
-                <span class="row-title">Réduire les animations</span>
-                <span class="row-sub">Désactive les transitions et effets (accessibilité, machines modestes).</span>
+                <span class="row-title">{{ t("reglages.general.animations.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.animations.sous") }}</span>
               </div>
               <span class="switch" :class="{ on: prefs.reduceMotion }"><span class="knob" /></span>
             </button>
@@ -581,8 +682,8 @@ function unhide(id: string) {
               @click="prefs.wishlistNotifications = !prefs.wishlistNotifications"
             >
               <div class="row-text">
-                <span class="row-title">Alertes de prix (wishlist)</span>
-                <span class="row-sub">Une notification quand un jeu de ta wishlist Steam passe en promo ou atteint son plus bas prix historique. (Torii doit tourner, même réduit dans le tray.)</span>
+                <span class="row-title">{{ t("reglages.general.alertesPrix.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.alertesPrix.sous") }}</span>
               </div>
               <span class="switch" :class="{ on: prefs.wishlistNotifications }"><span class="knob" /></span>
             </button>
@@ -590,11 +691,11 @@ function unhide(id: string) {
 
           <!-- À propos & maintenance -->
           <template v-else-if="settingsCategory === 'about'">
-            <h2 class="pane-title">À propos &amp; maintenance</h2>
+            <h2 class="pane-title">{{ t("reglages.categories.apropos") }}</h2>
 
             <div class="pref">
               <div class="row-text">
-                <span class="row-title">Version de Torii</span>
+                <span class="row-title">{{ t("reglages.apropos.version") }}</span>
                 <span class="row-sub">{{ updateLabel }}</span>
               </div>
               <span class="version-tag">{{ version ?? "—" }}</span>
@@ -602,10 +703,10 @@ function unhide(id: string) {
 
             <div class="row-actions">
               <button class="ghost-btn" :disabled="updateStatus === 'checking' || updateStatus === 'downloading'" @click="checkUpdate(false)">
-                Vérifier les mises à jour
+                {{ t("reglages.apropos.verifier") }}
               </button>
               <button v-if="updateStatus === 'available'" class="primary-btn sm" @click="installUpdate()">
-                Installer maintenant
+                {{ t("reglages.apropos.installer") }}
               </button>
             </div>
 
@@ -613,11 +714,11 @@ function unhide(id: string) {
 
             <div class="pref">
               <div class="row-text">
-                <span class="row-title">Vider le cache</span>
-                <span class="row-sub">Supprime les métadonnées, jaquettes et prix mis en cache (re-téléchargés au besoin). N'affecte ni tes comptes ni tes favoris.</span>
+                <span class="row-title">{{ t("reglages.apropos.cache.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.apropos.cache.sous") }}</span>
               </div>
               <button class="ghost-btn" :disabled="cacheBusy" @click="onClearCache">
-                {{ cacheBusy ? "Nettoyage…" : "Vider le cache" }}
+                {{ cacheBusy ? t("reglages.apropos.cache.enCours") : t("reglages.apropos.cache.bouton") }}
               </button>
             </div>
             <p v-if="cacheMsg" class="cache-msg">{{ cacheMsg }}</p>
@@ -626,33 +727,27 @@ function unhide(id: string) {
 
             <div class="pref">
               <div class="row-text">
-                <span class="row-title">Journal de l'application</span>
-                <span class="row-sub">
-                  Démarrages, erreurs et incidents. À joindre si tu signales un problème :
-                  c'est ce qui permet de comprendre ce qui s'est passé sur ta machine.
-                </span>
+                <span class="row-title">{{ t("reglages.apropos.journal.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.apropos.journal.sous") }}</span>
               </div>
-              <button class="ghost-btn" @click="openLog()">Ouvrir le journal</button>
+              <button class="ghost-btn" @click="openLog()">{{ t("reglages.apropos.journal.bouton") }}</button>
             </div>
 
             <div class="divider" />
 
             <div class="pref">
               <div class="row-text">
-                <span class="row-title">Signaler un problème</span>
-                <span class="row-sub">
-                  Ouvre un rapport pré-rempli avec ta version de Torii. C'est le seul moyen
-                  qu'un bug arrive jusqu'à quelqu'un qui peut le corriger.
-                </span>
+                <span class="row-title">{{ t("reglages.apropos.signaler.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.apropos.signaler.sous") }}</span>
               </div>
-              <button class="ghost-btn" @click="onSignaler()">Signaler</button>
+              <button class="ghost-btn" @click="onSignaler()">{{ t("reglages.apropos.signaler.bouton") }}</button>
             </div>
           </template>
 
           <!-- Jeux masqués -->
           <template v-else-if="settingsCategory === 'hidden'">
-            <h2 class="pane-title">Jeux masqués</h2>
-            <p class="pane-hint">Les jeux masqués sont retirés de la bibliothèque. Réaffiche-les ici.</p>
+            <h2 class="pane-title">{{ t("reglages.categories.masques") }}</h2>
+            <p class="pane-hint">{{ t("reglages.masques.sous") }}</p>
             <div v-if="hiddenGames.length" class="items">
               <div v-for="g in hiddenGames" :key="g.id" class="item">
                 <div class="thumb" :style="{ background: g.cover }">
@@ -662,52 +757,44 @@ function unhide(id: string) {
                   <span class="item-title">{{ g.title }}</span>
                   <span class="item-sub"><PlatformIcon :platform="g.platform" /> {{ platformName(g.platform) }}</span>
                 </div>
-                <button class="ghost-btn" @click="unhide(g.id)">Réafficher</button>
+                <button class="ghost-btn" @click="unhide(g.id)">{{ t("reglages.masques.reafficher") }}</button>
               </div>
             </div>
-            <p v-else class="empty">Aucun jeu masqué.</p>
+            <p v-else class="empty">{{ t("reglages.masques.aucun") }}</p>
           </template>
 
           <!-- Revendeurs masqués -->
           <template v-else-if="settingsCategory === 'stores'">
-            <h2 class="pane-title">Revendeurs masqués</h2>
-            <p class="pane-hint">Boutiques masquées dans le comparatif de prix de la Boutique.</p>
+            <h2 class="pane-title">{{ t("reglages.categories.revendeurs") }}</h2>
+            <p class="pane-hint">{{ t("reglages.revendeurs.sous") }}</p>
             <div v-if="excludedStores.length" class="items">
               <div v-for="name in excludedStores" :key="name" class="item">
                 <div class="thumb store"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /></svg></div>
                 <div class="item-text"><span class="item-title">{{ name }}</span></div>
-                <button class="ghost-btn" @click="toggleStoreExcluded(name)">Réafficher</button>
+                <button class="ghost-btn" @click="toggleStoreExcluded(name)">{{ t("reglages.revendeurs.reafficher") }}</button>
               </div>
-              <button class="clear-all" @click="clearExcludedStores">Tout réafficher</button>
+              <button class="clear-all" @click="clearExcludedStores">{{ t("reglages.revendeurs.toutReafficher") }}</button>
             </div>
-            <p v-else class="empty">
-              Aucun revendeur masqué. Tu peux en masquer depuis la fiche d'un jeu dans la Boutique.
-            </p>
+            <p v-else class="empty">{{ t("reglages.revendeurs.aucun") }}</p>
           </template>
 
           <!-- Réseau Torii -->
           <template v-else-if="settingsCategory === 'torii'">
-            <h2 class="pane-title">Réseau Torii</h2>
-            <p class="pane-hint">
-              Voir à quoi jouent tes amis, quel que soit leur launcher — et leur montrer ce
-              que tu joues, si tu le décides.
-            </p>
+            <h2 class="pane-title">{{ t("reglages.categories.torii") }}</h2>
+            <p class="pane-hint">{{ t("reglages.torii.intro") }}</p>
 
             <ToriiPanel />
 
             <template v-if="toriiConnected">
               <div class="pref">
                 <div class="row-text">
-                  <span class="row-title">Ton pseudo</span>
-                  <span class="row-sub">
-                    Le nom que voient tes amis. Il n'a pas besoin d'être unique et ne
-                    permet à personne de te retrouver — seul ton code d'ami le permet.
-                  </span>
+                  <span class="row-title">{{ t("reglages.torii.pseudo.titre") }}</span>
+                  <span class="row-sub">{{ t("reglages.torii.pseudo.sous") }}</span>
                 </div>
                 <div class="row-actions" style="margin-top: 0">
                   <input v-model="pseudoDraft" class="pseudo-input" maxlength="40" spellcheck="false" />
                   <button class="ghost-btn" :disabled="!pseudoDirty || pseudoBusy" @click="onSavePseudo">
-                    {{ pseudoBusy ? "…" : "Enregistrer" }}
+                    {{ pseudoBusy ? t("commun.enCours") : t("commun.enregistrer") }}
                   </button>
                 </div>
               </div>
@@ -716,15 +803,12 @@ function unhide(id: string) {
 
               <div class="pref">
                 <div class="row-text">
-                  <span class="row-title">Ton code d'ami</span>
-                  <span class="row-sub">
-                    À donner de la main à la main pour qu'on t'ajoute. Le renouveler rend
-                    l'ancien inutilisable — pratique si tu l'as diffusé trop largement.
-                  </span>
+                  <span class="row-title">{{ t("reglages.torii.code.titre") }}</span>
+                  <span class="row-sub">{{ t("reglages.torii.code.sous") }}</span>
                 </div>
                 <div class="row-actions" style="margin-top: 0">
                   <span class="friend-code">{{ toriiAccount?.friendCode }}</span>
-                  <button class="ghost-btn" @click="onRotateCode">Renouveler</button>
+                  <button class="ghost-btn" @click="onRotateCode">{{ t("reglages.torii.code.renouveler") }}</button>
                 </div>
               </div>
 
@@ -732,10 +816,8 @@ function unhide(id: string) {
 
               <div class="pref presence-choice">
                 <div class="row-text">
-                  <span class="row-title">Ce que tes amis voient</span>
-                  <span class="row-sub">
-                    Tant que tu es invisible, rien de ce que tu joues ne quitte ton PC.
-                  </span>
+                  <span class="row-title">{{ t("reglages.torii.presence.titre") }}</span>
+                  <span class="row-sub">{{ t("reglages.torii.presence.sous") }}</span>
                 </div>
                 <div class="modes">
                   <button
@@ -755,8 +837,8 @@ function unhide(id: string) {
 
               <div class="pref">
                 <div class="row-text">
-                  <span class="row-title">Passer « absent » après</span>
-                  <span class="row-sub">Sans action au clavier ni à la souris.</span>
+                  <span class="row-title">{{ t("reglages.torii.absent.titre") }}</span>
+                  <span class="row-sub">{{ t("reglages.torii.absent.sous") }}</span>
                 </div>
                 <div class="segmented">
                   <button
@@ -766,7 +848,7 @@ function unhide(id: string) {
                     :class="{ on: toriiPrefs.awayAfterMinutes === d }"
                     @click="setToriiPrefs({ awayAfterMinutes: d })"
                   >
-                    {{ d }} min
+                    {{ t("reglages.torii.absent.minutes", { n: d }) }}
                   </button>
                 </div>
               </div>
@@ -781,16 +863,9 @@ function unhide(id: string) {
                 @click="onToggleSteamLink"
               >
                 <div class="row-text">
-                  <span class="row-title">Visible par mes amis Steam</span>
+                  <span class="row-title">{{ t("reglages.torii.steam.titre") }}</span>
                   <span class="row-sub">
-                    <template v-if="canLinkSteam">
-                      Permet à tes amis Steam déjà sur Torii de te retrouver, et de fusionner
-                      ta fiche avec ton profil Steam. Il faut que vous l'ayez activé tous les deux.
-                    </template>
-                    <template v-else>
-                      Connecte d'abord ton compte Steam dans « Comptes &amp; launchers » :
-                      sans lui, il n'y a rien à rapprocher.
-                    </template>
+                    {{ canLinkSteam ? t("reglages.torii.steam.sous") : t("reglages.torii.steam.sousSansSteam") }}
                   </span>
                 </div>
                 <span class="switch" :class="{ on: toriiAccount?.steamDiscoverable }"><span class="knob" /></span>
@@ -799,15 +874,11 @@ function unhide(id: string) {
 
               <template v-if="toriiAccount?.steamDiscoverable">
                 <div class="divider" />
-                <h3 class="sub-title">Retrouver mes amis Steam</h3>
-                <p class="pane-hint">
-                  Torii compare ta liste d'amis Steam aux comptes existants. Seuls ceux qui
-                  ont eux aussi activé cette option apparaissent — c'est ce qui empêche de
-                  s'en servir pour savoir qui utilise Torii.
-                </p>
+                <h3 class="sub-title">{{ t("reglages.torii.steam.retrouver") }}</h3>
+                <p class="pane-hint">{{ t("reglages.torii.steam.retrouverAide") }}</p>
                 <div class="row-actions">
                   <button class="ghost-btn" :disabled="searching" @click="onFindSteamFriends">
-                    {{ searching ? "Recherche…" : "Chercher parmi mes amis Steam" }}
+                    {{ searching ? t("commun.recherche") : t("reglages.torii.steam.chercher") }}
                   </button>
                 </div>
                 <div v-if="suggestions.length" class="items">
@@ -818,25 +889,19 @@ function unhide(id: string) {
                     <div class="item-text">
                       <span class="item-title">{{ p.displayName }}</span>
                       <span v-if="steamNameOf(p.steamId)" class="item-sub">
-                        {{ steamNameOf(p.steamId) }} sur Steam
+                        {{ t("reglages.torii.steam.surSteam", { nom: steamNameOf(p.steamId) ?? "" }) }}
                       </span>
                     </div>
-                    <button class="ghost-btn" @click="inviteAccount(p.id)">Ajouter</button>
+                    <button class="ghost-btn" @click="inviteAccount(p.id)">{{ t("commun.ajouter") }}</button>
                   </div>
                 </div>
-                <p v-else-if="searched && !searching" class="empty">
-                  Aucun de tes amis Steam n'a de compte Torii visible pour l'instant.
-                </p>
+                <p v-else-if="searched && !searching" class="empty">{{ t("reglages.torii.steam.aucun") }}</p>
               </template>
 
               <div class="divider" />
 
-              <h3 class="sub-title">Ma bibliothèque</h3>
-              <p class="pane-hint">
-                Ce que tu possèdes, déposé sur le serveur pour le retrouver sur tes autres
-                appareils — et le montrer à tes amis, quel que soit le launcher. Les jeux
-                masqués et ceux marqués « ne pas diffuser » n'en font jamais partie.
-              </p>
+              <h3 class="sub-title">{{ t("reglages.torii.bibliotheque.titre") }}</h3>
+              <p class="pane-hint">{{ t("reglages.torii.bibliotheque.aide") }}</p>
 
               <button
                 class="pref toggle-row"
@@ -846,11 +911,8 @@ function unhide(id: string) {
                 @click="onToggleLibrarySync"
               >
                 <div class="row-text">
-                  <span class="row-title">Synchroniser ma bibliothèque</span>
-                  <span class="row-sub">
-                    Elle part après un scan, et seulement si elle a changé depuis la
-                    dernière fois. La couper l'efface du serveur.
-                  </span>
+                  <span class="row-title">{{ t("reglages.torii.bibliotheque.synchro") }}</span>
+                  <span class="row-sub">{{ t("reglages.torii.bibliotheque.synchroSous") }}</span>
                 </div>
                 <span class="switch" :class="{ on: toriiPrefs.syncLibrary }"><span class="knob" /></span>
               </button>
@@ -863,15 +925,9 @@ function unhide(id: string) {
                 @click="onToggleShareLibrary"
               >
                 <div class="row-text">
-                  <span class="row-title">Visible par mes amis Torii</span>
+                  <span class="row-title">{{ t("reglages.torii.bibliotheque.partage") }}</span>
                   <span class="row-sub">
-                    <template v-if="toriiPrefs.syncLibrary">
-                      Tes amis voient ce que tu possèdes, Steam ou non. Éteint, ta
-                      bibliothèque ne sert qu'à toi et à tes propres appareils.
-                    </template>
-                    <template v-else>
-                      Active d'abord la synchronisation : sans elle, il n'y a rien à montrer.
-                    </template>
+                    {{ toriiPrefs.syncLibrary ? t("reglages.torii.bibliotheque.partageSous") : t("reglages.torii.bibliotheque.partageSansSynchro") }}
                   </span>
                 </div>
                 <span class="switch" :class="{ on: toriiAccount?.shareLibrary }"><span class="knob" /></span>
@@ -882,30 +938,26 @@ function unhide(id: string) {
               <template v-if="toriiPrefs.syncLibrary">
                 <p class="sync-state">
                   <template v-if="myDevice">
-                    {{ myDevice.gameCount }} jeux envoyés depuis « {{ myDevice.deviceName }} »,
-                    {{ sinceLabel(myDevice.updatedAt) }}.
+                    {{ t("reglages.torii.bibliotheque.envoye", { n: myDevice.gameCount, appareil: myDevice.deviceName, quand: sinceLabel(myDevice.updatedAt) }) }}
                   </template>
-                  <template v-else>Rien n'a encore été envoyé depuis cet appareil.</template>
+                  <template v-else>{{ t("reglages.torii.bibliotheque.rienEnvoye") }}</template>
                 </p>
                 <div class="row-actions">
                   <button class="ghost-btn" :disabled="librarySyncing" @click="onSyncLibraryNow">
-                    {{ librarySyncing ? "Envoi…" : "Synchroniser maintenant" }}
+                    {{ librarySyncing ? t("reglages.torii.bibliotheque.envoi") : t("reglages.torii.bibliotheque.maintenant") }}
                   </button>
                 </div>
 
                 <template v-if="otherDevices.length">
-                  <h3 class="sub-title">Mes autres appareils</h3>
-                  <p class="pane-hint">
-                    Tes amis voient l'ensemble de tes appareils comme une seule
-                    bibliothèque. Retirer un vieux PC efface la sienne du serveur.
-                  </p>
+                  <h3 class="sub-title">{{ t("reglages.torii.bibliotheque.autres") }}</h3>
+                  <p class="pane-hint">{{ t("reglages.torii.bibliotheque.autresAide") }}</p>
                   <div class="items">
                     <div v-for="d in otherDevices" :key="d.deviceId" class="item">
                       <div class="item-text">
                         <span class="item-title">{{ d.deviceName }}</span>
-                        <span class="item-sub">{{ d.gameCount }} jeux · {{ sinceLabel(d.updatedAt) }}</span>
+                        <span class="item-sub">{{ t("reglages.torii.bibliotheque.ligneAppareil", { n: d.gameCount, quand: sinceLabel(d.updatedAt) }) }}</span>
                       </div>
-                      <button class="ghost-btn" @click="onForgetDevice(d.deviceId)">Retirer</button>
+                      <button class="ghost-btn" @click="onForgetDevice(d.deviceId)">{{ t("commun.retirer") }}</button>
                     </div>
                   </div>
                 </template>
@@ -920,41 +972,29 @@ function unhide(id: string) {
                 @click="setToriiPrefs({ notifyFriendLaunch: !toriiPrefs.notifyFriendLaunch })"
               >
                 <div class="row-text">
-                  <span class="row-title">Me prévenir quand un ami lance un jeu</span>
-                  <span class="row-sub">
-                    Un bandeau s'affiche quelques secondes en haut à droite de l'écran, sans
-                    prendre le focus. Un jeu en plein écran exclusif peut le masquer.
-                  </span>
+                  <span class="row-title">{{ t("reglages.torii.notifAmi.titre") }}</span>
+                  <span class="row-sub">{{ t("reglages.torii.notifAmi.sous") }}</span>
                 </div>
                 <span class="switch" :class="{ on: toriiPrefs.notifyFriendLaunch }"><span class="knob" /></span>
               </button>
 
               <div class="divider" />
 
-              <h3 class="sub-title">Jeux jamais diffusés</h3>
-              <p class="pane-hint">
-                Ces jeux n'apparaissent jamais dans ta présence, même en cours de partie.
-                Utile pour les applications qui tournent en permanence.
-              </p>
+              <h3 class="sub-title">{{ t("reglages.torii.silence.titre") }}</h3>
+              <p class="pane-hint">{{ t("reglages.torii.silence.aide") }}</p>
               <div v-if="mutedList.length" class="items">
                 <div v-for="g in mutedList" :key="g.id" class="item">
                   <div class="thumb"><PlatformIcon :platform="g.platform" /></div>
                   <div class="item-text"><span class="item-title">{{ g.title }}</span></div>
-                  <button class="ghost-btn" @click="setMuted(g.id, false)">Diffuser à nouveau</button>
+                  <button class="ghost-btn" @click="setMuted(g.id, false)">{{ t("reglages.torii.silence.rediffuser") }}</button>
                 </div>
               </div>
-              <p v-else class="empty">
-                Aucun jeu masqué. Fais un clic droit sur un jeu pour l'ajouter.
-              </p>
+              <p v-else class="empty">{{ t("reglages.torii.silence.aucun") }}</p>
 
               <div class="divider" />
 
-              <h3 class="sub-title">Mes appareils</h3>
-              <p class="pane-hint">
-                Les machines où ce compte Torii est connecté. Une session inutilisée
-                pendant six mois tombe d'elle-même, mais si tu ne reconnais pas un
-                appareil, déconnecte-le tout de suite : c'est immédiat et sans appel.
-              </p>
+              <h3 class="sub-title">{{ t("reglages.torii.appareils.titre") }}</h3>
+              <p class="pane-hint">{{ t("reglages.torii.appareils.aide") }}</p>
 
               <p v-if="devicesError" class="row-error" role="alert">{{ devicesError }}</p>
 
@@ -963,11 +1003,11 @@ function unhide(id: string) {
                   <div class="item-text">
                     <span class="item-title">
                       {{ d.device }}
-                      <span v-if="d.current" class="tag">cet appareil</span>
+                      <span v-if="d.current" class="tag">{{ t("reglages.torii.appareils.celuiCi") }}</span>
                     </span>
                     <span class="item-sub">
-                      Connecté {{ sinceLabel(d.createdAt) }}<template v-if="!d.current">
-                        · actif {{ sinceLabel(d.lastSeenAt) }}</template>
+                      {{ t("reglages.torii.appareils.connecte", { quand: sinceLabel(d.createdAt) }) }}<template v-if="!d.current">
+                        · {{ t("reglages.torii.appareils.actif", { quand: sinceLabel(d.lastSeenAt) }) }}</template>
                     </span>
                   </div>
                   <button
@@ -975,51 +1015,45 @@ function unhide(id: string) {
                     class="ghost-btn"
                     @click="onRevokeDevice(d.id, d.device)"
                   >
-                    Déconnecter
+                    {{ t("reglages.torii.appareils.deconnecter") }}
                   </button>
                 </div>
               </div>
               <p v-else class="empty">
-                {{ devicesLoading ? "Chargement…" : "Aucun appareil connecté à afficher." }}
+                {{ devicesLoading ? t("commun.chargement") : t("reglages.torii.appareils.aucun") }}
               </p>
 
               <div v-if="otherSessions.length" class="row-actions">
                 <button v-if="!revokeAllOpen" class="ghost-btn" @click="revokeAllOpen = true">
-                  Déconnecter tous les autres appareils
+                  {{ t("reglages.torii.appareils.deconnecterTous") }}
                 </button>
                 <template v-else>
                   <span class="confirm-lead">
-                    {{ otherSessions.length > 1
-                      ? `Les ${otherSessions.length} autres appareils devront se reconnecter.`
-                      : "L'autre appareil devra se reconnecter." }}
+                    {{ t("reglages.torii.appareils.confirmationTous", { n: otherSessions.length }) }}
                   </span>
-                  <button class="danger-btn" @click="onRevokeOthers">Confirmer</button>
-                  <button class="ghost-btn" @click="revokeAllOpen = false">Annuler</button>
+                  <button class="danger-btn" @click="onRevokeOthers">{{ t("commun.confirmer") }}</button>
+                  <button class="ghost-btn" @click="revokeAllOpen = false">{{ t("commun.annuler") }}</button>
                 </template>
               </div>
 
               <div class="row-actions">
-                <button class="ghost-btn" @click="toriiLogout()">Déconnecter ce compte</button>
+                <button class="ghost-btn" @click="toriiLogout()">{{ t("reglages.torii.appareils.deconnecterCompte") }}</button>
               </div>
 
               <div class="divider" />
 
-              <h3 class="sub-title danger">Supprimer mon compte</h3>
-              <p class="pane-hint">
-                Ton pseudo, ton code d'ami et toutes tes relations disparaissent du serveur.
-                Tes amis ne te verront plus dans leur liste. Ta bibliothèque et tes réglages
-                restent sur cet ordinateur : seul le compte Torii est supprimé.
-              </p>
+              <h3 class="sub-title danger">{{ t("reglages.torii.suppression.titre") }}</h3>
+              <p class="pane-hint">{{ t("reglages.torii.suppression.aide") }}</p>
 
               <div v-if="!deleteOpen" class="row-actions">
-                <button class="danger-btn" @click="openDelete">Supprimer mon compte Torii</button>
+                <button class="danger-btn" @click="openDelete">{{ t("reglages.torii.suppression.bouton") }}</button>
               </div>
 
               <div v-else class="danger-zone">
                 <p class="danger-lead">
-                  C'est définitif : il n'y a pas de corbeille, et le même code d'ami ne
-                  reviendra pas. Recopie <strong>{{ toriiAccount?.displayName }}</strong>
-                  pour confirmer.
+                  {{ t("reglages.torii.suppression.avant") }}
+                  <strong>{{ toriiAccount?.displayName }}</strong>
+                  {{ t("reglages.torii.suppression.apres") }}
                 </p>
                 <div class="controls">
                   <input
@@ -1033,9 +1067,9 @@ function unhide(id: string) {
                     :disabled="!deleteReady || deleteBusy"
                     @click="onDeleteAccount"
                   >
-                    {{ deleteBusy ? "Suppression…" : "Supprimer définitivement" }}
+                    {{ deleteBusy ? t("reglages.torii.suppression.enCours") : t("reglages.torii.suppression.definitif") }}
                   </button>
-                  <button class="ghost-btn" @click="deleteOpen = false">Annuler</button>
+                  <button class="ghost-btn" @click="deleteOpen = false">{{ t("commun.annuler") }}</button>
                 </div>
                 <p v-if="deleteError" class="row-error" role="alert">{{ deleteError }}</p>
               </div>
@@ -1044,7 +1078,7 @@ function unhide(id: string) {
 
           <!-- Comptes & launchers -->
           <template v-else>
-            <h2 class="pane-title">Comptes &amp; launchers</h2>
+            <h2 class="pane-title">{{ t("reglages.categories.comptes") }}</h2>
             <AccountsSettings />
           </template>
         </div>
@@ -1247,6 +1281,29 @@ function unhide(id: string) {
   color: var(--accent); background: var(--accent-soft);
 }
 .confirm-lead { align-self: center; font-size: 12.5px; color: var(--text-dim); }
+
+/* --- Langue et région --------------------------------------------------------- */
+
+/* Invite à redémarrer après un changement de langue : sous la ligne concernée, pas en
+   toast — elle doit rester visible tant que le redémarrage n'a pas eu lieu. */
+.row-note {
+  display: flex; align-items: center; gap: 12px; margin-top: 12px;
+  padding: 9px 12px; border-radius: 9px; font-size: 12.5px; line-height: 1.45;
+  color: var(--text-dim); background: var(--accent-soft);
+}
+.row-note span { flex: 1; }
+
+.region { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex: none; }
+/* 🔑 Une liste déroulante et pas un sélecteur segmenté comme la langue : douze pays ne
+   tiennent pas sur une ligne, et une rangée de drapeaux serait illisible. */
+.region-select {
+  padding: 7px 30px 7px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600;
+  font-family: inherit; color: var(--text); cursor: pointer; min-width: 190px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.region-select:hover { border-color: var(--border-strong); }
+.region-select:focus { border-color: var(--accent); }
+.region-devise { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
 
 @media (max-width: 720px) {
   .dialog { flex-direction: column; height: 90vh; }

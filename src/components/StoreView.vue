@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useStore, type StoreSort } from "../composables/useStore";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { gradientFor } from "../lib/covers";
-import { formatEur } from "../lib/format";
+import { formatPrix } from "../lib/format";
+import { t } from "../i18n";
 import type { StoreItem, StoreSuggestion } from "../types";
 
 const {
@@ -12,13 +13,13 @@ const {
 } = useStore();
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 
-const SORTS: { key: StoreSort; label: string }[] = [
-  { key: "featured", label: "Mises en avant" },
-  { key: "savings", label: "Meilleures remises" },
-  { key: "price", label: "Prix croissant" },
-  { key: "recent", label: "Récents" },
-  { key: "rating", label: "Mieux notés" },
-];
+const SORTS = computed<{ key: StoreSort; label: string }[]>(() => [
+  { key: "featured", label: t("boutique.tris.featured") },
+  { key: "savings", label: t("boutique.tris.savings") },
+  { key: "price", label: t("boutique.tris.price") },
+  { key: "recent", label: t("boutique.tris.recent") },
+  { key: "rating", label: t("boutique.tris.rating") },
+]);
 
 // --- Autocomplétion ---
 const suggestOpen = ref(false);
@@ -85,7 +86,8 @@ onBeforeUnmount(() => {
   clearTimeout(debounce);
 });
 
-const price = formatEur;
+/** Un montant dans la devise de l'offre qui le porte. */
+const price = (montant: number, it: StoreItem) => formatPrix(montant, it.currency);
 
 /** Jaquette ITAD si fournie et non cassée, sinon dégradé (géré côté template). */
 const failed = ref(new Set<string>());
@@ -102,8 +104,8 @@ function onCoverError(url: string | null) {
   <div class="store">
     <div class="store-head">
       <div class="store-title">
-        <h2>Boutique</h2>
-        <p class="sub">Découvre et compare les prix sur toutes les boutiques PC.</p>
+        <h2>{{ t("boutique.titre") }}</h2>
+        <p class="sub">{{ t("boutique.sousTitre") }}</p>
       </div>
       <div class="store-search-wrap">
         <div class="store-search">
@@ -111,7 +113,7 @@ function onCoverError(url: string | null) {
           <input
             v-model="query"
             type="text"
-            placeholder="Rechercher un jeu à acheter…"
+            :placeholder="t('boutique.rechercher')"
             autocomplete="off"
             role="combobox"
             aria-autocomplete="list"
@@ -120,10 +122,10 @@ function onCoverError(url: string | null) {
             @keydown="onSearchKey"
             @focus="query && (suggestOpen = true)"
           />
-          <button v-if="query" class="clear" aria-label="Effacer" @click="clearSearch">
+          <button v-if="query" class="clear" :aria-label="t('boutique.effacer')" @click="clearSearch">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
-          <button class="go" @click="submitSearch">Rechercher</button>
+          <button class="go" @click="submitSearch">{{ t("boutique.lancerRecherche") }}</button>
         </div>
 
         <ul v-if="suggestOpen && suggestions.length" class="suggest" role="listbox">
@@ -149,18 +151,18 @@ function onCoverError(url: string | null) {
 
     <div class="bar">
       <span class="ctx">
-        {{ activeQuery ? `Résultats pour « ${activeQuery} »` : randomMode ? "Sélection au hasard" : "Sélection du moment" }}
+        {{ activeQuery ? t("boutique.resultatsPour", { requete: activeQuery }) : randomMode ? t("boutique.hasard") : t("boutique.duMoment") }}
         <span class="n">· {{ items.length }}</span>
       </span>
       <span class="spacer" />
       <button
         class="chip random"
         :disabled="randomLoading"
-        title="Ouvrir un jeu au hasard"
+        :title="t('boutique.auHasardAide')"
         @click="pickRandom"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none" /></svg>
-        {{ randomLoading ? "Pioche…" : "Au hasard" }}
+        {{ randomLoading ? t("boutique.pioche") : t("boutique.auHasard") }}
       </button>
       <template v-if="!activeQuery">
         <button
@@ -177,11 +179,11 @@ function onCoverError(url: string | null) {
 
     <div v-if="loading && !items.length" class="empty">
       <span class="spin" />
-      <p>Chargement de la boutique…</p>
+      <p>{{ t("boutique.chargement") }}</p>
     </div>
     <div v-else-if="!items.length" class="empty">
-      <p>Aucun jeu trouvé.</p>
-      <p v-if="activeQuery" class="dim">Essaie un autre titre.</p>
+      <p>{{ t("boutique.aucun") }}</p>
+      <p v-if="activeQuery" class="dim">{{ t("boutique.autreTitre") }}</p>
     </div>
 
     <div v-else class="grid" :class="{ dim: loading }">
@@ -206,7 +208,7 @@ function onCoverError(url: string | null) {
             class="wish-dot"
             :class="{ on: isWishlisted(it.gameId) }"
             role="button"
-            :title="isWishlisted(it.gameId) ? 'Retirer de la wishlist' : 'Ajouter à la wishlist'"
+            :title="isWishlisted(it.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
             @click.stop="toggleWishlist({ gameId: it.gameId, title: it.title, coverUrl: it.coverUrl })"
           >
             <svg viewBox="0 0 24 24" :fill="isWishlisted(it.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
@@ -216,8 +218,8 @@ function onCoverError(url: string | null) {
         </div>
         <div class="meta">
           <div class="price">
-            <span class="now" :class="{ hot: it.savings > 0 }">{{ price(it.price) }}</span>
-            <span v-if="it.savings > 0" class="was">{{ price(it.normalPrice) }}</span>
+            <span class="now" :class="{ hot: it.savings > 0 }">{{ price(it.price, it) }}</span>
+            <span v-if="it.savings > 0" class="was">{{ price(it.normalPrice, it) }}</span>
           </div>
           <span v-if="it.storeName" class="store-name">{{ it.storeName }}</span>
         </div>

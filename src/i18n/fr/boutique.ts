@@ -1,0 +1,77 @@
+/** Boutique, fiche produit et wishlist. */
+export default {
+  titre: "Boutique",
+  sousTitre: "Découvre et compare les prix sur toutes les boutiques PC.",
+  rechercher: "Rechercher un jeu à acheter…",
+  effacer: "Effacer",
+  lancerRecherche: "Rechercher",
+  resultatsPour: "Résultats pour « {requete} »",
+  hasard: "Sélection au hasard",
+  duMoment: "Sélection du moment",
+  auHasard: "Au hasard",
+  auHasardAide: "Ouvrir un jeu au hasard",
+  pioche: "Pioche…",
+  tris: {
+    featured: "Mises en avant",
+    savings: "Meilleures remises",
+    price: "Prix croissant",
+    recent: "Récents",
+    rating: "Mieux notés",
+  },
+  chargement: "Chargement de la boutique…",
+  aucun: "Aucun jeu trouvé.",
+  autreTitre: "Essaie un autre titre.",
+  ajouterWishlist: "Ajouter à la wishlist",
+  retirerWishlist: "Retirer de la wishlist",
+
+  produit: {
+    fiche: "Fiche produit",
+    chargement: "Chargement…",
+    chargementFiche: "Chargement de la fiche…",
+    meilleurPrix: "Meilleur prix",
+    auLieuDe: "au lieu de {prix}",
+    acheterChez: "Acheter chez {boutique}",
+    dansWishlist: "Dans la wishlist",
+    plusBasHistorique: "Plus bas historique :",
+    comparer: "Comparer ({n} boutique) | Comparer ({n} boutiques)",
+    rupture: "Rupture de stock",
+    masquerVendeur: "Masquer ce vendeur",
+    reafficherVendeur: "Réafficher ce vendeur",
+    voirBoutique: "Voir sur la boutique",
+    acheter: "Acheter",
+    vendeursMasques: "{n} vendeur masqué | {n} vendeurs masqués",
+    // ⚠️ La devise est donnée par son code (EUR, USD) et non par son nom : les noms
+    // renvoyés par `Intl` sont au singulier (« en euro ») et ne s'accordent pas.
+    avertissement:
+      "Prix indicatifs ({devise}). Masque les vendeurs que tu ne veux plus voir avec " +
+      "l'icône œil. L'achat se fait sur la boutique du marchand.",
+  },
+
+  wishlist: {
+    titre: "Wishlist",
+    enPromo: "· {n} en promo",
+    actualisation: "Actualisation…",
+    rechercher: "Rechercher…",
+    rechercherAide: "Rechercher dans la wishlist",
+    actualiser: "Actualiser",
+    connecterSteam: "Connecte ton compte Steam pour suivre les prix de ta wishlist.",
+    ouvrirReglages: "Ouvrir les réglages",
+    recuperation: "Récupération des prix de ta wishlist…",
+    premiereFois: "Quelques secondes la première fois.",
+    vide: "Ta wishlist Steam est vide.",
+    aucunResultat: "Aucun jeu de ta wishlist ne correspond à « {requete} ».",
+    jeuSteam: "Jeu Steam",
+    pasDOffre: "Pas encore d'offre",
+    auPlusBas: "★ Plus bas historique",
+    auPlusBasAide: "Le prix actuel touche son plus bas historique",
+    retire: "« {titre} » retiré de ta wishlist",
+    ajouteSteam: "« {titre} » ajouté à ta wishlist, Steam compris",
+    ajoute: "« {titre} » ajouté à ta wishlist",
+  },
+
+  notifications: {
+    baisse: "💸 Baisse de prix",
+    baisses: "💸 Baisses de prix",
+    plusieurs: "{n} jeux de ta wishlist ont baissé (promo ou plus bas historique).",
+  },
+} as const;

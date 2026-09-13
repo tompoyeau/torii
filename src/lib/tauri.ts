@@ -1,5 +1,6 @@
 import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 import { avatarFictif } from "./covers";
+import { t } from "../i18n";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
 export interface ManualInput {
@@ -69,8 +70,54 @@ async function call<T>(cmd: string, args: Args | undefined, fallback: T): Promis
 /** Appelle une commande Rust en laissant remonter l'erreur (l'appelant la traite). */
 async function callOrThrow<T>(cmd: string, args?: Args): Promise<T> {
   const invoke = await loadInvoke();
-  if (!invoke) throw new Error(`${cmd} : indisponible hors de l'application Torii.`);
+  if (!invoke) throw new Error(t("systeme.commandeHorsApplication", { commande: cmd }));
   return await invoke<T>(cmd, args);
+}
+
+// --- Langue et région ---------------------------------------------------------
+
+/**
+ * Informe la couche native de la langue et de la région choisies.
+ *
+ * 🔑 POURQUOI RUST A BESOIN DE LE SAVOIR. Ce n'est pas l'interface qui interroge les
+ * boutiques, c'est Rust : `l=french` sur le Steam Store, `locale=fr-FR` chez GOG,
+ * `country=FR` sur le comparateur de prix. Une langue qui ne vivrait que dans le
+ * navigateur laisserait arriver des descriptions françaises dans une interface anglaise.
+ *
+ * ⚠️ Appelé au démarrage ET à chaque changement — la couche native n'a aucun moyen de
+ * lire `localStorage`, qui appartient à la fenêtre.
+ */
+export async function setLocale(language: string, region: string): Promise<void> {
+  await call<void>("set_locale", { language, region }, undefined);
+}
+
+/**
+ * `"fr"` si Torii était déjà installé avant d'avoir des langues — l'utilisateur doit alors
+ * rester en français. `null` pour une installation neuve, et hors Tauri.
+ */
+export async function langueHeritee(): Promise<"fr" | null> {
+  return await call<"fr" | null>("langue_heritee", undefined, null);
+}
+
+/**
+ * Relance l'application.
+ *
+ * Utilisé après un changement de langue : l'interface bascule tout de suite, mais les
+ * descriptions des jeux déjà chargées en mémoire restent dans l'ancienne langue jusqu'au
+ * prochain démarrage.
+ *
+ * ⚠️ Hors Tauri (démo en ligne), on recharge la page. Ne rien faire laissait un bouton
+ * « Redémarrer maintenant » inerte — et c'est dans la démo qu'il sert le plus : sa
+ * bibliothèque fictive est construite au chargement, un rechargement la reconstruit
+ * dans la nouvelle langue.
+ */
+export async function relaunchApp(): Promise<void> {
+  if (!hasTauriRuntime()) {
+    window.location.reload();
+    return;
+  }
+  const { relaunch } = await import("@tauri-apps/plugin-process");
+  await relaunch();
 }
 
 // --- Lancement / installation -------------------------------------------------
@@ -282,7 +329,7 @@ export async function enrichGame(game: Game): Promise<GameMeta | null> {
 
 async function social<T>(cmd: string, args?: Args): Promise<T> {
   const invoke = await loadInvoke();
-  if (!invoke) throw new Error("Le service Torii n'est disponible que dans l'application.");
+  if (!invoke) throw new Error(t("systeme.socialHorsApplication"));
   return await invoke<T>(cmd, args);
 }
 
@@ -785,11 +832,11 @@ function mockAchievements(): SteamAchievements {
     unlocked: 3,
     total: 8,
     items: [
-      { name: "Fuite de l'Avernus", description: "Prendre le contrôle du nautiloïde et vous enfuir des Enfers.", icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: true, unlockedAt: "Débloqué le 30 aout 2023 à 10h28" },
-      { name: "De Charybde en Scylla", description: "Quitter l'acte 1 pour vous rendre dans un lieu bien plus sombre.", icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: true, unlockedAt: "Débloqué le 19 nov. 2023 à 8h24" },
-      { name: "La cité vous attend", description: "Quitter l'acte 2 pour rejoindre la Porte de Baldur.", icon: icon("3c6d05ff648b66925238963a658ee307e31ff870"), unlocked: true, unlockedAt: "Débloqué le 26 janv. 2024 à 14h31" },
-      { name: "Tout est bien qui finit bien", description: "Terminer le jeu.", icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: false, unlockedAt: null },
-      { name: "L'appel du sang", description: "Boire le sang d'un ennemi vaincu.", icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: false, unlockedAt: null },
+      { name: t("demo.succes.nom1"), description: t("demo.succes.desc1"), icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: true, unlockedAt: t("demo.succes.date1") },
+      { name: t("demo.succes.nom2"), description: t("demo.succes.desc2"), icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: true, unlockedAt: t("demo.succes.date2") },
+      { name: t("demo.succes.nom3"), description: t("demo.succes.desc3"), icon: icon("3c6d05ff648b66925238963a658ee307e31ff870"), unlocked: true, unlockedAt: t("demo.succes.date3") },
+      { name: t("demo.succes.nom4"), description: t("demo.succes.desc4"), icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: false, unlockedAt: null },
+      { name: t("demo.succes.nom5"), description: t("demo.succes.desc5"), icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: false, unlockedAt: null },
     ],
   };
 }

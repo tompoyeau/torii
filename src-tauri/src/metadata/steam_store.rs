@@ -2,6 +2,10 @@ use crate::models::GameMeta;
 use serde_json::Value;
 use std::time::Duration;
 
+/// Pays passé à Steam (`cc=`) pour lire les fiches. Pas la région de l'utilisateur :
+/// voir `appdetails` — Steam masque des jeux selon le pays, et aucun prix n'est lu ici.
+const CATALOGUE_STEAM: &str = "us";
+
 const CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
 
 fn get_json(url: &str) -> Option<Value> {
@@ -15,13 +19,20 @@ fn get_json(url: &str) -> Option<Value> {
 
 /// Récupère les métadonnées d'un jeu Steam via l'API publique `appdetails`.
 pub fn appdetails(appid: &str) -> Option<GameMeta> {
-    // 🔑 `l=french` traduit description, genres et date de sortie ; `cc=fr` cale le pays
-    // sur celui de l'utilisateur. Le champ `name`, lui, n'est PAS localisé par Steam
+    // 🔑 `l=` traduit description, genres et date de sortie ; `cc=` cale le pays sur
+    // celui de l'utilisateur. Le champ `name`, lui, n'est PAS localisé par Steam
     // (vérifié) — aucun risque de renommer les jeux de la bibliothèque au passage.
     // ⚠️ La date devient « 24 févr. 2017 » : `parse_year` cherche une suite de 4 chiffres
     // en 19xx/20xx, il s'en moque.
-    let url =
-        format!("https://store.steampowered.com/api/appdetails?appids={appid}&l=french&cc=fr");
+    // ⚠️ `l=` suit la langue de l'interface — c'est pour ça que le cache est séparé par
+    // langue. `cc=`, lui, est FIXÉ sur les États-Unis et ne suit PAS la région : Torii ne lit
+    // aucun prix dans cette réponse, seulement description et genres, et Steam masque des
+    // jeux selon le pays. Mesuré : avec `cc=ru`, la fiche de Cyberpunk 2077 échoue. La région
+    // ne sert qu'aux prix, au comparateur ; ici, il faut le catalogue le plus large.
+    let langue = crate::locale::steam_langue();
+    let url = format!(
+        "https://store.steampowered.com/api/appdetails?appids={appid}&l={langue}&cc={CATALOGUE_STEAM}"
+    );
     let root = get_json(&url)?;
     let entry = root.get(appid)?;
     if !entry["success"].as_bool().unwrap_or(false) {
@@ -153,8 +164,9 @@ pub fn search_appid(title: &str) -> Option<String> {
 /// un suffixe d'édition — mais elle ne doit passer qu'après.
 fn search_exact(title: &str) -> Option<String> {
     let url = format!(
-        "https://store.steampowered.com/api/storesearch/?term={}&cc=fr&l=french",
-        percent_encode(title)
+        "https://store.steampowered.com/api/storesearch/?term={}&cc={CATALOGUE_STEAM}&l={}",
+        percent_encode(title),
+        crate::locale::steam_langue()
     );
     let root = get_json(&url)?;
     let want = normalize(title);

@@ -4,7 +4,8 @@ import { useWishlist } from "../composables/useWishlist";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { openExternal } from "../lib/tauri";
-import { formatEur } from "../lib/format";
+import { formatPrix } from "../lib/format";
+import { t } from "../i18n";
 import { gradientFor } from "../lib/covers";
 import type { WishlistItem } from "../types";
 
@@ -60,47 +61,47 @@ function atLow(it: WishlistItem): boolean {
 <template>
   <div class="wl">
     <div class="sec-head">
-      <h2>Wishlist</h2>
-      <span class="n">{{ visibles.length }} jeu{{ visibles.length > 1 ? "x" : "" }}</span>
+      <h2>{{ t("boutique.wishlist.titre") }}</h2>
+      <span class="n">{{ t("bibliotheque.jeux", { n: visibles.length }) }}</span>
       <!-- Le compte des promos porte sur la wishlist entiere : on le cache pendant une
            recherche, ou il contredirait le nombre affiche juste a cote. -->
-      <span v-if="onSaleCount && !query.trim()" class="n sale">· {{ onSaleCount }} en promo</span>
-      <span v-if="loading" class="spin" title="Actualisation…" />
+      <span v-if="onSaleCount && !query.trim()" class="n sale">{{ t("boutique.wishlist.enPromo", { n: onSaleCount }) }}</span>
+      <span v-if="loading" class="spin" :title="t('boutique.wishlist.actualisation')" />
       <span class="spacer" />
       <input
         v-if="items.length"
         v-model="query"
         class="search"
         type="search"
-        placeholder="Rechercher…"
-        aria-label="Rechercher dans la wishlist"
+        :placeholder="t('boutique.wishlist.rechercher')"
+        :aria-label="t('boutique.wishlist.rechercherAide')"
       />
-      <button class="chip refresh" :disabled="loading" title="Actualiser" @click="refresh()">
+      <button class="chip refresh" :disabled="loading" :title="t('boutique.wishlist.actualiser')" @click="refresh()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
-        Actualiser
+        {{ t("boutique.wishlist.actualiser") }}
       </button>
     </div>
 
     <!-- Steam non connecté -->
     <div v-if="loaded && !steamConnected" class="empty">
-      <p>Connecte ton compte Steam pour suivre les prix de ta wishlist.</p>
-      <button class="btn-connect" @click="openSettings()">Ouvrir les réglages</button>
+      <p>{{ t("boutique.wishlist.connecterSteam") }}</p>
+      <button class="btn-connect" @click="openSettings()">{{ t("boutique.wishlist.ouvrirReglages") }}</button>
     </div>
 
     <!-- Chargement initial -->
     <div v-else-if="!loaded && loading" class="empty">
       <span class="spin big" />
-      <p>Récupération des prix de ta wishlist…</p>
-      <p class="dim">Quelques secondes la première fois.</p>
+      <p>{{ t("boutique.wishlist.recuperation") }}</p>
+      <p class="dim">{{ t("boutique.wishlist.premiereFois") }}</p>
     </div>
 
     <!-- Vide -->
     <div v-else-if="loaded && !items.length" class="empty">
-      <p>Ta wishlist Steam est vide.</p>
+      <p>{{ t("boutique.wishlist.vide") }}</p>
     </div>
 
     <div v-else-if="!visibles.length" class="empty">
-      <p>Aucun jeu de ta wishlist ne correspond à « {{ query.trim() }} ».</p>
+      <p>{{ t("boutique.wishlist.aucunResultat", { requete: query.trim() }) }}</p>
     </div>
 
     <div v-else class="grid">
@@ -122,20 +123,20 @@ function atLow(it: WishlistItem): boolean {
           />
           <span v-if="it.savings > 0" class="badge">-{{ it.savings }}%</span>
           <span class="cover-scrim" />
-          <span class="cover-title">{{ it.title || "Jeu Steam" }}</span>
+          <span class="cover-title">{{ it.title || t("boutique.wishlist.jeuSteam") }}</span>
         </div>
         <div class="meta">
           <div v-if="it.price != null" class="price-row">
-            <span class="price" :class="{ low: atLow(it) }">{{ formatEur(it.price) }}</span>
-            <span v-if="it.savings > 0 && it.normalPrice" class="was">{{ formatEur(it.normalPrice) }}</span>
+            <span class="price" :class="{ low: atLow(it) }">{{ formatPrix(it.price, it.currency) }}</span>
+            <span v-if="it.savings > 0 && it.normalPrice" class="was">{{ formatPrix(it.normalPrice, it.currency) }}</span>
             <span v-if="it.storeName" class="store">{{ it.storeName }}</span>
           </div>
-          <div v-else class="price-row"><span class="soon">Pas encore d'offre</span></div>
-          <div v-if="atLow(it)" class="hist at-low" title="Le prix actuel touche son plus bas historique">
-            ★ Plus bas historique
+          <div v-else class="price-row"><span class="soon">{{ t("boutique.wishlist.pasDOffre") }}</span></div>
+          <div v-if="atLow(it)" class="hist at-low" :title="t('boutique.wishlist.auPlusBasAide')">
+            {{ t("boutique.wishlist.auPlusBas") }}
           </div>
           <div v-else-if="it.historyLow != null" class="hist">
-            Plus bas : {{ formatEur(it.historyLow) }}
+            {{ t("prix.plusBas", { prix: formatPrix(it.historyLow, it.currency) }) }}
           </div>
         </div>
       </button>

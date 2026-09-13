@@ -14,11 +14,12 @@ fn get_json(url: &str) -> Option<Value> {
 /// Métadonnées d'un jeu GOG via l'API v2 publique (celle de GOG Galaxy).
 /// Un seul appel fournit description, captures, développeur, année et genre.
 pub fn product(product_id: &str) -> Option<GameMeta> {
-    // 🔑 `locale=fr-FR` : GOG rend alors la description ET les tags en français
-    // (« Jeu de rôle », « Aventure »). `globalReleaseDate` reste une date ISO, donc
+    // 🔑 `locale=` : GOG rend alors la description ET les tags dans cette langue
+    // (« Jeu de rôle » / « Role-playing »). `globalReleaseDate` reste une date ISO, donc
     // `parse_year` n'est pas concerné.
+    let loc = crate::locale::gog_locale();
     let root = get_json(&format!(
-        "https://api.gog.com/v2/games/{product_id}?locale=fr-FR"
+        "https://api.gog.com/v2/games/{product_id}?locale={loc}"
     ))?;
     let emb = &root["_embedded"];
 

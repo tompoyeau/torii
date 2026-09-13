@@ -1,4 +1,5 @@
 import type { ToriiStatus } from "../types";
+import { t } from "../i18n";
 import type { UnifiedFriend } from "../composables/useFriendList";
 
 /**
@@ -20,22 +21,24 @@ export interface CanalPresence {
   title: string;
 }
 
+/**
+ * ⚠️ Une phrase entière par cas, et pas « En ligne » + « sur Steam » : l'ordre et la
+ * préposition changent d'une langue à l'autre, et certaines phrases (« Torii fermé »)
+ * n'ont aucune forme commune avec les autres.
+ */
 function etatSource(canal: "steam" | "torii", etat: ToriiStatus | null) {
-  const ou = canal === "steam" ? "sur Steam" : "sur Torii";
+  const steam = canal === "steam";
   switch (etat) {
     case "in-game":
-      return { live: true, phrase: `En jeu, vu ${ou}` };
+      return { live: true, phrase: steam ? t("amis.canaux.enJeuSteam") : t("amis.canaux.enJeuTorii") };
     case "online":
-      return { live: true, phrase: `En ligne ${ou}` };
+      return { live: true, phrase: steam ? t("amis.canaux.enLigneSteam") : t("amis.canaux.enLigneTorii") };
     case "away":
-      return { live: true, phrase: `Absent ${ou}` };
+      return { live: true, phrase: steam ? t("amis.canaux.absentSteam") : t("amis.canaux.absentTorii") };
     default:
       return {
         live: false,
-        phrase:
-          canal === "steam"
-            ? "Hors ligne sur Steam"
-            : "Torii fermé : ce qu'il joue hors Steam reste invisible",
+        phrase: steam ? t("amis.canaux.horsLigneSteam") : t("amis.canaux.toriiFerme"),
       };
   }
 }
@@ -49,7 +52,7 @@ export function sourcesOf(f: UnifiedFriend): CanalPresence[] {
       key: "torii",
       label: "Torii",
       live: e.live,
-      title: `${e.phrase}. Ami Torii : tu vois ses jeux quel que soit son launcher, tant qu'il a Torii ouvert.`,
+      title: t("amis.canaux.detailTorii", { etat: e.phrase }),
     });
   }
   if (f.steamState !== null) {
@@ -58,7 +61,7 @@ export function sourcesOf(f: UnifiedFriend): CanalPresence[] {
       key: "steam",
       label: "Steam",
       live: e.live,
-      title: `${e.phrase}. Ami Steam : cette liste vient de Steam et se gère depuis Steam.`,
+      title: t("amis.canaux.detailSteam", { etat: e.phrase }),
     });
   }
   return liste;
@@ -71,9 +74,7 @@ export function sourcesOf(f: UnifiedFriend): CanalPresence[] {
  */
 export function offlineHintOf(f: UnifiedFriend): string {
   if (f.source === "both") {
-    return "Hors ligne sur Steam et Torii fermé : elle joue peut-être sans qu'on le voie.";
+    return t("amis.canaux.pourquoiLesDeux");
   }
-  return f.source === "torii"
-    ? "Cette personne n'a pas Torii ouvert : elle joue peut-être sans qu'on le voie."
-    : "Hors ligne sur Steam.";
+  return f.source === "torii" ? t("amis.canaux.pourquoiTorii") : t("amis.canaux.pourquoiSteam");
 }

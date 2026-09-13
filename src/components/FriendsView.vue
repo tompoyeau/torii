@@ -10,6 +10,7 @@ import { useFriendLibrary } from "../composables/useFriendLibrary";
 import { showToast } from "../composables/useToast";
 import ToriiPanel from "./ToriiPanel.vue";
 import LibraryInvite from "./LibraryInvite.vue";
+import { t } from "../i18n";
 
 const { loaded, steamConnected, refresh } = useFriends();
 const { inGame, online, offline, activeCount, loading } = useFriendList();
@@ -49,7 +50,7 @@ async function onInvite() {
     await invite(code);
     friendCode.value = "";
     addOpen.value = false;
-    showToast("Demande envoyée.");
+    showToast(t("amis.demandeEnvoyee"));
   } catch (e) {
     addError.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -61,9 +62,9 @@ async function copyCode() {
   if (!account.value) return;
   try {
     await navigator.clipboard.writeText(account.value.friendCode);
-    showToast("Ton code d'ami est copié.");
+    showToast(t("amis.codeCopie"));
   } catch {
-    showToast("Copie impossible ; note le code à la main.");
+    showToast(t("amis.copieImpossible"));
   }
 }
 
@@ -71,10 +72,10 @@ async function copyCode() {
 
 function stateLabel(f: UnifiedFriend): string {
   switch (f.state) {
-    case "online": return "En ligne";
-    case "away": return "Absent";
-    case "in-game": return f.gameName ?? "En jeu";
-    default: return "Hors ligne";
+    case "online": return t("amis.etats.enLigne");
+    case "away": return t("amis.etats.absent");
+    case "in-game": return f.gameName ?? t("amis.etats.enJeu");
+    default: return t("amis.etats.horsLigne");
   }
 }
 
@@ -130,30 +131,19 @@ const showOffline = ref(false);
 
 /* ── Ce qu'on laisse voir ──────────────────────────────────────────────────── */
 
-const MODES = [
-  {
-    key: "detailed" as const,
-    label: "Jeu visible",
-    hint: "Tes amis voient à quoi tu joues et depuis quand.",
-  },
-  {
-    key: "online" as const,
-    label: "En ligne",
-    hint: "Ils te savent connecté, sans savoir à quoi tu joues.",
-  },
-  {
-    key: "offline" as const,
-    label: "Invisible",
-    hint: "Personne ne voit rien. Tu vois toujours tes amis.",
-  },
-];
+/** Mêmes libellés que les Paramètres, lus au même endroit du catalogue. */
+const MODES = computed(() => [
+  { key: "detailed" as const, label: t("reglages.torii.presence.detaille"), hint: t("reglages.torii.presence.detailleAide") },
+  { key: "online" as const, label: t("reglages.torii.presence.enLigne"), hint: t("reglages.torii.presence.enLigneAide") },
+  { key: "offline" as const, label: t("reglages.torii.presence.invisible"), hint: t("reglages.torii.presence.invisibleAide") },
+]);
 
 const presenceOpen = ref(false);
 const currentMode = computed(
-  () => MODES.find((m) => m.key === presenceMode.value) ?? MODES[2],
+  () => MODES.value.find((m) => m.key === presenceMode.value) ?? MODES.value[2],
 );
 
-async function choosePresence(mode: (typeof MODES)[number]["key"]) {
+async function choosePresence(mode: (typeof MODES.value)[number]["key"]) {
   presenceOpen.value = false;
   await setPresenceMode(mode);
 }
@@ -180,9 +170,9 @@ onBeforeUnmount(() => {
   <div class="friends">
     <header class="head">
       <div class="head-title">
-        <h2>Amis</h2>
-        <span class="count">{{ activeCount }} en ligne</span>
-        <span v-if="loading" class="spin" title="Actualisation…" />
+        <h2>{{ t("amis.titre") }}</h2>
+        <span class="count">{{ t("amis.enLigneCompte", { n: activeCount }) }}</span>
+        <span v-if="loading" class="spin" :title="t('amis.actualisation')" />
       </div>
 
       <div class="head-actions">
@@ -201,7 +191,7 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6" /></svg>
           </button>
           <div v-if="presenceOpen" class="presence-menu">
-            <p class="menu-head">Ce que tes amis voient</p>
+            <p class="menu-head">{{ t("amis.ceQueVoient") }}</p>
             <button
               v-for="m in MODES"
               :key="m.key"
@@ -220,9 +210,9 @@ onBeforeUnmount(() => {
         </div>
         <button v-if="toriiConnected" class="btn-add" @click="addOpen = !addOpen">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
-          Ajouter un ami
+          {{ t("amis.ajouterAmi") }}
         </button>
-        <button class="icon-btn" :disabled="loading" title="Actualiser" @click="refresh()">
+        <button class="icon-btn" :disabled="loading" :title="t('amis.actualiser')" @click="refresh()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
         </button>
       </div>
@@ -231,7 +221,7 @@ onBeforeUnmount(() => {
     <!-- Ajout : le code d'ami n'apparaît qu'ici, au moment où il sert -->
     <div v-if="addOpen && toriiConnected" class="add-panel">
       <form class="add-form" @submit.prevent="onInvite">
-        <label class="add-label" for="friend-code">Son code d'ami</label>
+        <label class="add-label" for="friend-code">{{ t("amis.sonCode") }}</label>
         <div class="add-row">
           <input
             id="friend-code"
@@ -242,14 +232,14 @@ onBeforeUnmount(() => {
             autocomplete="off"
           />
           <button type="submit" class="btn-primary" :disabled="addBusy || !friendCode.trim()">
-            {{ addBusy ? "Envoi…" : "Envoyer" }}
+            {{ addBusy ? t("amis.envoi") : t("amis.envoyer") }}
           </button>
         </div>
         <p v-if="addError" class="add-error">{{ addError }}</p>
       </form>
       <div class="add-mine">
-        <span class="add-label">Le tien, à lui donner</span>
-        <button class="code-chip" title="Copier" @click="copyCode">
+        <span class="add-label">{{ t("amis.leTien") }}</span>
+        <button class="code-chip" :title="t('amis.copier')" @click="copyCode">
           {{ account?.friendCode }}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
         </button>
@@ -263,31 +253,31 @@ onBeforeUnmount(() => {
 
     <!-- Demandes reçues -->
     <section v-if="circle.incoming.length" class="requests">
-      <h3>{{ circle.incoming.length }} demande{{ circle.incoming.length > 1 ? "s" : "" }} d'ami</h3>
+      <h3>{{ t("amis.demandes", { n: circle.incoming.length }) }}</h3>
       <div v-for="p in circle.incoming" :key="p.id" class="request">
         <span class="req-avatar">{{ initials(p.displayName) }}</span>
         <span class="req-name">{{ p.displayName }}</span>
-        <button class="btn-primary sm" @click="respond(p.id, true)">Accepter</button>
-        <button class="btn-ghost sm" @click="respond(p.id, false)">Refuser</button>
+        <button class="btn-primary sm" @click="respond(p.id, true)">{{ t("amis.accepter") }}</button>
+        <button class="btn-ghost sm" @click="respond(p.id, false)">{{ t("amis.refuser") }}</button>
       </div>
     </section>
 
     <!-- Aucune source connectée -->
     <div v-if="loaded && !steamConnected && !toriiConnected" class="empty">
-      <p class="empty-title">Personne à afficher pour l'instant</p>
-      <p>Connecte ton compte Steam, ou crée un compte Torii pour voir tes amis quel que soit leur launcher.</p>
-      <button class="btn-primary" @click="openSettings()">Ouvrir les réglages</button>
+      <p class="empty-title">{{ t("amis.personne") }}</p>
+      <p>{{ t("amis.personneAide") }}</p>
+      <button class="btn-primary" @click="openSettings()">{{ t("amis.ouvrirReglages") }}</button>
     </div>
 
     <div v-else-if="!loaded && loading" class="empty">
       <span class="spin big" />
-      <p>Récupération de tes amis…</p>
+      <p>{{ t("amis.recuperation") }}</p>
     </div>
 
     <template v-else>
       <!-- ── En jeu : la section qui répond à « avec qui je joue ? » ── -->
       <section v-if="inGame.length" class="block">
-        <h3 class="block-title ingame">En jeu <span>{{ inGame.length }}</span></h3>
+        <h3 class="block-title ingame">{{ t("amis.enJeu") }} <span>{{ inGame.length }}</span></h3>
         <div class="cards">
           <div v-for="f in inGame" :key="f.key" class="card" :class="{ same: f.ownedGame }">
             <button class="card-who" @click="openProfile(f)">
@@ -303,7 +293,7 @@ onBeforeUnmount(() => {
                      disaient pas la même chose, ce qui se lisait comme une information
                      manquante plutôt que comme une différence de source. -->
                 <span class="who-when">
-                  en ce moment
+                  {{ t("amis.enCeMoment") }}
                   <span
                     v-for="s in sources(f)"
                     :key="s.key"
@@ -315,12 +305,12 @@ onBeforeUnmount(() => {
               </span>
             </button>
             <div class="card-game">
-              <span class="game-name">{{ f.gameName ?? "Un jeu" }}</span>
-              <span v-if="f.ownedGame" class="game-same">Tu l'as aussi</span>
+              <span class="game-name">{{ f.gameName ?? t("amis.unJeu") }}</span>
+              <span v-if="f.ownedGame" class="game-same">{{ t("amis.tuLAsAussi") }}</span>
             </div>
             <button v-if="f.ownedGame" class="btn-play" @click="onSameGame(f)">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-              {{ f.ownedGame.installed ? "Jouer" : "Voir la fiche" }}
+              {{ f.ownedGame.installed ? t("bibliotheque.jouer") : t("amis.voirFiche") }}
             </button>
           </div>
         </div>
@@ -328,7 +318,7 @@ onBeforeUnmount(() => {
 
       <!-- ── Disponibles ── -->
       <section v-if="disponibles.length" class="block">
-        <h3 class="block-title">Disponibles <span>{{ disponibles.length }}</span></h3>
+        <h3 class="block-title">{{ t("amis.disponibles") }} <span>{{ disponibles.length }}</span></h3>
         <div class="rows">
           <div v-for="f in disponibles" :key="f.key" class="row-shell">
             <button class="row" @click="openProfile(f)">
@@ -355,7 +345,7 @@ onBeforeUnmount(() => {
       <section v-if="offline.length" class="block">
         <button class="block-title toggle" @click="showOffline = !showOffline">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" :class="{ open: showOffline }"><path d="M9 6l6 6-6 6" /></svg>
-          Hors ligne <span>{{ offline.length }}</span>
+          {{ t("amis.horsLigne") }} <span>{{ offline.length }}</span>
         </button>
         <div v-if="showOffline" class="rows">
           <div v-for="f in offline" :key="f.key" class="row-shell">
@@ -373,7 +363,7 @@ onBeforeUnmount(() => {
                 :class="[s.key, { off: !s.live }]"
                 :title="s.title"
               >{{ s.label }}</span>
-              <span class="row-state">{{ f.source === "torii" ? "Torii fermé" : "Hors ligne" }}</span>
+              <span class="row-state">{{ f.source === "torii" ? t("amis.toriiFerme") : t("amis.horsLigne") }}</span>
             </button>
           </div>
         </div>
@@ -381,16 +371,16 @@ onBeforeUnmount(() => {
 
       <!-- ── Aucun ami : c'est ICI que le code d'ami est utile ── -->
       <div v-if="!inGame.length && !disponibles.length && !offline.length" class="empty">
-        <p class="empty-title">Pas encore d'amis sur Torii</p>
+        <p class="empty-title">{{ t("amis.pasEncore") }}</p>
         <template v-if="toriiConnected">
-          <p>Donne ton code à quelqu'un, ou saisis le sien avec « Ajouter un ami ».</p>
-          <button class="code-chip big" title="Copier" @click="copyCode">
+          <p>{{ t("amis.pasEncoreAide") }}</p>
+          <button class="code-chip big" :title="t('amis.copier')" @click="copyCode">
             {{ account?.friendCode }}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
           </button>
         </template>
         <p v-else-if="steamConnected" class="dim">
-          Ta liste d'amis Steam est peut-être privée.
+          {{ t("amis.listePrivee") }}
         </p>
       </div>
     </template>

@@ -178,7 +178,7 @@ pub fn update(
     let game = games
         .iter_mut()
         .find(|g| g.id == id)
-        .ok_or_else(|| format!("Jeu détecté introuvable : {id}"))?;
+        .ok_or_else(|| if crate::locale::en() { format!("Detected game not found: {id}") } else { format!("Jeu détecté introuvable : {id}") })?;
     game.title = input.title;
     game.launch_target = input.launch_target;
     game.install_dir = input.install_dir;

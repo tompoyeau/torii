@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { useUpdater } from "../composables/useUpdater";
+import { t } from "../i18n";
 
 const { status, version, progress, error, check, install, dismiss } = useUpdater();
 
@@ -23,13 +24,13 @@ const pct = computed(() => (progress.value != null ? Math.round(progress.value *
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
           </div>
           <div class="ub-body">
-            <div class="ub-title">Mise à jour disponible</div>
-            <div class="ub-sub">Torii {{ version }} est prêt à être installé.</div>
+            <div class="ub-title">{{ t("systeme.maj.disponible") }}</div>
+            <div class="ub-sub">{{ t("systeme.maj.pret", { version: version ?? "" }) }}</div>
           </div>
         </div>
         <div class="ub-actions">
-          <button class="ub-btn primary" @click="install">Installer et redémarrer</button>
-          <button class="ub-btn ghost" @click="dismiss">Plus tard</button>
+          <button class="ub-btn primary" @click="install">{{ t("systeme.maj.installer") }}</button>
+          <button class="ub-btn ghost" @click="dismiss">{{ t("systeme.maj.plusTard") }}</button>
         </div>
       </template>
 
@@ -40,8 +41,8 @@ const pct = computed(() => (progress.value != null ? Math.round(progress.value *
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36" /></svg>
           </div>
           <div class="ub-body">
-            <div class="ub-title">Téléchargement de Torii {{ version }}…</div>
-            <div class="ub-sub">{{ pct != null ? pct + " %" : "En cours…" }}</div>
+            <div class="ub-title">{{ t("systeme.maj.telechargement", { version: version ?? "" }) }}</div>
+            <div class="ub-sub">{{ pct != null ? pct + " %" : t("systeme.maj.enCours") }}</div>
           </div>
         </div>
         <div class="ub-bar"><div class="ub-fill" :style="{ width: (pct ?? 0) + '%' }" /></div>
@@ -54,8 +55,8 @@ const pct = computed(() => (progress.value != null ? Math.round(progress.value *
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
           </div>
           <div class="ub-body">
-            <div class="ub-title">Mise à jour installée</div>
-            <div class="ub-sub">Redémarrage de Torii…</div>
+            <div class="ub-title">{{ t("systeme.maj.installee") }}</div>
+            <div class="ub-sub">{{ t("systeme.maj.redemarrage") }}</div>
           </div>
         </div>
       </template>
@@ -67,12 +68,12 @@ const pct = computed(() => (progress.value != null ? Math.round(progress.value *
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
           </div>
           <div class="ub-body">
-            <div class="ub-title">Échec de la mise à jour</div>
+            <div class="ub-title">{{ t("systeme.maj.echec") }}</div>
             <div class="ub-sub clamp" :title="error ?? ''">{{ error }}</div>
           </div>
         </div>
         <div class="ub-actions">
-          <button class="ub-btn ghost wide" @click="dismiss">Fermer</button>
+          <button class="ub-btn ghost wide" @click="dismiss">{{ t("commun.fermer") }}</button>
         </div>
       </template>
     </div>

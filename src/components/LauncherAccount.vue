@@ -7,6 +7,8 @@
  * la couleur, les textes et le comportement de la resynchronisation changent — d'où
  * les props. Le slot `extra` sert au chemin avancé de Steam (clé API).
  */
+import { t } from "../i18n";
+
 defineProps<{
   /** Nom affiché du launcher (« Epic Games », « Battle.net »…). */
   name: string;
@@ -44,7 +46,7 @@ defineEmits<{
       <span class="dot" :style="{ background: color }" />
       <span class="account-name">{{ name }}</span>
       <span class="badge" :class="connected ? 'on' : ''">
-        {{ connected ? "Connecté" : "Non connecté" }}
+        {{ connected ? t("comptes.launchers.etatConnecte") : t("comptes.launchers.etatNonConnecte") }}
       </span>
     </div>
 
@@ -52,10 +54,10 @@ defineEmits<{
       <p class="hint">{{ syncedHint }}</p>
       <div class="row">
         <button class="btn-primary" :disabled="busy" @click="$emit('resync')">
-          {{ busy && resyncBusyLabel ? resyncBusyLabel : "Resynchroniser" }}
+          {{ busy && resyncBusyLabel ? resyncBusyLabel : t("comptes.launchers.resynchroniser") }}
         </button>
         <button class="btn-secondary" :disabled="busy" @click="$emit('disconnect')">
-          Déconnecter
+          {{ t("comptes.launchers.deconnecter") }}
         </button>
       </div>
     </template>
@@ -64,7 +66,7 @@ defineEmits<{
       <p class="hint">{{ hint }}</p>
       <div class="row">
         <button class="btn-primary" :disabled="busy" @click="$emit('connect')">
-          {{ busy ? "En attente de connexion…" : connectLabel }}
+          {{ busy ? t("comptes.launchers.enAttente") : connectLabel }}
         </button>
       </div>
       <!-- Chemin avancé propre à un launcher (clé API Steam). -->

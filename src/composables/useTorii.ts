@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { computed, ref } from "vue";
 import {
   getSettings,
@@ -121,7 +122,7 @@ async function verify(email: string, code: string): Promise<boolean> {
  * le compte : abandonner avant ne laisse rien derrière soi, pas même une ligne à nettoyer.
  */
 async function completeSignup(displayName: string) {
-  if (!laissezPasser) throw new Error("Cette inscription a expiré. Recommence depuis ton adresse.");
+  if (!laissezPasser) throw new Error(t("comptes.torii.inscriptionExpiree"));
   account.value = await toriiSignup(laissezPasser, displayName.trim());
   laissezPasser = null;
   await reconcilierSteam();

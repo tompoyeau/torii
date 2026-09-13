@@ -6,6 +6,8 @@ import { useUi } from "../composables/useUi";
 import { getSettings } from "../lib/tauri";
 import type { LibraryFilter, PlatformId, Settings } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
+import { t } from "../i18n";
+import { platformName } from "../data/platforms";
 
 const { games } = useLibrary();
 const { section, filter, setFilter, showStore, showCommon, showWishlist, openSettings, settingsOpen } = useUi();
@@ -32,7 +34,7 @@ const allConnected = computed(() => {
   );
 });
 const launcherLabel = computed(() =>
-  allConnected.value ? "Gérer les connexions" : "Connecter un launcher",
+  allConnected.value ? t("bibliotheque.laterale.gererConnexions") : t("bibliotheque.laterale.connecterLauncher"),
 );
 
 // Les compteurs des vues normales excluent les jeux masqués.
@@ -62,16 +64,16 @@ const count = (f: LibraryFilter) =>
  * « Hors launcher », qui est une categorie regroupant deux plateformes et n en est
  * donc pas une (cf. `HORS_LAUNCHER`).
  */
-const platforms: { id: LibraryFilter; icon: PlatformId; label: string }[] = [
-  { id: "steam", icon: "steam", label: "Steam" },
-  { id: "epic", icon: "epic", label: "Epic Games" },
-  { id: "gog", icon: "gog", label: "GOG" },
-  { id: "riot", icon: "riot", label: "Riot Games" },
-  { id: "ubisoft", icon: "ubisoft", label: "Ubisoft Connect" },
-  { id: "ea", icon: "ea", label: "EA" },
-  { id: "battlenet", icon: "battlenet", label: "Battle.net" },
-  { id: "horsLauncher", icon: "manual", label: "Hors launcher" },
-];
+const platforms = computed<{ id: LibraryFilter; icon: PlatformId; label: string }[]>(() => [
+  { id: "steam", icon: "steam", label: platformName("steam") },
+  { id: "epic", icon: "epic", label: platformName("epic") },
+  { id: "gog", icon: "gog", label: platformName("gog") },
+  { id: "riot", icon: "riot", label: platformName("riot") },
+  { id: "ubisoft", icon: "ubisoft", label: platformName("ubisoft") },
+  { id: "ea", icon: "ea", label: platformName("ea") },
+  { id: "battlenet", icon: "battlenet", label: platformName("battlenet") },
+  { id: "horsLauncher", icon: "manual", label: platformName("manual") },
+]);
 
 </script>
 
@@ -91,52 +93,52 @@ const platforms: { id: LibraryFilter; icon: PlatformId; label: string }[] = [
       </div>
       <div>
         <div class="brand-name">Torii</div>
-        <div class="brand-sub">{{ total }} jeux</div>
+        <div class="brand-sub">{{ t("bibliotheque.jeux", { n: total }) }}</div>
       </div>
     </div>
 
     <nav class="nav-group">
-      <div class="nav-label">Bibliothèque</div>
+      <div class="nav-label">{{ t("bibliotheque.laterale.bibliotheque") }}</div>
       <button class="nav-item" :class="{ active: section === 'library' && filter ==='all' }" @click="setFilter('all')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg></span>
-        Tous les jeux <span class="count">{{ count("all").value }}</span>
+        {{ t("bibliotheque.laterale.tous") }} <span class="count">{{ count("all").value }}</span>
       </button>
       <button v-if="count('family').value" class="nav-item" :class="{ active: section === 'library' && filter ==='mine' }" @click="setFilter('mine')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4" /><path d="M5 20a7 7 0 0 1 14 0" /></svg></span>
-        Mes jeux <span class="count">{{ count("mine").value }}</span>
+        {{ t("bibliotheque.laterale.mesJeux") }} <span class="count">{{ count("mine").value }}</span>
       </button>
       <button v-if="count('family').value" class="nav-item" :class="{ active: section === 'library' && filter ==='family' }" @click="setFilter('family')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3" /><circle cx="17" cy="15" r="3" /><path d="M3 20a6 6 0 0 1 12 0M13 20a5 5 0 0 1 8 0" /></svg></span>
-        Famille <span class="count">{{ count("family").value }}</span>
+        {{ t("bibliotheque.laterale.famille") }} <span class="count">{{ count("family").value }}</span>
       </button>
       <button class="nav-item" :class="{ active: section === 'common' }" @click="showCommon()">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="8.5" cy="12" r="5.2" /><circle cx="15.5" cy="12" r="5.2" /></svg></span>
-        En commun
+        {{ t("bibliotheque.laterale.enCommun") }}
       </button>
       <button class="nav-item" :class="{ active: section === 'library' && filter ==='favorite' }" @click="setFilter('favorite')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg></span>
-        Favoris <span class="count">{{ count("favorite").value }}</span>
+        {{ t("bibliotheque.laterale.favoris") }} <span class="count">{{ count("favorite").value }}</span>
       </button>
       <button class="nav-item" :class="{ active: section === 'library' && filter ==='installed' }" @click="setFilter('installed')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" /></svg></span>
-        Installés <span class="count">{{ count("installed").value }}</span>
+        {{ t("bibliotheque.laterale.installes") }} <span class="count">{{ count("installed").value }}</span>
       </button>
     </nav>
 
     <nav class="nav-group">
-      <div class="nav-label">Découvrir</div>
+      <div class="nav-label">{{ t("bibliotheque.laterale.decouvrir") }}</div>
       <button class="nav-item" :class="{ active: section === 'store' }" @click="showStore()">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /><path d="M6 14.4V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5.6" /></svg></span>
-        Boutique
+        {{ t("bibliotheque.laterale.boutique") }}
       </button>
       <button class="nav-item" :class="{ active: section === 'wishlist' }" @click="showWishlist()">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg></span>
-        Wishlist
+        {{ t("bibliotheque.laterale.wishlist") }}
       </button>
     </nav>
 
     <nav class="nav-group">
-      <div class="nav-label">Plateformes</div>
+      <div class="nav-label">{{ t("bibliotheque.laterale.plateformes") }}</div>
       <button v-for="p in platforms" :key="p.id" class="nav-item plat"
               :class="{ active: section === 'library' && filter ===p.id }" @click="setFilter(p.id)">
         <span class="tile plat-tile"><PlatformIcon :platform="p.icon" /></span>

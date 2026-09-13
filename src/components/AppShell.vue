@@ -4,6 +4,7 @@ import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { PLATFORMS, platformName } from "../data/platforms";
 import type { Game, LibraryFilter, SortKey } from "../types";
+import { etiquetteIntl, t } from "../i18n";
 import Sidebar from "./Sidebar.vue";
 import TopBar from "./TopBar.vue";
 import HeroFeatured from "./HeroFeatured.vue";
@@ -33,7 +34,7 @@ const availableGenres = computed(() => {
   }
   return [...counts.entries()]
     .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "fr"));
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, etiquetteIntl.value));
 });
 
 // Menu déroulant des catégories.
@@ -70,7 +71,7 @@ function sortGames(list: Game[], key: SortKey): Game[] {
   const by = [...list];
   switch (key) {
     case "alpha":
-      return by.sort((a, b) => a.title.localeCompare(b.title, "fr", { sensitivity: "base" }));
+      return by.sort((a, b) => a.title.localeCompare(b.title, etiquetteIntl.value, { sensitivity: "base" }));
     case "playtime":
       return by.sort((a, b) => (b.hoursPlayed ?? 0) - (a.hoursPlayed ?? 0));
     case "recent":
@@ -88,24 +89,20 @@ const shownGames = computed(() => {
   return sortGames(list, sort.value);
 });
 
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: "recent", label: "Récemment joué" },
-  { key: "alpha", label: "A → Z" },
-  { key: "playtime", label: "Temps de jeu" },
-];
+const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
+  { key: "recent", label: t("bibliotheque.grille.tris.recent") },
+  { key: "alpha", label: t("bibliotheque.grille.tris.alpha") },
+  { key: "playtime", label: t("bibliotheque.grille.tris.playtime") },
+]);
 
-const FILTER_LABELS: Record<string, string> = {
-  all: "Tous les jeux",
-  mine: "Mes jeux",
-  family: "Partagés en famille",
-  recent: "Joués récemment",
-  favorite: "Favoris",
-  installed: "Installés",
-  hidden: "Masqués",
-  horsLauncher: "Hors launcher",
-};
+/** Les filtres qui ne sont pas une plateforme ; les autres prennent le nom de la plateforme. */
+const FILTRES_NOMMES = ["all", "mine", "family", "recent", "favorite", "installed", "hidden", "horsLauncher"] as const;
+type FiltreNomme = (typeof FILTRES_NOMMES)[number];
+
 function title(f: LibraryFilter): string {
-  return FILTER_LABELS[f] ?? platformName(f as never);
+  return (FILTRES_NOMMES as readonly string[]).includes(f)
+    ? t(`bibliotheque.grille.filtres.${f as FiltreNomme}`)
+    : platformName(f as never);
 }
 </script>
 
@@ -126,7 +123,7 @@ function title(f: LibraryFilter): string {
 
       <div class="sec-head">
         <h2>{{ title(filter) }}</h2>
-        <span class="n">{{ shownGames.length }} jeu{{ shownGames.length > 1 ? "x" : "" }}</span>
+        <span class="n">{{ t("bibliotheque.jeux", { n: shownGames.length }) }}</span>
         <span class="spacer" />
         <div v-if="availableGenres.length" class="genre-wrap">
           <button
@@ -138,12 +135,12 @@ function title(f: LibraryFilter): string {
             @click.stop="genreMenuOpen = !genreMenuOpen"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-            {{ genre ?? "Toutes catégories" }}
+            {{ genre ?? t("bibliotheque.grille.toutesCategoriesCourt") }}
             <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6" /></svg>
           </button>
           <div v-if="genreMenuOpen" class="genre-menu" @click.stop>
             <button class="genre-opt" :class="{ on: !genre }" @click="pickGenre(null)">
-              <span>Toutes les catégories</span>
+              <span>{{ t("bibliotheque.grille.toutesCategories") }}</span>
             </button>
             <div class="genre-sep" />
             <button
@@ -163,11 +160,11 @@ function title(f: LibraryFilter): string {
           class="chip toggle"
           :class="{ active: installedOnly }"
           :aria-pressed="installedOnly"
-          title="N'afficher que les jeux installés"
+          :title="t('bibliotheque.grille.installesSeulementAide')"
           @click="toggleInstalledOnly()"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" /></svg>
-          Installés uniquement
+          {{ t("bibliotheque.grille.installesSeulement") }}
         </button>
         <button
           v-for="s in SORTS"
@@ -183,7 +180,7 @@ function title(f: LibraryFilter): string {
       <div class="grid" :class="{ list: listView }">
         <GameCard v-for="g in shownGames" :key="g.id" :game="g" @open="openGame(g.id)" />
       </div>
-      <div v-if="!shownGames.length" class="empty">Aucun jeu ne correspond à ta recherche.</div>
+      <div v-if="!shownGames.length" class="empty">{{ t("bibliotheque.grille.aucun") }}</div>
       </template>
     </main>
   </div>

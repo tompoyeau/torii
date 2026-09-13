@@ -4,6 +4,7 @@ import { useTorii } from "../composables/useTorii";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { showToast } from "../composables/useToast";
+import { t } from "../i18n";
 
 /**
  * Création de compte et connexion, en trois temps : adresse, code, pseudo.
@@ -90,7 +91,7 @@ async function onCode() {
       etape.value = "pseudo";
     } else {
       closeSignIn();
-      showToast("Compte Torii connecté.");
+      showToast(t("comptes.torii.connecteToast"));
     }
   } catch (e) {
     error.value = message(e);
@@ -107,7 +108,7 @@ async function onPseudo() {
     const nom = pseudo.value.trim();
     await completeSignup(nom);
     closeSignIn();
-    showToast(`Bienvenue, ${nom}.`);
+    showToast(t("comptes.torii.bienvenue", { nom }));
   } catch (e) {
     error.value = message(e);
   } finally {
@@ -133,10 +134,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="signInOpen" class="modal-backdrop" @click.self="fermer">
-    <div ref="modale" class="modal" role="dialog" aria-modal="true" tabindex="-1" aria-label="Compte Torii">
+    <div ref="modale" class="modal" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('comptes.torii.compte')">
       <div class="modal-head">
-        <h3>{{ etape === "pseudo" ? "Choisis ton pseudo" : "Compte Torii" }}</h3>
-        <button v-if="!verrouille" class="modal-close" aria-label="Fermer" @click="closeSignIn">
+        <h3>{{ etape === "pseudo" ? t("comptes.torii.choisisPseudo") : t("comptes.torii.compte") }}</h3>
+        <button v-if="!verrouille" class="modal-close" :aria-label="t('commun.fermer')" @click="closeSignIn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
@@ -150,21 +151,18 @@ onBeforeUnmount(() => {
 
       <!-- ── 1. L'adresse ── -->
       <form v-if="etape === 'email'" class="body" @submit.prevent="onEmail">
-        <p class="lead">
-          Vois à quoi jouent tes amis, quel que soit leur launcher — et montre-leur ce que
-          tu joues, si tu le décides.
-        </p>
+        <p class="lead">{{ t("comptes.torii.argument") }}</p>
         <label class="field">
-          <span>Ton adresse e-mail</span>
+          <span>{{ t("comptes.torii.adresse") }}</span>
           <input
-            ref="champ" v-model="email" type="email" placeholder="ton@email.fr"
+            ref="champ" v-model="email" type="email" :placeholder="t('comptes.torii.adresseExemple')"
             autocomplete="email" spellcheck="false"
           />
         </label>
-        <p class="hint">Pas de mot de passe : un code à six chiffres arrive par e-mail.</p>
+        <p class="hint">{{ t("comptes.torii.sansMotDePasse") }}</p>
         <div class="actions">
           <button type="submit" class="btn-primary" :disabled="!emailValide || busy">
-            {{ busy ? "Envoi…" : "Recevoir un code" }}
+            {{ busy ? t("comptes.torii.envoi") : t("comptes.torii.recevoirCode") }}
           </button>
         </div>
       </form>
@@ -172,24 +170,24 @@ onBeforeUnmount(() => {
       <!-- ── 2. Le code ── -->
       <form v-else-if="etape === 'code'" class="body" @submit.prevent="onCode">
         <p class="lead">
-          Un code à six chiffres vient de partir vers <strong>{{ email }}</strong>.
-          Regarde aussi tes indésirables.
+          {{ t("comptes.torii.codeParti") }} <strong>{{ email }}</strong>.
+          {{ t("comptes.torii.codeIndesirables") }}
         </p>
         <label class="field">
-          <span>Le code reçu</span>
+          <span>{{ t("comptes.torii.codeRecu") }}</span>
           <input
             ref="champ" v-model="code" inputmode="numeric" maxlength="6"
             placeholder="123456" class="code" autocomplete="one-time-code"
           />
         </label>
         <p v-if="devCode" class="dev">
-          Serveur en mode développement : aucun e-mail ne part. Ton code est
+          {{ t("comptes.torii.modeDev") }}
           <strong>{{ devCode }}</strong>.
         </p>
         <div class="actions">
-          <button type="button" class="btn-ghost" @click="etape = 'email'">Changer d'adresse</button>
+          <button type="button" class="btn-ghost" @click="etape = 'email'">{{ t("comptes.torii.changerAdresse") }}</button>
           <button type="submit" class="btn-primary" :disabled="!codeValide || busy">
-            {{ busy ? "Vérification…" : "Valider" }}
+            {{ busy ? t("comptes.torii.verification") : t("comptes.torii.valider") }}
           </button>
         </div>
       </form>
@@ -197,25 +195,23 @@ onBeforeUnmount(() => {
       <!-- ── 3. Le pseudo : obligatoire, et c'est ici que le compte naît ── -->
       <form v-else class="body" @submit.prevent="onPseudo">
         <p class="lead">
-          C'est le nom que verront tes amis. Choisis-le maintenant : ton compte sera créé
-          avec.
+          {{ t("comptes.torii.pseudoIntro") }}
         </p>
         <label class="field">
-          <span>Ton pseudo</span>
+          <span>{{ t("comptes.torii.pseudo") }}</span>
           <input
-            ref="champ" v-model="pseudo" maxlength="40" placeholder="Ton pseudo"
+            ref="champ" v-model="pseudo" maxlength="40" :placeholder="t('comptes.torii.pseudo')"
             spellcheck="false" autocomplete="off"
           />
         </label>
-        <p class="hint">Deux caractères minimum. Modifiable à tout moment dans les réglages.</p>
+        <p class="hint">{{ t("comptes.torii.pseudoAide") }}</p>
         <div class="actions">
           <button type="submit" class="btn-primary" :disabled="!pseudoValide || busy">
-            {{ busy ? "Création…" : "Créer mon compte" }}
+            {{ busy ? t("comptes.torii.creation") : t("comptes.torii.creer") }}
           </button>
         </div>
         <p class="locked">
-          Tant qu'aucun pseudo n'est choisi, aucun compte n'est créé. Fermer Torii
-          maintenant annule l'inscription, sans rien laisser derrière.
+          {{ t("comptes.torii.verrou") }}
         </p>
       </form>
 

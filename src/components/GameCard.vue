@@ -5,6 +5,7 @@ import { platformName } from "../data/platforms";
 import { useLibrary } from "../composables/useLibrary";
 import { useContextMenu } from "../composables/useContextMenu";
 import PlatformIcon from "./PlatformIcon.vue";
+import { t } from "../i18n";
 
 const props = withDefaults(
   defineProps<{
@@ -83,8 +84,8 @@ function toggleFavorite() {
       <div v-if="actions" class="cover-actions">
         <button
           class="cover-act"
-          :title="game.hidden ? 'Réafficher' : 'Masquer ce jeu'"
-          :aria-label="game.hidden ? 'Réafficher' : 'Masquer ce jeu'"
+          :title="game.hidden ? t('bibliotheque.carte.reafficher') : t('bibliotheque.carte.masquer')"
+          :aria-label="game.hidden ? t('bibliotheque.carte.reafficher') : t('bibliotheque.carte.masquer')"
           @click.stop="toggleHidden"
         >
           <svg v-if="game.hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -93,8 +94,8 @@ function toggleFavorite() {
         <button
           class="cover-act fav"
           :class="{ on: game.favorite }"
-          :title="game.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'"
-          :aria-label="game.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'"
+          :title="game.favorite ? t('bibliotheque.carte.retirerFavoris') : t('bibliotheque.carte.ajouterFavoris')"
+          :aria-label="game.favorite ? t('bibliotheque.carte.retirerFavoris') : t('bibliotheque.carte.ajouterFavoris')"
           :aria-pressed="game.favorite"
           @click.stop="toggleFavorite"
         >
@@ -102,7 +103,7 @@ function toggleFavorite() {
         </button>
       </div>
       <span class="cover-scrim" />
-      <span v-if="familyCopies >= 2" class="cover-fam" :title="`${familyCopies} copies dans ta famille Steam`">
+      <span v-if="familyCopies >= 2" class="cover-fam" :title="t('bibliotheque.carte.copiesFamille', { n: familyCopies })">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>
         {{ familyCopies }}
       </span>
@@ -119,10 +120,10 @@ function toggleFavorite() {
         <span>{{ game.sources && game.sources.length > 1
           ? game.sources.map((s) => platformName(s.platform)).join(" · ")
           : platformName(game.platform) }}</span>
-        <template v-if="game.hoursPlayed != null"><span>·</span><span>{{ game.hoursPlayed }} h</span></template>
+        <template v-if="game.hoursPlayed != null"><span>·</span><span>{{ t("bibliotheque.heures", { n: game.hoursPlayed }) }}</span></template>
         <span>·</span>
         <span :class="game.installed ? 'installed' : 'not-installed'">
-          {{ game.installed ? "Installé" : "Non installé" }}
+          {{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}
         </span>
       </span>
     </div>

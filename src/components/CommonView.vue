@@ -6,6 +6,7 @@ import { useUi } from "../composables/useUi";
 import { gradientFor } from "../lib/covers";
 import GameCard from "./GameCard.vue";
 import type { CommonGame, FriendLib, Game } from "../types";
+import { t } from "../i18n";
 
 const {
   friends, readable, privateCount, shownGames, selected,
@@ -84,21 +85,21 @@ const visibles = computed(() => {
 <template>
   <div class="common">
     <div class="sec-head">
-      <h2>Jeux en commun</h2>
-      <span class="n">{{ visibles.length }} jeu{{ visibles.length > 1 ? "x" : "" }}</span>
-      <span v-if="loading" class="spin" title="Actualisation…" />
+      <h2>{{ t("amis.commun.titre") }}</h2>
+      <span class="n">{{ t("bibliotheque.jeux", { n: visibles.length }) }}</span>
+      <span v-if="loading" class="spin" :title="t('amis.actualisation')" />
       <span class="spacer" />
       <input
         v-if="shownGames.length"
         v-model="query"
         class="search"
         type="search"
-        placeholder="Rechercher…"
-        aria-label="Rechercher parmi les jeux en commun"
+        :placeholder="t('amis.bibliotheque.rechercher')"
+        :aria-label="t('amis.commun.rechercherAide')"
       />
-      <button class="chip refresh" :disabled="loading" title="Recalculer" @click="refresh(true)">
+      <button class="chip refresh" :disabled="loading" :title="t('amis.commun.recalculer')" @click="refresh(true)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
-        Actualiser
+        {{ t("amis.actualiser") }}
       </button>
     </div>
 
@@ -106,24 +107,22 @@ const visibles = computed(() => {
          sur `readable` et pas seulement sur Steam : depuis que les amis peuvent partager
          leur bibliothèque Torii, cette vue a du sens même sans compte Steam. -->
     <div v-if="loaded && !steamConnected && !readable.length" class="empty">
-      <p>Connecte ton compte Steam, ou attends qu'un ami partage sa bibliothèque Torii,
-        pour voir les jeux que vous avez en commun.</p>
-      <button class="btn-connect" @click="openSettings()">Ouvrir les réglages</button>
+      <p>{{ t("amis.commun.aucuneSource") }}</p>
+      <button class="btn-connect" @click="openSettings()">{{ t("amis.ouvrirReglages") }}</button>
     </div>
 
     <!-- Chargement initial -->
     <div v-else-if="!loaded && loading" class="empty">
       <span class="spin big" />
-      <p>Analyse des bibliothèques de tes amis…</p>
-      <p class="dim">Ça peut prendre quelques secondes la première fois.</p>
+      <p>{{ t("amis.commun.analyse") }}</p>
+      <p class="dim">{{ t("amis.commun.analyseAide") }}</p>
     </div>
 
     <!-- Aucun ami lisible -->
     <div v-else-if="loaded && !readable.length" class="empty">
-      <p>Impossible de lire la bibliothèque de tes amis.</p>
+      <p>{{ t("amis.commun.illisible") }}</p>
       <p class="dim">
-        Leurs profils Steam sont peut-être privés (« Détails des jeux »), et personne n'a
-        encore partagé sa bibliothèque Torii.
+        {{ t("amis.commun.illisibleAide") }}
       </p>
     </div>
 
@@ -131,14 +130,14 @@ const visibles = computed(() => {
       <!-- Sélecteur multi-amis -->
       <div class="picker">
         <button class="fchip" :class="{ on: selCount === 0 }" @click="clearSelection()">
-          <span class="all">Tous</span>
+          <span class="all">{{ t("amis.commun.tous") }}</span>
         </button>
         <button
           v-for="f in readable"
           :key="f.steamId"
           class="fchip"
           :class="{ on: isSelected(f.steamId) }"
-          :title="`${f.name} · ${f.commonCount} en commun`"
+          :title="t('amis.commun.enCommunAvec', { nom: f.name, n: f.commonCount })"
           @click="toggleFriend(f.steamId)"
         >
           <span class="av">
@@ -151,23 +150,23 @@ const visibles = computed(() => {
           <span v-if="f.steamId.startsWith('torii:')" class="fsrc">Torii</span>
           <span class="fcount">{{ f.commonCount }}</span>
         </button>
-        <span v-if="privateCount" class="priv" :title="`${privateCount} ami(s) au profil privé`">
-          🔒 {{ privateCount }} privé{{ privateCount > 1 ? "s" : "" }}
+        <span v-if="privateCount" class="priv" :title="t('amis.commun.privesAide', { n: privateCount })">
+          🔒 {{ t("amis.commun.prives", { n: privateCount }) }}
         </span>
       </div>
 
       <p class="hint">
-        <template v-if="selCount === 0">Tes jeux, triés par nombre d'amis qui les possèdent aussi.</template>
-        <template v-else>Jeux que <strong>vous possédez tous</strong> ({{ selCount }} ami{{ selCount > 1 ? "s" : "" }} + toi).</template>
+        <template v-if="selCount === 0">{{ t("amis.commun.tri") }}</template>
+        <template v-else>{{ t("amis.commun.selectionAvant") }} <strong>{{ t("amis.commun.selectionGras") }}</strong> {{ t("amis.commun.selectionApres", { n: selCount }) }}</template>
       </p>
 
       <div v-if="!shownGames.length" class="empty small">
-        <p>Aucun jeu en commun avec cette sélection.</p>
-        <button class="btn-ghost" @click="clearSelection()">Réinitialiser</button>
+        <p>{{ t("amis.commun.aucunAvecSelection") }}</p>
+        <button class="btn-ghost" @click="clearSelection()">{{ t("amis.commun.reinitialiser") }}</button>
       </div>
 
       <div v-else-if="!visibles.length" class="empty small">
-        <p>Aucun jeu en commun ne correspond à « {{ query.trim() }} ».</p>
+        <p>{{ t("amis.commun.aucunResultat", { requete: query.trim() }) }}</p>
       </div>
 
       <div v-else class="grid">
@@ -181,7 +180,7 @@ const visibles = computed(() => {
               </span>
               <span v-if="g.owners.length > 5" class="more">+{{ g.owners.length - 5 }}</span>
             </span>
-            <span class="ncount">{{ g.owners.length }} ami{{ g.owners.length > 1 ? "s" : "" }}</span>
+            <span class="ncount">{{ t("amis.commun.amis", { n: g.owners.length }) }}</span>
           </div>
         </div>
       </div>

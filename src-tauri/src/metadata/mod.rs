@@ -16,11 +16,30 @@ fn cache_file(config_dir: &Path) -> PathBuf {
     // avec repli sans numéro final (résout OW2 & co) ; v4 = sources interrogées en français
     // (les entrées v3 contiennent des descriptions et des genres anglais) ; v5 = les DLC
     // sont refusés et le nom exact prime sur l'approchant (cf. `steam_store`).
-    config_dir.join("metadata_cache_v5.json")
+    //
+    // 🔑 **UN FICHIER PAR LANGUE.** Une entrée contient une description et des genres dans
+    // la langue où ils ont été demandés. Le problème s'est déjà posé une fois — c'est
+    // exactement ce que raconte le passage à v4 ci-dessus, réglé alors en jetant tout le
+    // cache. Le jeter à chaque changement de langue serait cette fois absurde : on
+    // rebasculerait sans arrêt entre deux contenus qu'il faudrait retélécharger en entier.
+    // Chaque langue garde donc ce qu'elle a déjà obtenu.
+    //
+    // ⚠️ **LE FRANÇAIS GARDE LE NOM HISTORIQUE**, sans suffixe. Les installations
+    // existantes ont un `metadata_cache_v5.json` rempli de français — souvent plusieurs
+    // centaines de fiches. Leur ajouter un suffixe les rendrait invisibles du jour au
+    // lendemain et déclencherait un retéléchargement complet chez tout le monde, pour un
+    // changement dont l'immense majorité des utilisateurs n'a que faire.
+    match crate::locale::langue() {
+        crate::locale::Langue::Fr => config_dir.join("metadata_cache_v5.json"),
+        crate::locale::Langue::En => config_dir.join("metadata_cache_v5_en.json"),
+    }
 }
 
 /// Le cache d'avant le refus des DLC : ses entrées devinées peuvent décrire un lot de
 /// pièces ou un pass de combat au lieu du jeu.
+///
+/// ⚠️ Pas de variante par langue : la v4 n'a existé qu'en français, et la reprise
+/// ci-dessous n'a donc de sens que vers le cache français.
 fn cache_file_v4(config_dir: &Path) -> PathBuf {
     config_dir.join("metadata_cache_v4.json")
 }

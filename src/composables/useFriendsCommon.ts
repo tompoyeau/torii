@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { computed, ref } from "vue";
 import { friendsCommon, getSettings } from "../lib/tauri";
 import { avatarFictif } from "../lib/covers";
@@ -170,7 +171,7 @@ export function useFriendsCommon() {
       .filter((id) => ownerIdOf(id).startsWith("torii:"))
       .map((id) => ({
         steamId: toriiOwnerId(id),
-        name: nameOfAccount.value.get(id) ?? "Ami Torii",
+        name: nameOfAccount.value.get(id) ?? t("amis.commun.amiTorii"),
         avatarUrl: "",
         // Une bibliothèque Torii partagée est lisible par construction : on ne la voit
         // que parce que la personne a activé le partage.

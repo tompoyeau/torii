@@ -74,7 +74,7 @@ pub fn load(config_dir: &Path) -> Credentials {
 pub fn save(config_dir: &Path, creds: &Credentials) -> Result<(), String> {
     std::fs::create_dir_all(config_dir).map_err(|e| e.to_string())?;
     let json = serde_json::to_vec(creds).map_err(|e| e.to_string())?;
-    let blob = protect(&json).ok_or("Chiffrement des identifiants impossible (DPAPI).")?;
+    let blob = protect(&json).ok_or(crate::locale::tr("Chiffrement des identifiants impossible (DPAPI).", "Couldn't encrypt credentials (DPAPI)."))?;
 
     // Écriture atomique : une coupure en plein écrasement laisserait sinon un fichier
     // tronqué, donc une déconnexion de TOUS les comptes au prochain démarrage.

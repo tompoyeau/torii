@@ -3,6 +3,7 @@ import { computed, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
+import { t } from "../i18n";
 const { spotlight, launchOrInstall, ensureEnriched } = useLibrary();
 const { openGame } = useUi();
 
@@ -44,22 +45,22 @@ function hideBrokenCover(e: Event) {
     <div class="hero-art" :style="{ background: game.cover }" />
     <img v-if="game.heroUrl" class="hero-img" :src="game.heroUrl" alt="" @error="hideBrokenCover" />
     <div class="hero-scrim" />
-    <div class="hero-eyebrow"><span class="pulse" />{{ game.recent ? "Reprendre la partie" : "À l'honneur" }}</div>
+    <div class="hero-eyebrow"><span class="pulse" />{{ game.recent ? t("bibliotheque.vedette.reprendre") : t("bibliotheque.vedette.honneur") }}</div>
     <h1 class="hero-title">{{ game.title }}</h1>
     <div class="hero-meta">
       <span>{{ platformName(game.platform) }}</span>
       <template v-if="game.genre"><span class="sep">•</span><span>{{ game.genre }}</span></template>
-      <template v-if="game.hoursPlayed != null"><span class="sep">•</span><span>{{ game.hoursPlayed }} h de jeu</span></template>
-      <template v-if="game.lastPlayed"><span class="sep">•</span><span>Joué {{ game.lastPlayed }}</span></template>
+      <template v-if="game.hoursPlayed != null"><span class="sep">•</span><span>{{ t("bibliotheque.heuresDeJeu", { n: game.hoursPlayed }) }}</span></template>
+      <template v-if="game.lastPlayed"><span class="sep">•</span><span>{{ t("bibliotheque.vedette.joue", { quand: game.lastPlayed }) }}</span></template>
     </div>
     <div class="hero-actions">
       <button class="btn-play" @click="play()">
         <svg v-if="game.installed" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 21h14" /></svg>
-        {{ game.installed ? "Jouer" : "Installer" }}
+        {{ game.installed ? t("bibliotheque.jouer") : t("bibliotheque.installer") }}
       </button>
       <button class="btn-ghost" @click="openGame(game.id)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v.01M11 12h1v4h1" /></svg>Détails
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 8v.01M11 12h1v4h1" /></svg>{{ t("bibliotheque.vedette.details") }}
       </button>
     </div>
   </section>

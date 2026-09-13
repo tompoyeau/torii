@@ -1,4 +1,5 @@
 import type { Platform, PlatformId } from "../types";
+import { t } from "../i18n";
 
 export const PLATFORMS: Record<PlatformId, Platform> = {
   steam: { id: "steam", name: "Steam", color: "var(--steam)" },
@@ -31,6 +32,13 @@ export function estHorsLauncher(platform: string | undefined): boolean {
   return HORS_LAUNCHER.includes(platform as PlatformId);
 }
 
+/**
+ * Le nom d'une plateforme, tel qu'affiché.
+ *
+ * ⚠️ « Hors launcher » est le seul qui se traduit : les autres sont des marques. Il est
+ * lu ici, à chaque appel, et pas figé dans `PLATFORMS` — une table calculée au
+ * chargement garderait la langue du démarrage.
+ */
 export function platformName(id: PlatformId): string {
-  return PLATFORMS[id].name;
+  return estHorsLauncher(id) ? t("bibliotheque.horsLauncher") : PLATFORMS[id].name;
 }

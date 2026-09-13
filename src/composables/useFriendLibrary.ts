@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { computed, ref } from "vue";
 import { hasTauriRuntime, libraryOf } from "../lib/tauri";
 import { useLibrary } from "./useLibrary";
@@ -106,7 +107,7 @@ export function useFriendLibrary() {
     try {
       await fetchInto(accountId, force);
       if (!libraries.value[accountId]?.length && !devicesOf(accountId).length) {
-        error.value = "Cette personne ne partage pas sa bibliothèque.";
+        error.value = t("amis.bibliotheque.personneNePartagePas");
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e);

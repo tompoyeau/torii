@@ -95,18 +95,29 @@ pub fn price(title: &str) -> Option<IgOffer> {
     if want.len() < 3 {
         return None;
     }
-    // Le site FRANÇAIS d'abord : c'est là qu'on veut envoyer l'utilisateur, et les prix y
-    // sont déjà en euros. Repli sur l'anglais quand IG a traduit le titre du jeu et que le
-    // rapprochement échoue (« Shadow of the Erdtree » y devient « L'ombre de l'Arbre-monde »)
-    // — sans ce repli, franciser les liens ferait DISPARAÎTRE des offres.
-    let mut offer = cherche(RECHERCHE_FR, title, &want)
-        .or_else(|| cherche(RECHERCHE_EN, title, &want))?;
+    // En français : le site FRANÇAIS d'abord, c'est là qu'on veut envoyer l'utilisateur.
+    // Repli sur l'anglais quand IG a traduit le titre du jeu et que le rapprochement échoue
+    // (« Shadow of the Erdtree » y devient « L'ombre de l'Arbre-monde ») — sans ce repli,
+    // franciser les liens ferait DISPARAÎTRE des offres.
+    //
+    // En anglais : le site anglais seul suffit. Les titres y sont ceux des éditeurs, donc
+    // ceux de la bibliothèque — le problème de traduction qui justifie le repli n'existe
+    // que dans l'autre sens.
+    let francais = crate::locale::langue() == crate::locale::Langue::Fr;
+    let mut offer = if francais {
+        cherche(RECHERCHE_FR, title, &want).or_else(|| cherche(RECHERCHE_EN, title, &want))?
+    } else {
+        cherche(RECHERCHE_EN, title, &want)?
+    };
     // 🔑 Le slug anglais placé sous `/fr/` est redirigé (301) par IG vers son équivalent
     // français : on francise donc l'URL d'un résultat venu du repli sans avoir à connaître
     // son slug FR. Mesuré sur `/fr/4824-buy-elden-ring-pc-steam/`.
-    offer.url = offer
-        .url
-        .replace("instant-gaming.com/en/", "instant-gaming.com/fr/");
+    // ⚠️ En anglais on ne touche à rien : tout vient déjà de `/en/`.
+    if francais {
+        offer.url = offer
+            .url
+            .replace("instant-gaming.com/en/", "instant-gaming.com/fr/");
+    }
     // Le fragment de recherche n'indique jamais le stock : on va lire la page produit.
     // Rupture = page sans bouton « add to cart » (IG affiche alors `nostock` / « Out of stock »).
     // ⚠️ Ce marqueur est le même sur la page française (vérifié).

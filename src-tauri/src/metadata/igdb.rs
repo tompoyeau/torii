@@ -210,10 +210,45 @@ fn genre_fr(g: &str) -> &str {
 /// retéléchargement de toute la bibliothèque (plusieurs minutes pour les jeux non-Steam,
 /// interrogés un par un et throttlés).
 fn traduire_lot(lot: &mut [(String, IgdbMeta)]) {
+    traduire_lot_pour(lot, crate::locale::langue());
+}
+
+/// Même travail, pour une langue donnée.
+///
+/// ⚠️ Séparé de `traduire_lot` pour les tests : la langue courante est un état global, et
+/// un test qui en dépendrait verrait celle qu'un autre test, en parallèle, vient de poser.
+fn traduire_lot_pour(lot: &mut [(String, IgdbMeta)], langue: crate::locale::Langue) {
+    let traduire: fn(&str) -> &str = match langue {
+        crate::locale::Langue::Fr => genre_fr,
+        crate::locale::Langue::En => genre_en,
+    };
     for (_, meta) in lot.iter_mut() {
         if let Some(genres) = meta.genre.as_deref() {
-            meta.genre = Some(genres.split(", ").map(genre_fr).collect::<Vec<_>>().join(", "));
+            meta.genre = Some(genres.split(", ").map(traduire).collect::<Vec<_>>().join(", "));
         }
+    }
+}
+
+/// Les genres IGDB, relus pour une interface anglaise.
+///
+/// 🔑 IGDB EST DÉJÀ EN ANGLAIS, mais `clean_genre` abrège ses sigles pour qu'ils tiennent
+/// dans une pastille : « RTS », « TBS », « RPG ». Un joueur français lisait « Stratégie
+/// temps réel » grâce à `genre_fr` ; sans cette table, un joueur anglophone lirait le
+/// sigle nu. On rend donc les formes longues, et on arrondit les deux libellés composés
+/// qu'IGDB écrit comme des catégories de base de données.
+///
+/// ⚠️ Même contrainte que `genre_fr` : ces libellés sont la **clé du filtre par
+/// catégorie**. Deux libellés pour un même genre y feraient deux entrées.
+fn genre_en(g: &str) -> &str {
+    match g {
+        "Card & Board Game" => "Card & board",
+        "Hack and slash/Beat 'em up" => "Beat 'em up",
+        "Quiz/Trivia" => "Quiz",
+        "RTS" => "Real-time strategy",
+        "RPG" => "Role-playing",
+        "Simulator" => "Simulation",
+        "TBS" => "Turn-based strategy",
+        autre => autre,
     }
 }
 
@@ -728,7 +763,7 @@ mod tests {
             "steam:1".to_string(),
             IgdbMeta { genre: Some("Roguelike".into()), ..Default::default() },
         )];
-        traduire_lot(&mut lot);
+        traduire_lot_pour(&mut lot, crate::locale::Langue::Fr);
         assert_eq!(lot[0].1.genre.as_deref(), Some("Roguelike"));
     }
 
@@ -740,8 +775,19 @@ mod tests {
         )];
         // `parse_meta` abrège avant de stocker : on simule la valeur telle qu'elle est en cache.
         lot[0].1.genre = Some(clean_genre("Role-playing (RPG)"));
-        traduire_lot(&mut lot);
+        traduire_lot_pour(&mut lot, crate::locale::Langue::Fr);
         assert_eq!(lot[0].1.genre.as_deref(), Some("Jeu de rôle"));
+    }
+
+    /// En anglais, les sigles abrégés par `clean_genre` redeviennent lisibles.
+    #[test]
+    fn en_anglais_les_sigles_se_deplient() {
+        let mut lot = vec![(
+            "steam:3".to_string(),
+            IgdbMeta { genre: Some(format!("{}, Indie", clean_genre("Real Time Strategy (RTS)"))), ..Default::default() },
+        )];
+        traduire_lot_pour(&mut lot, crate::locale::Langue::En);
+        assert_eq!(lot[0].1.genre.as_deref(), Some("Real-time strategy, Indie"));
     }
 
     /// Un jeu dont le titre commercial n'est qu'un ALIAS chez IGDB doit être reconnu.

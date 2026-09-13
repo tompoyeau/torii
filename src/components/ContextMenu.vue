@@ -6,6 +6,7 @@ import { useUi } from "../composables/useUi";
 import { useTorii } from "../composables/useTorii";
 import { estHorsLauncher } from "../data/platforms";
 import { openInstallDir, uninstallGame } from "../lib/tauri";
+import { t } from "../i18n";
 
 const { ctx, closeContext } = useContextMenu();
 const { setFavorite, setHidden, removeManual, launchOrInstall } = useLibrary();
@@ -112,39 +113,39 @@ onBeforeUnmount(() => {
       <div class="ctx-title">{{ game.title }}</div>
       <button class="ctx-item" @click="onPlay">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-        <span>Jouer</span>
+        <span>{{ t("bibliotheque.jouer") }}</span>
       </button>
       <button class="ctx-item" @click="onDetail">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /><path d="M9 9h6M9 13h6M9 17h3" /></svg>
-        <span>Voir la fiche</span>
+        <span>{{ t("bibliotheque.menu.voirFiche") }}</span>
       </button>
       <button v-if="game.installed && game.installDir" class="ctx-item" @click="onOpenFolder">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
-        <span>Ouvrir l'emplacement du fichier</span>
+        <span>{{ t("bibliotheque.menu.ouvrirEmplacement") }}</span>
       </button>
       <div class="ctx-sep" />
       <button class="ctx-item" @click="onFavorite">
         <svg viewBox="0 0 24 24" :fill="game.favorite ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg>
-        <span>{{ game.favorite ? "Retirer des favoris" : "Ajouter aux favoris" }}</span>
+        <span>{{ game.favorite ? t("bibliotheque.carte.retirerFavoris") : t("bibliotheque.carte.ajouterFavoris") }}</span>
       </button>
       <button class="ctx-item" @click="onHide">
         <svg v-if="game.hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg>
-        <span>{{ game.hidden ? "Réafficher" : "Masquer ce jeu" }}</span>
+        <span>{{ game.hidden ? t("bibliotheque.carte.reafficher") : t("bibliotheque.carte.masquer") }}</span>
       </button>
       <template v-if="isManual || game.installed">
         <button v-if="toriiConnected" class="ctx-item" @click="onToggleMuted">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18" /><path d="M9 8v8a1 1 0 0 0 1.6.8L14 14" /><path d="M14 10V6.2a1 1 0 0 0-1.6-.8L10 7" /><path d="M18 8a5 5 0 0 1 .8 5.5" /></svg>
-          <span>{{ game && isMuted(game.id) ? "Diffuser ce jeu aux amis" : "Ne pas diffuser ce jeu" }}</span>
+          <span>{{ game && isMuted(game.id) ? t("bibliotheque.menu.diffuser") : t("bibliotheque.menu.nePasDiffuser") }}</span>
         </button>
         <div class="ctx-sep" />
         <button v-if="isManual" class="ctx-item" @click="onEdit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z" /><path d="M14.5 7.5 16.5 9.5" /></svg>
-          <span>Modifier les informations</span>
+          <span>{{ t("bibliotheque.menu.modifier") }}</span>
         </button>
         <button class="ctx-item danger" @click="onUninstall">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6M10 11v6M14 11v6" /></svg>
-          <span>{{ isManual ? "Retirer de la bibliothèque" : "Désinstaller" }}</span>
+          <span>{{ isManual ? t("bibliotheque.menu.retirer") : t("bibliotheque.menu.desinstaller") }}</span>
         </button>
       </template>
     </div>

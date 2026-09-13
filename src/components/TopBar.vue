@@ -8,6 +8,7 @@ import { useFriendList } from "../composables/useFriendList";
 import { useTorii } from "../composables/useTorii";
 import { steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
+import { t } from "../i18n";
 
 const { section, query, openAddGame, showFriends, openSettings, settingsOpen } = useUi();
 
@@ -62,7 +63,7 @@ function openMyAccount() {
 }
 
 /** Ce qu'on affiche : le pseudo Torii s'il existe, sinon le nom Steam. */
-const myName = computed(() => toriiAccount.value?.displayName ?? me.value?.name ?? "Mon compte");
+const myName = computed(() => toriiAccount.value?.displayName ?? me.value?.name ?? t("bibliotheque.barre.monCompte"));
 const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase());
 </script>
 
@@ -70,13 +71,13 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   <div class="topbar">
     <label v-if="chercheDansLaBiblio" class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-      <input ref="champ" v-model="query" type="text" placeholder="Rechercher dans la bibliothèque…" autocomplete="off" />
+      <input ref="champ" v-model="query" type="text" :placeholder="t('bibliotheque.barre.rechercher')" autocomplete="off" />
       <button
         v-if="query"
         type="button"
         class="clear"
-        title="Effacer la recherche"
-        aria-label="Effacer la recherche"
+        :title="t('bibliotheque.barre.effacer')"
+        :aria-label="t('bibliotheque.barre.effacer')"
         @click="effacerRecherche"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -84,31 +85,31 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
     </label>
     <div class="topbar-spacer" />
     <span v-if="loading" class="enrich-pill">
-      <span class="spinner" />Actualisation…
+      <span class="spinner" />{{ t("bibliotheque.barre.actualisation") }}
     </span>
-    <button class="add-btn" title="Ajouter un jeu manuellement" @click="openAddGame">
+    <button class="add-btn" :title="t('bibliotheque.barre.ajouterJeu')" @click="openAddGame">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
-      <span>Ajouter</span>
+      <span>{{ t("bibliotheque.barre.ajouter") }}</span>
     </button>
-    <button class="icon-btn friends-btn" :class="{ active: section === 'friends' }" title="Amis" @click="showFriends">
+    <button class="icon-btn friends-btn" :class="{ active: section === 'friends' }" :title="t('bibliotheque.barre.amis')" @click="showFriends">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
       <span v-if="friendsOnline" class="friends-badge">{{ friendsOnline }}</span>
     </button>
-    <button class="icon-btn" title="Resynchroniser" :disabled="loading" @click="reload()">
+    <button class="icon-btn" :title="t('bibliotheque.barre.resynchroniser')" :disabled="loading" @click="reload()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
     </button>
-    <button class="icon-btn" title="Thème clair / sombre" @click="toggleTheme">
+    <button class="icon-btn" :title="t('bibliotheque.barre.theme')" @click="toggleTheme">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5Z" /></svg>
     </button>
-    <button class="icon-btn" :class="{ active: settingsOpen }" title="Paramètres" @click="openSettings()">
+    <button class="icon-btn" :class="{ active: settingsOpen }" :title="t('bibliotheque.barre.parametres')" @click="openSettings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3.1" /><path d="M19.4 13a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H8a1.6 1.6 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V8a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></svg>
     </button>
-    <button class="me" :title="`${myName} — mon compte Torii`" @click="openMyAccount">
+    <button class="me" :title="t('bibliotheque.barre.monCompteTorii', { nom: myName })" @click="openMyAccount">
       <img v-if="me?.avatarUrl" class="me-avatar" :src="me.avatarUrl" :alt="myName" />
       <span v-else class="me-avatar fallback">{{ myInitials }}</span>
       <span class="me-name">{{ myName }}</span>
       <!-- Pastille discrète : le compte Torii est actif, la présence peut circuler. -->
-      <span v-if="toriiConnected" class="me-torii" title="Compte Torii connecté">⛩</span>
+      <span v-if="toriiConnected" class="me-torii" :title="t('bibliotheque.barre.toriiConnecte')">⛩</span>
     </button>
   </div>
 </template>

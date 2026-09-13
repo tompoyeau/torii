@@ -22,8 +22,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 const PROXY: &str = "https://torii-igdb-proxy.toriiapp.workers.dev/itad";
-/// Pays pour la tarification régionale (→ prix en EUR).
-const COUNTRY: &str = "FR";
+/// Chemin de l'appel « prix », pour la région couramment choisie.
+///
+/// ⚠️ C'ÉTAIT UNE CONSTANTE (`const COUNTRY: &str = "FR"`). Ça ne pouvait plus tenir : la
+/// région est désormais un réglage, et elle peut changer pendant que l'application
+/// tourne. Une fonction relit donc la valeur à chaque appel plutôt que de la figer à la
+/// compilation.
+///
+/// 🔑 C'est le pays qui détermine la **devise** renvoyée par l'API — l'interface ne la
+/// suppose plus, elle lit celle qui accompagne chaque prix (voir `lib/format.ts`).
+fn chemin_prix() -> String {
+    format!("games/prices/v3?country={}", crate::locale::region())
+}
 const PAGE_SIZE: u32 = 48;
 
 /// Un jeu de la vitrine / des résultats de recherche (carte de grille).
@@ -35,10 +45,18 @@ pub struct StoreItem {
     pub title: String,
     /// Jaquette (ITAD boxart) si disponible, sinon le front met un dégradé.
     pub cover_url: Option<String>,
-    /// Prix actuel le plus bas (EUR).
+    /// Prix actuel le plus bas, dans la devise `currency`.
     pub price: f64,
     /// Prix normal (hors promo) ; == price si inconnu.
     pub normal_price: f64,
+    /// Devise des montants ci-dessus (`EUR`, `USD`…), telle que renvoyée avec eux.
+    ///
+    /// 🔑 Lue dans la réponse, jamais supposée : c'est le pays interrogé qui la décide
+    /// (`locale::region`), et l'interface ne formate plus un prix sans elle — un montant
+    /// américain affiché « 59,99 € » serait un chiffre faux, pas une approximation.
+    /// Vide si la source n'en a pas donné ; l'interface retombe alors sur la devise
+    /// attendue pour la région.
+    pub currency: String,
     /// Remise en % entier (0 = pas de promo / inconnu).
     pub savings: u32,
     /// Boutique de la meilleure offre (vide si non résolu).
@@ -63,6 +81,14 @@ pub struct StorePrice {
     pub store_name: String,
     pub price: f64,
     pub retail_price: f64,
+    /// Devise des montants ci-dessus (`EUR`, `USD`…), telle que renvoyée avec eux.
+    ///
+    /// 🔑 Lue dans la réponse, jamais supposée : c'est le pays interrogé qui la décide
+    /// (`locale::region`), et l'interface ne formate plus un prix sans elle — un montant
+    /// américain affiché « 59,99 € » serait un chiffre faux, pas une approximation.
+    /// Vide si la source n'en a pas donné ; l'interface retombe alors sur la devise
+    /// attendue pour la région.
+    pub currency: String,
     pub savings: u32,
     pub buy_url: String,
     /// `false` si l'offre est en rupture de stock (Instant Gaming). Les offres ITAD
@@ -78,8 +104,10 @@ pub struct StoreGame {
     pub title: String,
     pub cover_url: Option<String>,
     pub hero_url: Option<String>,
-    /// Prix le plus bas jamais atteint (EUR), si connu.
+    /// Prix le plus bas jamais atteint, si connu.
     pub cheapest_ever: Option<f64>,
+    /// Devise de `cheapest_ever` (les offres portent chacune la leur).
+    pub currency: String,
     /// Offres par boutique, triées par prix croissant.
     pub prices: Vec<StorePrice>,
     pub description: Option<String>,
@@ -143,6 +171,11 @@ fn cheapest<'a>(entry: &'a Value, excluded: &HashSet<String>) -> Option<&'a Valu
         })
 }
 
+/// La devise d'un montant ITAD (`{ amount, amountInt, currency }`), vide si absente.
+fn devise(montant: &Value) -> String {
+    montant["currency"].as_str().unwrap_or_default().to_string()
+}
+
 /// Applique une offre à un item de grille (vitrine / recherche).
 fn apply_deal(item: &mut StoreItem, deal: &Value) -> bool {
     let Some(price) = num(&deal["price"]["amount"]) else {
@@ -150,6 +183,7 @@ fn apply_deal(item: &mut StoreItem, deal: &Value) -> bool {
     };
     item.price = price;
     item.normal_price = num(&deal["regular"]["amount"]).unwrap_or(price);
+    item.currency = devise(&deal["price"]);
     item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
     item.store_name = shop_of(deal).to_string();
     item.buy_url = deal["url"].as_str().unwrap_or_default().to_string();
@@ -179,6 +213,7 @@ fn item_from_deal(it: &Value) -> Option<StoreItem> {
         cover_url: it["assets"]["boxart"].as_str().map(String::from),
         price,
         normal_price: regular,
+        currency: devise(&deal["price"]),
         savings: num(&deal["cut"]).unwrap_or(0.0).round() as u32,
         store_name: deal["shop"]["name"].as_str().unwrap_or_default().to_string(),
         buy_url: deal["url"].as_str().unwrap_or_default().to_string(),
@@ -191,7 +226,8 @@ fn item_from_deal(it: &Value) -> Option<StoreItem> {
 pub fn deals(page: u32, sort: &str, excluded: &HashSet<String>) -> Vec<StoreItem> {
     let offset = page * PAGE_SIZE;
     let path = format!(
-        "deals/v2?country={COUNTRY}&offset={offset}&limit={PAGE_SIZE}&sort={}",
+        "deals/v2?country={}&offset={offset}&limit={PAGE_SIZE}&sort={}",
+        crate::locale::region(),
         sort_param(sort)
     );
     let Some(root) = get_json(&path) else {
@@ -229,7 +265,7 @@ fn reprice_excluded(items: &mut Vec<StoreItem>, excluded: &HashSet<String>) {
         return;
     }
     let entries: std::collections::HashMap<String, Value> =
-        post_json(&format!("games/prices/v3?country={COUNTRY}"), &json!(ids))
+        post_json(&chemin_prix(), &json!(ids))
             .and_then(|v| v.as_array().cloned())
             .unwrap_or_default()
             .into_iter()
@@ -316,7 +352,7 @@ pub fn search(query: &str, excluded: &HashSet<String>) -> Vec<StoreItem> {
         .collect();
 
     // Prix courants (meilleure offre par jeu) en un seul appel.
-    let prices = post_json(&format!("games/prices/v3?country={COUNTRY}"), &json!(ids))
+    let prices = post_json(&chemin_prix(), &json!(ids))
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default();
 
@@ -333,6 +369,7 @@ pub fn search(query: &str, excluded: &HashSet<String>) -> Vec<StoreItem> {
                 cover_url,
                 price,
                 normal_price: num(&best["regular"]["amount"]).unwrap_or(price),
+                currency: devise(&best["price"]),
                 savings: num(&best["cut"]).unwrap_or(0.0).round() as u32,
                 store_name: best["shop"]["name"].as_str().unwrap_or_default().to_string(),
                 buy_url: best["url"].as_str().unwrap_or_default().to_string(),
@@ -351,7 +388,7 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
 
     // 2. Prix par boutique (comparatif) + plus bas historique, en un seul appel.
     let prices_root = post_json(
-        &format!("games/prices/v3?country={COUNTRY}"),
+        &chemin_prix(),
         &json!([game_id]),
     );
     let entry = prices_root
@@ -371,6 +408,7 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
                         store_name: d["shop"]["name"].as_str().unwrap_or_default().to_string(),
                         price,
                         retail_price: num(&d["regular"]["amount"]).unwrap_or(price),
+                        currency: devise(&d["price"]),
                         savings: num(&d["cut"]).unwrap_or(0.0).round() as u32,
                         buy_url: d["url"].as_str().unwrap_or_default().to_string(),
                         available: true, // offres ITAD = deals en cours
@@ -381,19 +419,29 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
         .unwrap_or_default();
 
     // 3. Instant Gaming (prix EUR natif, absent d'ITAD) — best-effort scrape.
-    if let Some(ig) = super::instant_gaming::price(&title) {
-        prices.push(StorePrice {
-            store_name: "Instant Gaming".into(),
-            price: ig.price,
-            retail_price: if ig.savings > 0 {
-                (ig.price / (1.0 - ig.savings as f64 / 100.0) * 100.0).round() / 100.0
-            } else {
-                ig.price
-            },
-            savings: ig.savings,
-            buy_url: ig.url,
-            available: ig.available,
-        });
+    //
+    // ⚠️ ZONE EURO SEULEMENT. Ce revendeur n'affiche que des euros, sans équivalent
+    // local. Hors zone euro, sa ligne se retrouverait au milieu de prix en livres ou en
+    // dollars sans qu'on puisse la comparer à rien — alors que comparer est exactement
+    // ce qu'on vient faire ici. L'interface explique l'absence (`prix.revendeurIndisponible`)
+    // plutôt que de laisser croire à une panne.
+    if crate::locale::zone_euro() {
+        if let Some(ig) = super::instant_gaming::price(&title) {
+            prices.push(StorePrice {
+                store_name: "Instant Gaming".into(),
+                price: ig.price,
+                retail_price: if ig.savings > 0 {
+                    (ig.price / (1.0 - ig.savings as f64 / 100.0) * 100.0).round() / 100.0
+                } else {
+                    ig.price
+                },
+                // Instant Gaming ne vend qu'en euros — et n'est proposé qu'en zone euro.
+                currency: "EUR".into(),
+                savings: ig.savings,
+                buy_url: ig.url,
+                available: ig.available,
+            });
+        }
     }
     prices.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -401,6 +449,10 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
     let cheapest_ever = entry
         .as_ref()
         .and_then(|e| num(&e["historyLow"]["all"]["amount"]));
+    let currency = entry
+        .as_ref()
+        .map(|e| devise(&e["historyLow"]["all"]))
+        .unwrap_or_default();
 
     let mut out = StoreGame {
         game_id: game_id.to_string(),
@@ -408,6 +460,7 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
         cover_url: boxart,
         hero_url: None,
         cheapest_ever,
+        currency,
         prices,
         ..Default::default()
     };
@@ -501,13 +554,21 @@ pub struct WishlistItem {
     /// C'est ce qui manquait : sans elle, un jeu sans capsule Steam n'affichait qu'un
     /// dégradé dans la wishlist alors que sa fiche produit, elle, avait un visuel.
     pub cover_fallback_url: Option<String>,
-    /// Meilleur prix actuel (EUR), `None` si aucune offre / non résolu.
+    /// Meilleur prix actuel, `None` si aucune offre / non résolu.
     pub price: Option<f64>,
+    /// Devise des montants ci-dessus (`EUR`, `USD`…), telle que renvoyée avec eux.
+    ///
+    /// 🔑 Lue dans la réponse, jamais supposée : c'est le pays interrogé qui la décide
+    /// (`locale::region`), et l'interface ne formate plus un prix sans elle — un montant
+    /// américain affiché « 59,99 € » serait un chiffre faux, pas une approximation.
+    /// Vide si la source n'en a pas donné ; l'interface retombe alors sur la devise
+    /// attendue pour la région.
+    pub currency: String,
     pub normal_price: Option<f64>,
     pub savings: u32,
     pub store_name: String,
     pub buy_url: String,
-    /// Plus bas prix historique (EUR), si connu.
+    /// Plus bas prix historique, si connu (même devise que `price`).
     pub history_low: Option<f64>,
 }
 
@@ -565,7 +626,7 @@ pub fn wishlist(appids: &[u64], excluded: &HashSet<String>) -> Vec<WishlistItem>
     let price_entries = if ids.is_empty() {
         Vec::new()
     } else {
-        post_json(&format!("games/prices/v3?country={COUNTRY}"), &json!(ids))
+        post_json(&chemin_prix(), &json!(ids))
             .and_then(|v| v.as_array().cloned())
             .unwrap_or_default()
     };
@@ -595,9 +656,11 @@ pub fn wishlist(appids: &[u64], excluded: &HashSet<String>) -> Vec<WishlistItem>
             };
             if let Some(entry) = prices.get(&game_id) {
                 item.history_low = num(&entry["historyLow"]["all"]["amount"]);
+                item.currency = devise(&entry["historyLow"]["all"]);
                 if let Some(deal) = cheapest(entry, excluded) {
                     if let Some(p) = num(&deal["price"]["amount"]) {
                         item.price = Some(p);
+                        item.currency = devise(&deal["price"]);
                         item.normal_price = Some(num(&deal["regular"]["amount"]).unwrap_or(p));
                         item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
                         item.store_name =
@@ -631,7 +694,7 @@ pub fn wishlist_custom(
     let price_entries = if ids.is_empty() {
         Vec::new()
     } else {
-        post_json(&format!("games/prices/v3?country={COUNTRY}"), &json!(ids))
+        post_json(&chemin_prix(), &json!(ids))
             .and_then(|v| v.as_array().cloned())
             .unwrap_or_default()
     };
@@ -662,9 +725,11 @@ pub fn wishlist_custom(
             };
             if let Some(entry) = prices.get(id) {
                 item.history_low = num(&entry["historyLow"]["all"]["amount"]);
+                item.currency = devise(&entry["historyLow"]["all"]);
                 if let Some(deal) = cheapest(entry, excluded) {
                     if let Some(p) = num(&deal["price"]["amount"]) {
                         item.price = Some(p);
+                        item.currency = devise(&deal["price"]);
                         item.normal_price = Some(num(&deal["regular"]["amount"]).unwrap_or(p));
                         item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
                         item.store_name = deal["shop"]["name"].as_str().unwrap_or_default().to_string();

@@ -11,6 +11,7 @@ import { estHorsLauncher, platformName } from "../data/platforms";
 import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
 import type { FriendLib, GameSource, SteamAchievements } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
+import { etiquetteIntl, t } from "../i18n";
 
 const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
@@ -63,7 +64,7 @@ const friendOwners = computed<FriendLib[]>(() => {
     const f = friendById.value.get(sid);
     if (f) map.set(sid, f);
   }
-  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, etiquetteIntl.value));
 });
 
 /** Nombre de copies du jeu dans la famille Steam. */
@@ -299,7 +300,7 @@ const showAllAch = ref(false);
 /** Joueurs en ce moment sur le jeu Steam (API publique), affiché dans la stat-card. */
 const currentPlayers = ref<number | null>(null);
 const playersLabel = computed(() =>
-  currentPlayers.value != null ? currentPlayers.value.toLocaleString("fr-FR") : null,
+  currentPlayers.value != null ? currentPlayers.value.toLocaleString(etiquetteIntl.value) : null,
 );
 
 /** Succès affichés : débloqués d'abord (tri backend), limités sauf « tout afficher ». */
@@ -359,7 +360,7 @@ onBeforeUnmount(() => {
     role="dialog"
     aria-modal="true"
     tabindex="-1"
-    :aria-label="game ? game.title : 'Fiche du jeu'"
+    :aria-label="game ? game.title : t('fiche.fiche')"
   >
     <template v-if="game">
       <div class="detail-banner">
@@ -367,7 +368,7 @@ onBeforeUnmount(() => {
         <img v-if="game.heroUrl" class="detail-banner-img" :src="game.heroUrl" alt="" @error="hideBrokenCover" />
         <div class="detail-banner-scrim" />
         <button class="detail-back" @click="closeGame">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>Bibliothèque
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>{{ t("fiche.retour") }}
         </button>
         <div class="detail-header">
           <div class="detail-title-wrap">
@@ -379,11 +380,11 @@ onBeforeUnmount(() => {
               <button class="btn-play big" @click.stop="onPlay">
                 <svg v-if="game.installed" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 21h14" /></svg>
-                {{ game.installed ? "Jouer" : "Installer" }}
+                {{ game.installed ? t("bibliotheque.jouer") : t("bibliotheque.installer") }}
                 <svg v-if="multiSource" class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6" /></svg>
               </button>
               <div v-if="multiSource && launchMenuOpen" class="launch-menu" @click.stop>
-                <div class="launch-menu-label">{{ game.installed ? "Jouer depuis…" : "Installer depuis…" }}</div>
+                <div class="launch-menu-label">{{ game.installed ? t("fiche.jouerDepuis") : t("fiche.installerDepuis") }}</div>
                 <button
                   v-for="s in sources"
                   :key="s.platform + (s.launchTarget ?? '')"
@@ -392,26 +393,26 @@ onBeforeUnmount(() => {
                 >
                   <PlatformIcon :platform="s.platform" />
                   <span class="launch-opt-name">{{ platformName(s.platform) }}</span>
-                  <span class="launch-opt-tag" :class="s.installed ? 'on' : ''">{{ s.installed ? "Installé" : "Non installé" }}</span>
+                  <span class="launch-opt-tag" :class="s.installed ? 'on' : ''">{{ s.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}</span>
                 </button>
               </div>
             </div>
             <button
               class="btn-ghost solid"
               :class="{ 'fav-on': game.favorite }"
-              :title="game.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'"
+              :title="game.favorite ? t('bibliotheque.carte.retirerFavoris') : t('bibliotheque.carte.ajouterFavoris')"
               :aria-pressed="game.favorite"
               @click.stop="toggleFavorite"
             >
               <svg viewBox="0 0 24 24" :fill="game.favorite ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg>
             </button>
-            <button class="btn-ghost solid" title="Voir dans la boutique" aria-label="Voir dans la boutique" @click.stop="viewInStore">
+            <button class="btn-ghost solid" :title="t('fiche.voirBoutique')" :aria-label="t('fiche.voirBoutique')" @click.stop="viewInStore">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 13.3 12.8 21a1.5 1.5 0 0 1-2.1 0l-7-7a1.4 1.4 0 0 1-.4-1V4.6A1.5 1.5 0 0 1 4.6 3h8.4a1.4 1.4 0 0 1 1 .4l6.5 6.5a2 2 0 0 1 0 2.8Z" /><circle cx="7.8" cy="7.8" r="1.4" fill="currentColor" stroke="none" /></svg>
             </button>
             <div v-if="game.installed" class="settings-wrap">
               <button
                 class="btn-ghost solid"
-                title="Options du jeu"
+                :title="t('fiche.options')"
                 aria-haspopup="true"
                 :aria-expanded="uninstallMenuOpen"
                 @click.stop="toggleSettingsMenu"
@@ -419,18 +420,18 @@ onBeforeUnmount(() => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.3 1a7 7 0 0 0-1.7-1L14.5 2h-5l-.4 2.5a7 7 0 0 0-1.7 1l-2.3-1-2 3.5 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.3-1a7 7 0 0 0 1.7 1l.4 2.5h5l.4-2.5a7 7 0 0 0 1.7-1l2.3 1 2-3.5-2-1.5a7 7 0 0 0 .1-1Z" /></svg>
               </button>
               <div v-if="uninstallMenuOpen" class="settings-menu" @click.stop>
-                <div class="settings-menu-label">Options</div>
+                <div class="settings-menu-label">{{ t("fiche.optionsTitre") }}</div>
                 <button v-if="game.installDir" class="settings-opt" @click="onOpenFolder">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
-                  <span>Ouvrir l'emplacement du fichier</span>
+                  <span>{{ t("bibliotheque.menu.ouvrirEmplacement") }}</span>
                 </button>
                 <button v-if="toriiConnected" class="settings-opt" @click="onToggleMuted">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18" /><path d="M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg>
-                  <span>{{ gameMuted ? "Diffuser ce jeu aux amis" : "Ne pas diffuser ce jeu" }}</span>
+                  <span>{{ gameMuted ? t("bibliotheque.menu.diffuser") : t("bibliotheque.menu.nePasDiffuser") }}</span>
                 </button>
                 <button v-if="isManual" class="settings-opt" @click="onEdit">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z" /><path d="M14.5 7.5 16.5 9.5" /></svg>
-                  <span>Modifier les informations</span>
+                  <span>{{ t("bibliotheque.menu.modifier") }}</span>
                 </button>
                 <button
                   class="settings-opt danger"
@@ -440,8 +441,8 @@ onBeforeUnmount(() => {
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6M10 11v6M14 11v6" /></svg>
                   <span>
                     {{ uninstalling
-                      ? (isManual ? "Retrait…" : "Désinstallation…")
-                      : (isManual ? "Retirer de la bibliothèque" : "Désinstaller") }}
+                      ? (isManual ? t("fiche.retrait") : t("fiche.desinstallation"))
+                      : (isManual ? t("bibliotheque.menu.retirer") : t("bibliotheque.menu.desinstaller")) }}
                   </span>
                 </button>
               </div>
@@ -453,19 +454,19 @@ onBeforeUnmount(() => {
       <div class="detail-body">
         <div>
           <div class="detail-section">
-            <h4>À propos</h4>
+            <h4>{{ t("fiche.apropos") }}</h4>
             <p v-if="game.description" class="detail-desc">{{ game.description }}</p>
-            <p v-else-if="loadingMeta" class="detail-desc dim">Chargement des détails…</p>
-            <p v-else class="detail-desc dim">Aucune description disponible pour ce jeu.</p>
+            <p v-else-if="loadingMeta" class="detail-desc dim">{{ t("fiche.chargementDetails") }}</p>
+            <p v-else class="detail-desc dim">{{ t("fiche.aucuneDescription") }}</p>
           </div>
           <div v-if="friendOwners.length" class="detail-section">
-            <h4>Amis qui possèdent ce jeu <span class="sec-count">{{ friendOwners.length }}</span></h4>
+            <h4>{{ t("fiche.amis") }} <span class="sec-count">{{ friendOwners.length }}</span></h4>
             <div class="owners-list">
               <button
                 v-for="f in friendOwners"
                 :key="f.steamId"
                 class="owner"
-                :title="`Voir le profil de ${f.name}`"
+                :title="t('fiche.voirProfil', { nom: f.name })"
                 @click="openFriendProfile(f)"
               >
                 <span class="owner-av">
@@ -477,13 +478,13 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="detail-section">
-            <h4>Captures d'écran</h4>
+            <h4>{{ t("fiche.captures") }}</h4>
             <div class="shots-wrap">
               <button
                 v-if="!shotsAtStart"
                 class="shots-nav prev"
                 type="button"
-                aria-label="Captures précédentes"
+                :aria-label="t('fiche.capturesPrecedentes')"
                 @click="scrollShots(-1)"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
@@ -495,7 +496,7 @@ onBeforeUnmount(() => {
                     :key="'r' + i"
                     class="shot shot-btn"
                     type="button"
-                    aria-label="Agrandir la capture"
+                    :aria-label="t('fiche.agrandir')"
                     @click="openShot(i)"
                   >
                     <img :src="s" alt="" loading="lazy" @error="hideBrokenCover" />
@@ -509,7 +510,7 @@ onBeforeUnmount(() => {
                 v-if="!shotsAtEnd"
                 class="shots-nav next"
                 type="button"
-                aria-label="Captures suivantes"
+                :aria-label="t('fiche.capturesSuivantes')"
                 @click="scrollShots(1)"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
@@ -518,10 +519,10 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="loadingAch || (steamAch && steamAch.items.length)" class="detail-section">
             <h4>
-              Succès
+              {{ t("fiche.succes") }}
               <span v-if="steamAch" class="sec-count">{{ steamAch.unlocked }} / {{ steamAch.total }}</span>
             </h4>
-            <p v-if="loadingAch && !steamAch" class="detail-desc dim">Chargement des succès…</p>
+            <p v-if="loadingAch && !steamAch" class="detail-desc dim">{{ t("fiche.chargementSucces") }}</p>
             <template v-else-if="steamAch">
               <div class="ach-list">
                 <div v-for="a in visibleAch" :key="a.name" class="ach" :class="{ locked: !a.unlocked }">
@@ -531,7 +532,7 @@ onBeforeUnmount(() => {
                   <div class="ach-info">
                     <div class="ach-name">{{ a.name }}</div>
                     <div v-if="a.description" class="ach-desc">{{ a.description }}</div>
-                    <div class="ach-pct">{{ a.unlocked ? (a.unlockedAt ?? "Débloqué") : "Verrouillé" }}</div>
+                    <div class="ach-pct">{{ a.unlocked ? (a.unlockedAt ?? t("fiche.debloque")) : t("fiche.verrouille") }}</div>
                   </div>
                 </div>
               </div>
@@ -540,7 +541,7 @@ onBeforeUnmount(() => {
                 class="ach-toggle"
                 @click="showAllAch = !showAllAch"
               >
-                {{ showAllAch ? "Réduire" : `Afficher tout (${steamAch.items.length})` }}
+                {{ showAllAch ? t("fiche.reduire") : t("fiche.toutAfficher", { n: steamAch.items.length }) }}
               </button>
             </template>
           </div>
@@ -548,42 +549,42 @@ onBeforeUnmount(() => {
 
         <aside class="stat-card">
           <template v-if="game.hoursPlayed != null">
-            <div class="stat-play">{{ game.hoursPlayed }}<span> h</span></div>
-            <div class="stat-label">de temps de jeu</div>
+            <div class="stat-play">{{ game.hoursPlayed }}<span> {{ t("fiche.stats.heures") }}</span></div>
+            <div class="stat-label">{{ t("fiche.stats.tempsDeJeu") }}</div>
           </template>
           <template v-else-if="game.sizeGb">
-            <div class="stat-play">{{ game.sizeGb }}<span> Go</span></div>
-            <div class="stat-label">{{ game.installed ? "sur le disque" : "taille du jeu" }}</div>
+            <div class="stat-play">{{ game.sizeGb }}<span> {{ t("fiche.stats.go") }}</span></div>
+            <div class="stat-label">{{ game.installed ? t("fiche.stats.surDisque") : t("fiche.stats.tailleJeu") }}</div>
           </template>
           <template v-else>
             <div class="stat-play">—</div>
-            <div class="stat-label">aucune statistique</div>
+            <div class="stat-label">{{ t("fiche.stats.aucune") }}</div>
           </template>
           <div class="stat-rows">
-            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>Statut</span><span class="v">{{ game.installed ? "Installé" : "Non installé" }}</span></div>
-            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>Dernière session</span><span class="v">{{ game.lastPlayed ?? "—" }}</span></div>
-            <div v-if="playersLabel" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>En ce moment</span><span class="v">{{ playersLabel }}</span></div>
-            <div v-if="game.developer" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10" /></svg>Développeur</span><span class="v">{{ game.developer }}</span></div>
-            <div v-if="game.year" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></svg>Sortie</span><span class="v">{{ game.year }}</span></div>
-            <div v-if="game.genre" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg>Genre</span><span class="v">{{ game.genre }}</span></div>
-            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>Taille</span><span class="v">{{ game.sizeGb ? game.sizeGb + " Go" : "—" }}</span></div>
-            <div v-if="showFamily" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>Famille Steam</span><span class="v">{{ familyCopies }} copie{{ familyCopies > 1 ? "s" : "" }}</span></div>
+            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.statut") }}</span><span class="v">{{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}</span></div>
+            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{{ t("fiche.stats.derniereSession") }}</span><span class="v">{{ game.lastPlayed ?? "—" }}</span></div>
+            <div v-if="playersLabel" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.enCeMoment") }}</span><span class="v">{{ playersLabel }}</span></div>
+            <div v-if="game.developer" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10" /></svg>{{ t("fiche.stats.developpeur") }}</span><span class="v">{{ game.developer }}</span></div>
+            <div v-if="game.year" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></svg>{{ t("fiche.stats.sortie") }}</span><span class="v">{{ game.year }}</span></div>
+            <div v-if="game.genre" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg>{{ t("fiche.stats.genre") }}</span><span class="v">{{ game.genre }}</span></div>
+            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.taille") }}</span><span class="v">{{ game.sizeGb ? t("fiche.stats.tailleGo", { n: game.sizeGb }) : "—" }}</span></div>
+            <div v-if="showFamily" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.familleSteam") }}</span><span class="v">{{ t("fiche.stats.copies", { n: familyCopies }) }}</span></div>
           </div>
           <div v-if="steamAch && steamAch.total" class="ach-progress">
-            <div class="top"><span>Succès</span><span><b>{{ steamAch.unlocked }} / {{ steamAch.total }} ({{ achPct }}%)</b></span></div>
+            <div class="top"><span>{{ t("fiche.succes") }}</span><span><b>{{ steamAch.unlocked }} / {{ steamAch.total }} ({{ achPct }}%)</b></span></div>
             <div class="ach-bar"><div class="ach-fill" :style="{ width: `${achPct}%` }" /></div>
           </div>
         </aside>
       </div>
 
       <div v-if="zoomedShot" class="lightbox" @click.self="closeShot">
-        <button class="lb-close" aria-label="Fermer" @click="closeShot">
+        <button class="lb-close" :aria-label="t('commun.fermer')" @click="closeShot">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
         <button
           v-if="realShots.length > 1"
           class="lb-nav prev"
-          aria-label="Capture précédente"
+          :aria-label="t('fiche.capturePrecedente')"
           @click.stop="stepShot(-1)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
@@ -592,7 +593,7 @@ onBeforeUnmount(() => {
         <button
           v-if="realShots.length > 1"
           class="lb-nav next"
-          aria-label="Capture suivante"
+          :aria-label="t('fiche.captureSuivante')"
           @click.stop="stepShot(1)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>

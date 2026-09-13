@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod metadata;
 pub mod journal;
+pub mod locale;
 pub mod libsync;
 pub mod models;
 pub mod procwatch;
@@ -48,6 +49,37 @@ impl Settings {
             battlenet_connected: accounts::battlenet::is_connected(config_dir),
         }
     }
+}
+
+/// Reçoit la langue et la région choisies dans l'interface.
+///
+/// 🔑 Appelée au démarrage **et** à chaque changement : la couche native ne peut pas lire
+/// `localStorage`, qui appartient à la fenêtre. Voir `locale.rs` pour ce qui en dépend —
+/// langue demandée aux boutiques, pays de tarification, et le fichier de cache utilisé.
+///
+/// Ne renvoie rien et ne peut pas échouer : une préférence illisible retombe sur le
+/// français, elle n'interrompt pas le démarrage de l'interface.
+#[tauri::command]
+fn set_locale(app: tauri::AppHandle, language: String, region: String) {
+    match app.path().app_config_dir() {
+        Ok(dir) => locale::definir_et_retenir(&dir, &language, &region),
+        Err(_) => locale::definir(&language, &region),
+    }
+    // Le menu a été construit au démarrage, dans la langue d'alors : on le retraduit.
+    if let Some(menu) = app.try_state::<TrayItems>() {
+        menu.traduire();
+    }
+}
+
+/// `"fr"` si Torii était installé avant d'avoir des langues, `None` sinon.
+///
+/// 🔑 L'interface la demande AVANT de choisir sa langue, quand l'utilisateur n'en a jamais
+/// choisi : l'anglais est le défaut des nouvelles installations, mais quelqu'un qui
+/// utilisait Torii en français doit le retrouver en français après la mise à jour. Voir
+/// `locale::charger`.
+#[tauri::command]
+fn langue_heritee() -> Option<String> {
+    locale::installation_anterieure().then(|| "fr".to_string())
 }
 
 /// Enregistre (ou efface) la clé API Steam et auto-détecte le SteamID.
@@ -424,7 +456,7 @@ async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
     close_login_window(&app, STEAM_LOGIN_LABEL);
 
     let Some((store_secure, store_sid, steam_id, community, refresh_token)) = captured else {
-        return Err("Connexion Steam non détectée (délai dépassé ou fenêtre fermée).".into());
+        return Err(crate::locale::tr("Connexion Steam non détectée (délai dépassé ou fenêtre fermée).", "Steam sign-in not detected (timed out or window closed).").into());
     };
     let steam_id = steam_id.or_else(accounts::steam::detect_steam_id);
 
@@ -507,9 +539,9 @@ async fn connect_gog(app: tauri::AppHandle) -> Result<Settings, String> {
     close_login_window(&app, GOG_LOGIN_LABEL);
 
     let Some(code) = code else {
-        return Err("Connexion GOG non détectée (délai dépassé ou fenêtre fermée).".into());
+        return Err(crate::locale::tr("Connexion GOG non détectée (délai dépassé ou fenêtre fermée).", "GOG sign-in not detected (timed out or window closed).").into());
     };
-    let tokens = accounts::gog::exchange_code(&code).ok_or("Échec de l'échange du code GOG.")?;
+    let tokens = accounts::gog::exchange_code(&code).ok_or(crate::locale::tr("Échec de l'échange du code GOG.", "Couldn't exchange the GOG code."))?;
 
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let mut creds = accounts::secrets::load(&dir);
@@ -577,9 +609,9 @@ async fn connect_epic(app: tauri::AppHandle) -> Result<Settings, String> {
     close_login_window(&app, EPIC_LOGIN_LABEL);
 
     let Some(code) = code else {
-        return Err("Connexion Epic non détectée (délai dépassé ou fenêtre fermée).".into());
+        return Err(crate::locale::tr("Connexion Epic non détectée (délai dépassé ou fenêtre fermée).", "Epic sign-in not detected (timed out or window closed).").into());
     };
-    let tokens = accounts::epic::exchange_code(&code).ok_or("Échec de l'échange du code Epic.")?;
+    let tokens = accounts::epic::exchange_code(&code).ok_or(crate::locale::tr("Échec de l'échange du code Epic.", "Couldn't exchange the Epic code."))?;
 
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let mut creds = accounts::secrets::load(&dir);
@@ -664,7 +696,7 @@ async fn connect_ea(app: tauri::AppHandle) -> Result<Settings, String> {
     close_login_window(&app, EA_LOGIN_LABEL);
 
     let Some(token) = token else {
-        return Err("Connexion EA non détectée (délai dépassé ou fenêtre fermée).".into());
+        return Err(crate::locale::tr("Connexion EA non détectée (délai dépassé ou fenêtre fermée).", "EA sign-in not detected (timed out or window closed).").into());
     };
 
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
@@ -673,7 +705,7 @@ async fn connect_ea(app: tauri::AppHandle) -> Result<Settings, String> {
         .await
         .map_err(|e| e.to_string())?;
     if games.is_empty() {
-        return Err("Aucun jeu EA récupéré (token invalide ou API indisponible).".into());
+        return Err(crate::locale::tr("Aucun jeu EA récupéré (token invalide ou API indisponible).", "No EA games retrieved (invalid token or API unavailable).").into());
     }
     accounts::ea::save_library(&dir, &games);
 
@@ -771,7 +803,7 @@ async fn connect_battlenet(app: tauri::AppHandle) -> Result<Settings, String> {
     close_login_window(&app, BNET_LOGIN_LABEL);
 
     let Some(games) = games else {
-        return Err("Connexion Battle.net non détectée (délai dépassé ou fenêtre fermée).".into());
+        return Err(crate::locale::tr("Connexion Battle.net non détectée (délai dépassé ou fenêtre fermée).", "Battle.net sign-in not detected (timed out or window closed).").into());
     };
 
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
@@ -1106,7 +1138,13 @@ fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
     use tauri_plugin_autostart::ManagerExt;
     let manager = app.autolaunch();
     let result = if enabled { manager.enable() } else { manager.disable() };
-    result.map_err(|e| format!("Impossible de modifier le démarrage automatique : {e}"))?;
+    result.map_err(|e| {
+        if locale::en() {
+            format!("Couldn't change launch at startup: {e}")
+        } else {
+            format!("Impossible de modifier le démarrage automatique : {e}")
+        }
+    })?;
     Ok(manager.is_enabled().unwrap_or(enabled))
 }
 
@@ -1275,10 +1313,20 @@ fn open_install_dir(path: String) -> Result<(), String> {
         path.clone()
     };
     if !std::path::Path::new(&target).exists() {
-        return Err(format!("Dossier introuvable : {target}"));
+        return Err(if locale::en() {
+            format!("Folder not found: {target}")
+        } else {
+            format!("Dossier introuvable : {target}")
+        });
     }
     tauri_plugin_opener::open_path(&target, None::<&str>)
-        .map_err(|e| format!("Impossible d'ouvrir le dossier : {e}"))
+        .map_err(|e| {
+            if locale::en() {
+                format!("Couldn't open the folder: {e}")
+            } else {
+                format!("Impossible d'ouvrir le dossier : {e}")
+            }
+        })
 }
 
 /// Déclenche la désinstallation d'un jeu installé (délègue à l'UI native du launcher).
@@ -1652,14 +1700,18 @@ const LABEL_WEB: &str = "torii-web";
 async fn open_web_window(app: tauri::AppHandle, url: String, title: String) -> Result<(), String> {
     let parsed: tauri::Url = url.parse().map_err(|_| "Adresse illisible.".to_string())?;
     if parsed.scheme() != "https" {
-        return Err("Torii n'ouvre que des adresses sécurisées.".into());
+        return Err(crate::locale::tr("Torii n'ouvre que des adresses sécurisées.", "Torii only opens secure addresses.").into());
     }
     let hote = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
     let permis = DOMAINES_WEB
         .iter()
         .any(|d| hote == *d || hote.ends_with(&format!(".{d}")));
     if !permis {
-        return Err(format!("Torii n'ouvre pas {hote} lui-même."));
+        return Err(if locale::en() {
+            format!("Torii doesn't open {hote} itself.")
+        } else {
+            format!("Torii n'ouvre pas {hote} lui-même.")
+        });
     }
     // Le titre vient d'un pseudo, donc de quelqu'un d'autre : borné, et jamais interprété
     // (une barre de titre n'affiche pas de HTML, mais un pseudo de 4 000 caractères
@@ -1741,13 +1793,40 @@ fn set_window_prefs(app: tauri::AppHandle, start_minimized: bool, close_to_tray:
 }
 
 /// Construit l'icône de la zone de notification (tray) avec son menu.
+/// Les entrées du menu de la zone de notification.
+///
+/// 🔑 Conservées dans l'état de l'application parce que le menu est construit **une
+/// fois**, au démarrage. Changer de langue dans les Paramètres doit le retraduire tout de
+/// suite : sinon « Quitter » resterait affiché jusqu'au prochain lancement, dans un menu
+/// qu'on ouvre justement quand la fenêtre est fermée — donc sans rien d'autre à l'écran
+/// pour rappeler que la langue a changé.
+struct TrayItems {
+    show: tauri::menu::MenuItem<tauri::Wry>,
+    quit: tauri::menu::MenuItem<tauri::Wry>,
+}
+
+impl TrayItems {
+    fn texte_ouvrir() -> &'static str {
+        locale::tr("Ouvrir Torii", "Open Torii")
+    }
+    fn texte_quitter() -> &'static str {
+        locale::tr("Quitter", "Quit")
+    }
+    fn traduire(&self) {
+        let _ = self.show.set_text(Self::texte_ouvrir());
+        let _ = self.quit.set_text(Self::texte_quitter());
+    }
+}
+
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-    let show = MenuItem::with_id(app, "show", "Ouvrir Torii", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", TrayItems::texte_ouvrir(), true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", TrayItems::texte_quitter(), true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &quit])?;
+    // Gardés sous la main pour `set_locale`, qui doit pouvoir les retraduire à chaud.
+    app.manage(TrayItems { show: show.clone(), quit: quit.clone() });
 
     let mut builder = TrayIconBuilder::new()
         .tooltip("Torii")
@@ -1826,6 +1905,10 @@ pub fn run() {
         .setup(|app| {
             // Journal en premier : une panique survenue plus tôt ne laisserait rien.
             if let Ok(dir) = app.path().app_config_dir() {
+                // 🔑 La langue avant le menu, la présence et le reste : tout ce qui suit peut
+                // afficher un texte ou interroger une boutique avant que l'interface ait
+                // chargé son script. Voir `locale::definir_et_retenir`.
+                locale::charger(&dir);
                 journal::init(dir);
             }
             // Un bandeau resté d'une session précédente n'a rien à faire là.
@@ -1879,6 +1962,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            set_locale,
+            langue_heritee,
             scan_library,
             cached_library,
             enrich_game,

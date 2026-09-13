@@ -5,6 +5,7 @@ import { useLibrary } from "../composables/useLibrary";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { pickFile, pickFolder } from "../lib/tauri";
+import { t } from "../i18n";
 
 const { addGameOpen, editGameId, closeAddGame, openGame } = useUi();
 const { addManual, updateManual, byId } = useLibrary();
@@ -42,9 +43,9 @@ watch(addGameOpen, (open) => {
 
 /** Choix de l'exécutable dans l'explorateur Windows. */
 async function browseExe() {
-  const path = await pickFile("Choisir l'exécutable du jeu", [
-    { name: "Programmes", extensions: ["exe", "bat", "cmd", "lnk", "url"] },
-    { name: "Tous les fichiers", extensions: ["*"] },
+  const path = await pickFile(t("comptes.ajout.choisirExe"), [
+    { name: t("comptes.ajout.programmes"), extensions: ["exe", "bat", "cmd", "lnk", "url"] },
+    { name: t("comptes.ajout.tousFichiers"), extensions: ["*"] },
   ]);
   if (path) {
     launchTarget.value = path;
@@ -63,14 +64,14 @@ async function browseExe() {
 
 /** Choix du dossier d'installation. */
 async function browseDir() {
-  const dir = await pickFolder("Choisir le dossier du jeu");
+  const dir = await pickFolder(t("comptes.ajout.choisirDossier"));
   if (dir) installDir.value = dir;
 }
 
 /** Choix d'une image de jaquette sur le disque (une URL reste saisissable à la main). */
 async function browseCover() {
-  const path = await pickFile("Choisir une jaquette", [
-    { name: "Images", extensions: ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp"] },
+  const path = await pickFile(t("comptes.ajout.choisirJaquette"), [
+    { name: t("comptes.ajout.images"), extensions: ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp"] },
   ]);
   if (path) coverUrl.value = path;
 }
@@ -110,55 +111,53 @@ function onKey(e: KeyboardEvent) {
       role="dialog"
       aria-modal="true"
       tabindex="-1"
-      :aria-label="editing ? 'Modifier le jeu' : 'Ajouter un jeu'"
+      :aria-label="editing ? t('comptes.ajout.modifier') : t('comptes.ajout.ajouter')"
     >
       <div class="modal-head">
-        <h3>{{ editing ? "Modifier le jeu" : "Ajouter un jeu" }}</h3>
-        <button class="modal-close" aria-label="Fermer" @click="closeAddGame">
+        <h3>{{ editing ? t("comptes.ajout.modifier") : t("comptes.ajout.ajouter") }}</h3>
+        <button class="modal-close" :aria-label="t('commun.fermer')" @click="closeAddGame">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
       <p class="modal-sub">
-        {{ editing
-          ? "Corrige les informations de ce jeu ajouté à la main."
-          : "Référence un jeu (ou toute application) qui n’apparaît dans aucun launcher." }}
+        {{ editing ? t("comptes.ajout.introModif") : t("comptes.ajout.introAjout") }}
       </p>
 
       <form class="modal-form" @submit.prevent="save">
         <label class="field">
-          <span class="field-label">Titre <em>*</em></span>
-          <input v-model="title" type="text" placeholder="Ex : Minecraft" autofocus />
+          <span class="field-label">{{ t("comptes.ajout.titre") }} <em>*</em></span>
+          <input v-model="title" type="text" :placeholder="t('comptes.ajout.titreExemple')" autofocus />
         </label>
         <label class="field">
-          <span class="field-label">Exécutable <em>*</em></span>
+          <span class="field-label">{{ t("comptes.ajout.executable") }} <em>*</em></span>
           <div class="field-row">
-            <input v-model="launchTarget" type="text" placeholder="C:\Jeux\MonJeu\jeu.exe" spellcheck="false" />
-            <button type="button" class="btn-browse" @click="browseExe">Parcourir…</button>
+            <input v-model="launchTarget" type="text" :placeholder="t('comptes.ajout.executableExemple')" spellcheck="false" />
+            <button type="button" class="btn-browse" @click="browseExe">{{ t("comptes.ajout.parcourir") }}</button>
           </div>
-          <span class="field-hint">Le fichier lancé quand tu cliques sur « Jouer » (.exe, .bat, .lnk…).</span>
+          <span class="field-hint">{{ t("comptes.ajout.executableAide") }}</span>
         </label>
         <label class="field">
-          <span class="field-label">Dossier d'installation <i>(optionnel)</i></span>
+          <span class="field-label">{{ t("comptes.ajout.dossier") }} <i>{{ t("comptes.ajout.optionnel") }}</i></span>
           <div class="field-row">
-            <input v-model="installDir" type="text" placeholder="C:\Jeux\MonJeu" spellcheck="false" />
-            <button type="button" class="btn-browse" @click="browseDir">Parcourir…</button>
+            <input v-model="installDir" type="text" :placeholder="t('comptes.ajout.dossierExemple')" spellcheck="false" />
+            <button type="button" class="btn-browse" @click="browseDir">{{ t("comptes.ajout.parcourir") }}</button>
           </div>
         </label>
         <label class="field">
-          <span class="field-label">Jaquette <i>(optionnel)</i></span>
+          <span class="field-label">{{ t("comptes.ajout.jaquette") }} <i>{{ t("comptes.ajout.optionnel") }}</i></span>
           <div class="field-row">
-            <input v-model="coverUrl" type="text" placeholder="https://…/cover.jpg ou un fichier image" spellcheck="false" />
-            <button type="button" class="btn-browse" @click="browseCover">Parcourir…</button>
+            <input v-model="coverUrl" type="text" :placeholder="t('comptes.ajout.jaquetteExemple')" spellcheck="false" />
+            <button type="button" class="btn-browse" @click="browseCover">{{ t("comptes.ajout.parcourir") }}</button>
           </div>
-          <span class="field-hint">Une image de ton disque ou une adresse web. Sinon un dégradé est généré.</span>
+          <span class="field-hint">{{ t("comptes.ajout.jaquetteAide") }}</span>
         </label>
 
         <p v-if="error" class="modal-error">{{ error }}</p>
 
         <div class="modal-actions">
-          <button type="button" class="btn-cancel" @click="closeAddGame">Annuler</button>
+          <button type="button" class="btn-cancel" @click="closeAddGame">{{ t("commun.annuler") }}</button>
           <button type="submit" class="btn-save" :disabled="!canSave || saving">
-            {{ saving ? "Enregistrement…" : editing ? "Enregistrer" : "Ajouter le jeu" }}
+            {{ saving ? t("comptes.ajout.enregistrement") : editing ? t("comptes.ajout.enregistrer") : t("comptes.ajout.ajouterJeu") }}
           </button>
         </div>
       </form>

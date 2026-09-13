@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useTorii } from "../composables/useTorii";
+import { t } from "../i18n";
 
 /**
  * Invitation à rejoindre le réseau Torii.
@@ -16,18 +17,15 @@ const { account, connected, openSignIn } = useTorii();
 <template>
   <!-- Connecté : une seule ligne de rappel, le reste est ailleurs. -->
   <p v-if="connected" class="signed">
-    Connecté en tant que <strong>{{ account?.displayName }}</strong>
+    {{ t("comptes.torii.connecteEnTantQue") }} <strong>{{ account?.displayName }}</strong>
   </p>
 
   <div v-else class="invite">
     <div class="pitch">
-      <span class="title">Réseau Torii</span>
-      <span class="sub">
-        Vois à quoi jouent tes amis, quel que soit leur launcher — et montre-leur ce que
-        tu joues, si tu le décides.
-      </span>
+      <span class="title">{{ t("comptes.torii.reseau") }}</span>
+      <span class="sub">{{ t("comptes.torii.argument") }}</span>
     </div>
-    <button class="btn-primary" @click="openSignIn">Créer un compte ou se connecter</button>
+    <button class="btn-primary" @click="openSignIn">{{ t("comptes.torii.creerOuConnecter") }}</button>
   </div>
 </template>
 

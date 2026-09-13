@@ -19,6 +19,7 @@ import { ref } from "vue";
 import { usePreferences } from "../composables/usePreferences";
 import { useTorii } from "../composables/useTorii";
 import { showToast } from "../composables/useToast";
+import { t } from "../i18n";
 
 const { prefs } = usePreferences();
 const { prefs: toriiPrefs, connected, setLibrarySync, setShareLibrary, librarySyncing } = useTorii();
@@ -39,8 +40,8 @@ async function activer(avecLesAmis: boolean) {
     if (avecLesAmis) await setShareLibrary(true);
     showToast(
       avecLesAmis
-        ? "Ta bibliothèque est partagée avec tes amis Torii."
-        : "Ta bibliothèque est synchronisée. Tes amis ne la voient pas.",
+        ? t("amis.invitation.partagee")
+        : t("amis.invitation.synchronisee"),
     );
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
@@ -59,22 +60,17 @@ function refuser() {
     class="invite"
   >
     <div class="pitch">
-      <span class="title">Ta bibliothèque, ailleurs que sur ce PC</span>
-      <span class="sub">
-        Torii peut la déposer sur ton compte pour que tu la retrouves sur tes autres
-        appareils — et, si tu le veux, la montrer à tes amis quel que soit leur launcher.
-        Les deux se règlent séparément. Les jeux masqués et ceux que tu ne diffuses pas en
-        sont exclus dans tous les cas, et tu peux tout couper d'un clic.
-      </span>
+      <span class="title">{{ t("amis.invitation.titre") }}</span>
+      <span class="sub">{{ t("amis.invitation.texte") }}</span>
     </div>
     <div class="actions">
       <button class="btn-primary" :disabled="librarySyncing" @click="activer(true)">
-        {{ librarySyncing ? "Envoi…" : "Partager avec mes amis" }}
+        {{ librarySyncing ? t("amis.envoi") : t("amis.invitation.partager") }}
       </button>
       <button class="btn-second" :disabled="librarySyncing" @click="activer(false)">
-        Seulement mes appareils
+        {{ t("amis.invitation.mesAppareils") }}
       </button>
-      <button class="btn-ghost" @click="refuser">Non merci</button>
+      <button class="btn-ghost" @click="refuser">{{ t("amis.invitation.nonMerci") }}</button>
     </div>
     <p v-if="error" class="err" role="alert">{{ error }}</p>
   </div>

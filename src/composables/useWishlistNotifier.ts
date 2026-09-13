@@ -1,6 +1,7 @@
 import { watch } from "vue";
 import { notify, wishlistAll } from "../lib/tauri";
-import { formatEur } from "../lib/format";
+import { formatPrix } from "../lib/format";
+import { t } from "../i18n";
 import { usePreferences } from "./usePreferences";
 
 const { prefs } = usePreferences();
@@ -20,6 +21,16 @@ const { prefs } = usePreferences();
 // pour que l'amorçage silencieux soit rejoué, sinon la 1re passe notifierait tout).
 const MAP_KEY = "ludo-wishlist-notif-v2";
 const SEEDED_KEY = "ludo-wishlist-notif-seeded-v2";
+/**
+ * Devise dans laquelle les prix de `MAP_KEY` ont été relevés.
+ *
+ * ⚠️ SANS ELLE, CHANGER DE RÉGION DÉCLENCHAIT DE FAUSSES ALERTES. Le suivi compare le
+ * prix du jour au dernier prix notifié, en nombre nu : passer de la France aux
+ * États-Unis faisait comparer « 59,99 » euros à « 49,99 » dollars, et annoncer une
+ * baisse qui n'existe pas. Quand la devise change, les anciens relevés ne veulent plus
+ * rien dire — on repart d'un amorçage silencieux, comme au tout premier passage.
+ */
+const DEVISE_KEY = "ludo-wishlist-notif-devise";
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 h
 const FIRST_DELAY_MS = 30 * 1000; // laisse l'app/session s'initialiser
 
@@ -46,9 +57,15 @@ async function check() {
   try {
     const items = await wishlistAll();
     if (!items) return; // hors Tauri ou Steam non connecté
-    const map = loadMap();
-    const seeded = localStorage.getItem(SEEDED_KEY) === "1";
-    const toNotify: { title: string; price: number; savings: number }[] = [];
+    const devise = items.find((i) => i.currency)?.currency ?? "";
+    const deviseMemo = localStorage.getItem(DEVISE_KEY);
+    const deviseChangee = !!devise && !!deviseMemo && deviseMemo !== devise;
+    if (devise) localStorage.setItem(DEVISE_KEY, devise);
+
+    const map = deviseChangee ? {} : loadMap();
+    // Une devise changée vaut un premier passage : on mémorise sans notifier.
+    const seeded = !deviseChangee && localStorage.getItem(SEEDED_KEY) === "1";
+    const toNotify: { title: string; price: number; savings: number; currency?: string }[] = [];
     let changed = false;
 
     for (const it of items) {
@@ -69,13 +86,13 @@ async function check() {
       }
       // Nouveau deal, ou prix plus bas que le dernier notifié.
       if (last == null || it.price < last - 0.01) {
-        if (seeded) toNotify.push({ title: it.title, price: it.price, savings: it.savings });
+        if (seeded) toNotify.push({ title: it.title, price: it.price, savings: it.savings, currency: it.currency });
         map[key] = it.price;
         changed = true;
       }
     }
 
-    if (changed) saveMap(map);
+    if (changed || deviseChangee) saveMap(map);
     // Premier passage = amorçage silencieux (on mémorise l'état sans spammer).
     if (!seeded) {
       localStorage.setItem(SEEDED_KEY, "1");
@@ -86,12 +103,12 @@ async function check() {
     if (toNotify.length <= 3) {
       for (const d of toNotify) {
         const cut = d.savings > 0 ? ` (-${d.savings}%)` : "";
-        void notify("💸 Baisse de prix", `${d.title} — ${formatEur(d.price)}${cut}`);
+        void notify(t("boutique.notifications.baisse"), `${d.title} — ${formatPrix(d.price, d.currency)}${cut}`);
       }
     } else {
       void notify(
-        "💸 Baisses de prix",
-        `${toNotify.length} jeux de ta wishlist ont baissé (promo ou plus bas historique).`,
+        t("boutique.notifications.baisses"),
+        t("boutique.notifications.plusieurs", { n: toNotify.length }),
       );
     }
   } finally {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { hasTauriRuntime } from "../lib/tauri";
+import { t } from "../i18n";
 
 /**
  * Bandeau de la démo en ligne.
@@ -23,13 +24,13 @@ const visible = ref(!hasTauriRuntime());
 
 <template>
   <div v-if="visible" class="demo-banner" role="status">
-    <span class="pastille">Démo</span>
+    <span class="pastille">{{ t("systeme.demo.pastille") }}</span>
     <p>
-      Tu essaies Torii dans ton navigateur, sur une bibliothèque inventée.
-      <span class="dim">Lancer un jeu ou connecter un compte demande l'application.</span>
+      {{ t("systeme.demo.texte") }}
+      <span class="dim">{{ t("systeme.demo.limite") }}</span>
     </p>
-    <a class="lien" href="../#telecharger">Télécharger Torii</a>
-    <button class="fermer" title="Masquer ce bandeau" aria-label="Masquer ce bandeau"
+    <a class="lien" href="../#telecharger">{{ t("systeme.demo.telecharger") }}</a>
+    <button class="fermer" :title="t('systeme.demo.masquer')" :aria-label="t('systeme.demo.masquer')"
             @click="visible = false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
         <path d="M6 6l12 12M18 6L6 18" />

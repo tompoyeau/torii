@@ -5,7 +5,10 @@ import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { openExternal } from "../lib/tauri";
-import { formatEur } from "../lib/format";
+import { formatPrix } from "../lib/format";
+import { t } from "../i18n";
+import { deviseAttendue } from "../i18n/regions";
+import type { StorePrice } from "../types";
 
 const { product, productLoading, selectedGameId, closeProduct, isStoreExcluded, toggleStoreExcluded } =
   useStore();
@@ -18,7 +21,16 @@ useScrollLock(open);
 const panneau = ref<HTMLElement | null>(null);
 useFocusTrap(panneau, open);
 
-const price = formatEur;
+/** Un montant dans la devise de l'offre qui le porte. */
+const price = (montant: number, offre: StorePrice) => formatPrix(montant, offre.currency);
+
+/**
+ * La devise de la fiche, pour l'avertissement en pied de colonne. Celle des offres si
+ * elles en portent une, sinon celle attendue pour la région.
+ */
+const deviseFiche = computed(
+  () => product.value?.currency || product.value?.prices.find((p) => p.currency)?.currency || deviseAttendue.value,
+);
 
 /** Offres retenues (hors boutiques exclues par l'utilisateur), triées par prix croissant. */
 const visiblePrices = computed(() => (product.value?.prices ?? []).filter((p) => !isStoreExcluded(p.storeName)));
@@ -87,18 +99,18 @@ watch([selectedGameId, shots], () => {
 </script>
 
 <template>
-  <div ref="panneau" class="sd" :class="{ open }" role="dialog" aria-modal="true" tabindex="-1" aria-label="Fiche produit">
+  <div ref="panneau" class="sd" :class="{ open }" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('boutique.produit.fiche')">
     <template v-if="open">
       <div class="sd-banner">
         <div class="sd-banner-art" :style="{ background: 'linear-gradient(160deg,#241a3a,#0e0a18)' }" />
         <img v-if="product?.heroUrl" class="sd-banner-img" :src="product.heroUrl" alt="" @error="hideBroken" />
         <div class="sd-scrim" />
         <button class="sd-back" @click="closeProduct">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>Boutique
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>{{ t("boutique.titre") }}
         </button>
         <div class="sd-header">
-          <span class="sd-tag">Boutique</span>
-          <h1 class="sd-title">{{ product?.title ?? "Chargement…" }}</h1>
+          <span class="sd-tag">{{ t("boutique.titre") }}</span>
+          <h1 class="sd-title">{{ product?.title ?? t("boutique.produit.chargement") }}</h1>
           <div v-if="product" class="sd-facts">
             <span v-if="product.genre">{{ product.genre }}</span>
             <span v-if="product.developer">· {{ product.developer }}</span>
@@ -110,22 +122,22 @@ watch([selectedGameId, shots], () => {
       <div class="sd-body">
         <div class="sd-main">
           <div v-if="productLoading && !product" class="sd-loading">
-            <span class="spin" /> Chargement de la fiche…
+            <span class="spin" /> {{ t("boutique.produit.chargementFiche") }}
           </div>
           <template v-else-if="product">
             <section class="sd-sec">
-              <h4>À propos</h4>
+              <h4>{{ t("fiche.apropos") }}</h4>
               <p v-if="product.description" class="desc">{{ product.description }}</p>
-              <p v-else class="desc dim">Aucune description disponible pour ce jeu.</p>
+              <p v-else class="desc dim">{{ t("fiche.aucuneDescription") }}</p>
             </section>
             <section v-if="shots.length" class="sd-sec">
-              <h4>Captures d'écran</h4>
+              <h4>{{ t("fiche.captures") }}</h4>
               <div class="shots-wrap">
                 <button
                   v-if="!shotsAtStart"
                   class="shots-nav prev"
                   type="button"
-                  aria-label="Captures précédentes"
+                  :aria-label="t('fiche.capturesPrecedentes')"
                   @click="scrollShots(-1)"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
@@ -139,7 +151,7 @@ watch([selectedGameId, shots], () => {
                   v-if="!shotsAtEnd"
                   class="shots-nav next"
                   type="button"
-                  aria-label="Captures suivantes"
+                  :aria-label="t('fiche.capturesSuivantes')"
                   @click="scrollShots(1)"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
@@ -152,14 +164,14 @@ watch([selectedGameId, shots], () => {
         <aside class="sd-prices">
           <div v-if="best" class="best">
             <div class="best-top">
-              <span class="best-label">Meilleur prix</span>
+              <span class="best-label">{{ t("boutique.produit.meilleurPrix") }}</span>
               <span v-if="best.savings > 0" class="best-save">-{{ best.savings }}%</span>
             </div>
-            <div class="best-price">{{ price(best.price) }}</div>
-            <div v-if="best.savings > 0" class="best-was">au lieu de {{ price(best.retailPrice) }}</div>
+            <div class="best-price">{{ price(best.price, best) }}</div>
+            <div v-if="best.savings > 0" class="best-was">{{ t("boutique.produit.auLieuDe", { prix: price(best.retailPrice, best) }) }}</div>
             <button class="buy big" @click="buy(best.buyUrl)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z" /><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M6 6 5 3H2" /></svg>
-              Acheter chez {{ best.storeName }}
+              {{ t("boutique.produit.acheterChez", { boutique: best.storeName }) }}
             </button>
             <button
               v-if="product"
@@ -168,37 +180,37 @@ watch([selectedGameId, shots], () => {
               @click="toggleWishlist({ gameId: product.gameId, title: product.title, coverUrl: product.coverUrl })"
             >
               <svg viewBox="0 0 24 24" :fill="isWishlisted(product.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
-              {{ isWishlisted(product.gameId) ? "Dans la wishlist" : "Ajouter à la wishlist" }}
+              {{ isWishlisted(product.gameId) ? t("boutique.produit.dansWishlist") : t("boutique.ajouterWishlist") }}
             </button>
             <div v-if="product?.cheapestEver != null" class="ever">
-              Plus bas historique : <b>{{ price(product.cheapestEver) }}</b>
+              {{ t("boutique.produit.plusBasHistorique") }} <b>{{ formatPrix(product.cheapestEver, deviseFiche) }}</b>
             </div>
           </div>
 
           <div v-if="product && product.prices.length > 1" class="compare">
-            <div class="compare-label">Comparer ({{ visiblePrices.length }} boutique{{ visiblePrices.length > 1 ? "s" : "" }})</div>
+            <div class="compare-label">{{ t("boutique.produit.comparer", { n: visiblePrices.length }) }}</div>
             <div v-for="(p, i) in visiblePrices" :key="p.storeName + p.buyUrl + i" class="row" :class="{ oos: p.available === false }">
               <span class="row-store">{{ p.storeName }}</span>
-              <span v-if="p.available === false" class="row-oos">Rupture de stock</span>
+              <span v-if="p.available === false" class="row-oos">{{ t("boutique.produit.rupture") }}</span>
               <span v-else-if="p.savings > 0" class="row-save">-{{ p.savings }}%</span>
-              <span class="row-price">{{ price(p.price) }}</span>
-              <button class="row-icon" title="Masquer ce vendeur" @click="toggleStoreExcluded(p.storeName)">
+              <span class="row-price">{{ price(p.price, p) }}</span>
+              <button class="row-icon" :title="t('boutique.produit.masquerVendeur')" @click="toggleStoreExcluded(p.storeName)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /><path d="M3 3l18 18" /></svg>
               </button>
-              <button class="row-buy" :title="p.available === false ? 'Voir sur la boutique' : 'Acheter'" @click="buy(p.buyUrl)">
+              <button class="row-buy" :title="p.available === false ? t('boutique.produit.voirBoutique') : t('boutique.produit.acheter')" @click="buy(p.buyUrl)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
               </button>
             </div>
 
             <template v-if="hiddenPrices.length">
               <button class="hidden-toggle" @click="showHidden = !showHidden">
-                {{ showHidden ? "▾" : "▸" }} {{ hiddenPrices.length }} vendeur{{ hiddenPrices.length > 1 ? "s" : "" }} masqué{{ hiddenPrices.length > 1 ? "s" : "" }}
+                {{ showHidden ? "▾" : "▸" }} {{ t("boutique.produit.vendeursMasques", { n: hiddenPrices.length }) }}
               </button>
               <div v-if="showHidden" class="hidden-list">
                 <div v-for="(p, i) in hiddenPrices" :key="'h' + p.storeName + i" class="row muted">
                   <span class="row-store">{{ p.storeName }}</span>
-                  <span class="row-price">{{ price(p.price) }}</span>
-                  <button class="row-icon" title="Réafficher ce vendeur" @click="toggleStoreExcluded(p.storeName)">
+                  <span class="row-price">{{ price(p.price, p) }}</span>
+                  <button class="row-icon" :title="t('boutique.produit.reafficherVendeur')" @click="toggleStoreExcluded(p.storeName)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
                   </button>
                 </div>
@@ -206,19 +218,19 @@ watch([selectedGameId, shots], () => {
             </template>
           </div>
 
-          <p class="disclaimer">Prix indicatifs en euros. Masque les vendeurs que tu ne veux plus voir avec l'icône œil. L'achat se fait sur la boutique du marchand.</p>
+          <p class="disclaimer">{{ t("boutique.produit.avertissement", { devise: deviseFiche }) }}</p>
         </aside>
       </div>
 
       <div v-if="zoom != null && shots[zoom]" class="lightbox" @click.self="zoom = null">
-        <button class="lb-close" aria-label="Fermer" @click="zoom = null">
+        <button class="lb-close" :aria-label="t('commun.fermer')" @click="zoom = null">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
-        <button v-if="shots.length > 1" class="lb-nav prev" aria-label="Capture précédente" @click.stop="stepZoom(-1)">
+        <button v-if="shots.length > 1" class="lb-nav prev" :aria-label="t('fiche.capturePrecedente')" @click.stop="stepZoom(-1)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
         </button>
         <img class="lb-img" :src="shots[zoom]" alt="" @error="hideBroken" />
-        <button v-if="shots.length > 1" class="lb-nav next" aria-label="Capture suivante" @click.stop="stepZoom(1)">
+        <button v-if="shots.length > 1" class="lb-nav next" :aria-label="t('fiche.captureSuivante')" @click.stop="stepZoom(1)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
         </button>
         <div v-if="shots.length > 1" class="lb-count">{{ zoom + 1 }} / {{ shots.length }}</div>

@@ -16,6 +16,8 @@ import { platformName } from "../data/platforms";
 import GameCard from "./GameCard.vue";
 import PlatformIcon from "./PlatformIcon.vue";
 import type { Game, LibGame, PlatformId } from "../types";
+import { t } from "../i18n";
+import { ilYA } from "../lib/format";
 
 const { friendLibraryId, showFriendProfile, showStore, openGame } = useUi();
 const { games, loading, error, loadedId, devicesOf, load, mine, commonCount } = useFriendLibrary();
@@ -30,7 +32,7 @@ const friend = computed(() => {
 
 /** Nom de repli : l'index porte le pseudo même quand la personne n'est pas dans le cercle. */
 const friendName = computed(
-  () => friend.value?.name ?? devicesOf(friendLibraryId.value ?? "")[0]?.displayName ?? "Cet ami",
+  () => friend.value?.name ?? devicesOf(friendLibraryId.value ?? "")[0]?.displayName ?? t("amis.profil.cetAmi"),
 );
 
 const devices = computed(() => devicesOf(friendLibraryId.value ?? ""));
@@ -48,11 +50,11 @@ const query = ref("");
 type Filtre = "tous" | "manquants" | "communs";
 const filtre = ref<Filtre>("tous");
 
-const FILTRES: { key: Filtre; label: string }[] = [
-  { key: "tous", label: "Tous" },
-  { key: "manquants", label: "Que tu n'as pas" },
-  { key: "communs", label: "Vous l'avez tous les deux" },
-];
+const FILTRES = computed<{ key: Filtre; label: string }[]>(() => [
+  { key: "tous", label: t("amis.bibliotheque.tous") },
+  { key: "manquants", label: t("amis.bibliotheque.manquants") },
+  { key: "communs", label: t("amis.bibliotheque.communs") },
+]);
 
 const shown = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -107,13 +109,11 @@ function platformsLabel(g: LibGame): string {
   return g.platforms.map((p) => platformName(p as never)).join(", ");
 }
 
-/** « il y a 3 j » — une bibliothèque partagée peut dater, et ça se dit. */
-function sinceLabel(timestamp: number): string {
-  const s = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
-  if (s < 3600) return "à l'instant";
-  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
-  return `il y a ${Math.round(s / 86400)} j`;
-}
+/**
+ * « il y a 3 j » — une bibliothèque partagée peut dater, et ça se dit. À l'heure près :
+ * savoir qu'elle a bougé il y a 40 minutes n'apprend rien, d'où le seuil d'une heure.
+ */
+const sinceLabel = (timestamp: number): string => ilYA(timestamp, 3600);
 
 /** La plus récente des mises à jour, tous appareils confondus. */
 const updatedAt = computed(() =>
@@ -136,31 +136,31 @@ const familyCount = computed(() => games.value.filter((g) => g.familyShared).len
            sauterait un étage et perdrait la personne qu'on était en train de regarder. -->
       <button
         class="chip back"
-        :title="`Retour au profil de ${friendName}`"
+        :title="t('amis.bibliotheque.retourProfil', { nom: friendName })"
         @click="showFriendProfile(`torii:${friendLibraryId}`)"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 6l-6 6 6 6" />
         </svg>
-        Profil
+        {{ t("amis.bibliotheque.profil") }}
       </button>
-      <h2>Bibliothèque de {{ friendName }}</h2>
-      <span v-if="games.length" class="n">{{ games.length }} jeu{{ games.length > 1 ? "x" : "" }}</span>
+      <h2>{{ t("amis.bibliotheque.titre", { nom: friendName }) }}</h2>
+      <span v-if="games.length" class="n">{{ t("bibliotheque.jeux", { n: games.length }) }}</span>
     </div>
 
     <p v-if="devices.length" class="sub">
-      {{ commonCount }} en commun avec toi ·
+      {{ t("amis.bibliotheque.enCommun", { n: commonCount }) }} ·
       <template v-if="familyCount">
-        {{ familyCount }} via le partage familial Steam ·
+        {{ t("amis.bibliotheque.famille", { n: familyCount }) }} ·
       </template>
-      {{ devices.length }} appareil{{ devices.length > 1 ? "s" : "" }} ·
-      mis à jour {{ sinceLabel(updatedAt) }}
+      {{ t("amis.bibliotheque.appareils", { n: devices.length }) }} ·
+      {{ t("amis.bibliotheque.misAJour", { quand: sinceLabel(updatedAt) }) }}
     </p>
 
     <!-- Recherche et filtres sur la même ligne : ils font le même travail — restreindre
          la liste — et les séparer donnait deux barres d'outils pour une seule intention. -->
     <div v-if="games.length" class="filters">
-      <input v-model="query" class="search" type="search" placeholder="Rechercher…" />
+      <input v-model="query" class="search" type="search" :placeholder="t('amis.bibliotheque.rechercher')" />
       <button
         v-for="f in FILTRES"
         :key="f.key"
@@ -172,13 +172,13 @@ const familyCount = computed(() => games.value.filter((g) => g.familyShared).len
       </button>
     </div>
 
-    <p v-if="loading" class="empty">Chargement de sa bibliothèque…</p>
+    <p v-if="loading" class="empty">{{ t("amis.profil.chargementBibliotheque") }}</p>
     <p v-else-if="error" class="empty" role="alert">{{ error }}</p>
     <p v-else-if="!games.length" class="empty">
-      {{ friendName }} ne partage pas sa bibliothèque.
+      {{ t("amis.bibliotheque.nePartagePas", { nom: friendName }) }}
     </p>
     <p v-else-if="!shown.length" class="empty">
-      Aucun jeu ne correspond.
+      {{ t("amis.bibliotheque.aucun") }}
     </p>
 
     <div v-else class="grid">
@@ -194,11 +194,11 @@ const familyCount = computed(() => games.value.filter((g) => g.familyShared).len
           <span
             v-if="g.familyShared"
             class="family"
-            :title="`${friendName} y a accès par le partage familial Steam : le jeu ne lui appartient pas.`"
+            :title="t('amis.bibliotheque.familleAide', { nom: friendName })"
           >
-            Famille Steam
+            {{ t("amis.bibliotheque.familleSteam") }}
           </span>
-          <span v-if="mine(g)" class="owned">Tu l'as aussi</span>
+          <span v-if="mine(g)" class="owned">{{ t("amis.tuLAsAussi") }}</span>
         </div>
       </div>
     </div>

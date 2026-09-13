@@ -29,6 +29,7 @@ import { sourcesOf } from "../lib/friendPresence";
 import { gradientFor } from "../lib/covers";
 import { openExternal, openWebWindow } from "../lib/tauri";
 import type { LibGame } from "../types";
+import { t } from "../i18n";
 
 const { friendProfileKey, showFriends, showFriendLibrary, openGame } = useUi();
 const { inGame, online, offline } = useFriendList();
@@ -62,7 +63,7 @@ const toriiId = computed(() => {
 /** Même repli que dans la vue bibliothèque : l'index porte le pseudo, le cercle peut ne
     pas (encore) l'avoir. */
 const name = computed(
-  () => friend.value?.name ?? devicesOf(toriiId.value ?? "")[0]?.displayName ?? "Cet ami",
+  () => friend.value?.name ?? devicesOf(toriiId.value ?? "")[0]?.displayName ?? t("amis.profil.cetAmi"),
 );
 
 const partage = computed(() => hasLibrary(toriiId.value));
@@ -76,16 +77,16 @@ const canaux = computed(() => (friend.value ? sourcesOf(friend.value) : []));
 /** Ce que fait la personne, en une ligne. */
 const stateLine = computed(() => {
   const f = friend.value;
-  if (!f) return "Hors de ton cercle";
+  if (!f) return t("amis.etats.horsCercle");
   switch (f.state) {
     case "in-game":
-      return f.gameName ? `Joue à ${f.gameName}` : "En jeu";
+      return f.gameName ? t("amis.etats.joueA", { jeu: f.gameName }) : t("amis.etats.enJeu");
     case "online":
-      return "En ligne";
+      return t("amis.etats.enLigne");
     case "away":
-      return "Absent";
+      return t("amis.etats.absent");
     default:
-      return "Hors ligne";
+      return t("amis.etats.horsLigne");
   }
 });
 
@@ -139,7 +140,7 @@ function onSameGame() {
 async function openSteam() {
   const url = friend.value?.profileUrl;
   if (!url || url === "#") return;
-  if (!(await openWebWindow(url, `${name.value} — profil Steam`))) openExternal(url);
+  if (!(await openWebWindow(url, t("amis.profil.fenetreSteam", { nom: name.value })))) openExternal(url);
 }
 
 /**
@@ -154,9 +155,9 @@ async function copierCode() {
   if (!code) return;
   try {
     await navigator.clipboard.writeText(code);
-    showToast("Ton code d'ami est copié.");
+    showToast(t("amis.codeCopie"));
   } catch {
-    showToast("Copie impossible ; note le code à la main.");
+    showToast(t("amis.copieImpossible"));
   }
 }
 
@@ -179,8 +180,8 @@ const hasSettings = computed(() => !!toriiId.value);
 
 const removeHint = computed(() =>
   friend.value?.source === "both"
-    ? `Vous disparaîtrez de la liste Torii l'un de l'autre. Vous resterez amis sur Steam, et tu continueras de le voir par là.`
-    : `Vous disparaîtrez de la liste l'un de l'autre.`,
+    ? t("amis.profil.retirerLesDeux")
+    : t("amis.profil.retirerSimple"),
 );
 
 // La confirmation est une vraie fenêtre modale : le geste est indéfaisable (il faudra une
@@ -195,14 +196,14 @@ async function onRemove() {
     await removeFriend(id);
     showToast(
       friend.value?.source === "both"
-        ? `${name.value} a été retiré de tes amis Torii. Vous restez amis sur Steam.`
-        : `${name.value} a été retiré de tes amis, des deux côtés.`,
+        ? t("amis.profil.retireLesDeux", { nom: name.value })
+        : t("amis.profil.retireSimple", { nom: name.value }),
     );
     // Sa page n'a plus d'objet : on revient à la liste plutôt que de laisser un profil
     // d'inconnu à l'écran.
     showFriends();
   } catch (e) {
-    showToast(`Retrait impossible : ${e instanceof Error ? e.message : String(e)}`);
+    showToast(t("amis.profil.retraitImpossible", { erreur: e instanceof Error ? e.message : String(e) }));
   } finally {
     removing.value = false;
     confirming.value = false;
@@ -239,11 +240,11 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
 <template>
   <div class="profile">
     <div class="sec-head">
-      <button class="chip back" title="Retour aux amis" @click="showFriends()">
+      <button class="chip back" :title="t('amis.profil.retour')" @click="showFriends()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 6l-6 6 6 6" />
         </svg>
-        Amis
+        {{ t("amis.titre") }}
       </button>
     </div>
 
@@ -268,21 +269,21 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
       </div>
       <div class="actions">
         <button v-if="partage" class="btn-primary" @click="showFriendLibrary(toriiId!)">
-          Voir sa bibliothèque
+          {{ t("amis.profil.voirBibliotheque") }}
         </button>
         <button v-if="friend?.ownedGame" class="btn-soft" @click="onSameGame">
-          {{ friend.ownedGame.installed ? "Jouer au même jeu" : "Voir la fiche" }}
+          {{ friend.ownedGame.installed ? t("amis.profil.memeJeu") : t("amis.voirFiche") }}
         </button>
         <button v-if="friend?.profileUrl" class="btn-soft" @click="openSteam">
-          Profil Steam
+          {{ t("amis.profil.profilSteam") }}
         </button>
 
         <!-- L'écrou : les réglages de la relation, pas ceux de l'application. -->
         <div v-if="hasSettings" class="gear-wrap" @click.stop>
           <button
             class="gear"
-            title="Réglages de cette relation"
-            aria-label="Réglages de cette relation"
+            :title="t('amis.profil.reglagesRelation')"
+            :aria-label="t('amis.profil.reglagesRelation')"
             aria-haspopup="true"
             :aria-expanded="menuOpen"
             @click="menuOpen = !menuOpen"
@@ -294,7 +295,7 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
           </button>
           <div v-if="menuOpen" class="gear-menu">
             <button class="gear-item danger" @click="menuOpen = false; confirming = true">
-              Retirer cet ami
+              {{ t("amis.profil.retirerAmi") }}
             </button>
           </div>
         </div>
@@ -304,11 +305,11 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
     <div v-if="partage" class="stats">
       <div class="stat">
         <b>{{ gameCount }}</b>
-        <span>total de jeux</span>
+        <span>{{ t("amis.profil.totalJeux") }}</span>
       </div>
       <div class="stat">
         <b>{{ commonCount }}</b>
-        <span>en commun avec toi</span>
+        <span>{{ t("amis.profil.enCommunAvecToi") }}</span>
       </div>
     </div>
 
@@ -325,13 +326,12 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
             <path d="M23 43.5c2.7-4 5.7-6 9-6s6.3 2 9 6" />
           </svg>
         </span>
-        <h2>Torii ne voit presque rien de {{ name }}</h2>
+        <h2>{{ t("amis.profil.presqueRien", { nom: name }) }}</h2>
         <p>
-          {{ name }} n'est pas dans tes amis Torii. Torii ne sait de lui que ce que Steam veut
-          bien dire : son pseudo, son avatar, s'il est connecté et à quoi il joue
-          <b>sur Steam</b>. Donne-lui ton code d'ami pour voir tout le reste.
+          {{ t("amis.profil.presqueRienAvant", { nom: name }) }}
+          <b>{{ t("amis.profil.presqueRienGras") }}</b>{{ t("amis.profil.presqueRienApres") }}
         </p>
-        <button v-if="monCode" class="code-chip" title="Copier ton code d'ami" @click="copierCode">
+        <button v-if="monCode" class="code-chip" :title="t('amis.profil.copierCode')" @click="copierCode">
           {{ monCode }}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -352,17 +352,16 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
             <path d="M14 12l38 40" stroke-width="2.8" />
           </svg>
         </span>
-        <h2>{{ name }} ne partage pas sa bibliothèque</h2>
+        <h2>{{ t("amis.profil.nePartagePas", { nom: name }) }}</h2>
         <p>
-          Le partage est éteint par défaut, et lui seul peut l'allumer, dans ses réglages
-          Torii.
+          {{ t("amis.profil.nePartagePasAide") }}
         </p>
       </div>
 
-      <p v-else-if="loading && !games.length" class="empty">Chargement de sa bibliothèque…</p>
+      <p v-else-if="loading && !games.length" class="empty">{{ t("amis.profil.chargementBibliotheque") }}</p>
 
       <template v-else>
-        <h2>Sa bibliothèque</h2>
+        <h2>{{ t("amis.profil.saBibliotheque") }}</h2>
         <!-- Une seule rangée, quelle que soit la largeur : la coupe est en CSS, pas
              calculée en JS (cf. `.strip`). -->
         <div class="strip">
@@ -378,14 +377,14 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
               <span class="cover-scrim" />
               <span class="cover-title">{{ g.title }}</span>
             </span>
-            <span v-if="mine(g)" class="tile-mine">Tu l'as aussi</span>
+            <span v-if="mine(g)" class="tile-mine">{{ t("amis.tuLAsAussi") }}</span>
           </button>
         </div>
         <button class="btn-more" @click="showFriendLibrary(toriiId!)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          Voir plus
+          {{ t("amis.profil.voirPlus") }}
         </button>
       </template>
     </section>
@@ -393,15 +392,15 @@ const initials = computed(() => name.value.trim().slice(0, 2).toUpperCase());
     <!-- Confirmation de retrait : une vraie modale, parce que c'est indéfaisable. -->
     <div v-if="confirming" class="modal-back" @click.self="confirming = false">
       <div ref="modale" class="modal" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="retirer-titre">
-        <h3 id="retirer-titre">Retirer {{ name }} ?</h3>
+        <h3 id="retirer-titre">{{ t("amis.profil.retirerQuestion", { nom: name }) }}</h3>
         <p>{{ removeHint }}</p>
         <p class="sub">
-          Pour revenir en arrière, il faudra une nouvelle demande, acceptée des deux côtés.
+          {{ t("amis.profil.retirerRetour") }}
         </p>
         <div class="modal-actions">
-          <button class="c-no" @click="confirming = false">Annuler</button>
+          <button class="c-no" @click="confirming = false">{{ t("commun.annuler") }}</button>
           <button class="c-yes" :disabled="removing" @click="onRemove">
-            {{ removing ? "Retrait…" : "Retirer" }}
+            {{ removing ? t("amis.profil.retrait") : t("amis.profil.retirer") }}
           </button>
         </div>
       </div>

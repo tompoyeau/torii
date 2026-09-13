@@ -351,6 +351,166 @@ cargo run --example community        # jeux possédés + famille (via session st
   `~"x"` sans wildcards ne matche pas (`~ *"x"*` = contains) ; `="x"` = exact sensible à la casse. Ratés : Overwatch 2
   (absent d'IGDB en jeu de base) + ~7 % niche. Proxy URL en dur (`PROXY_URL`). Recherche Steam-par-titre pour jaquettes RETIRÉE.
 
+## Internationalisation — langue ≠ région (fait : français + anglais)
+
+⚠️ **La section suivante (« Tout en français ») décrit l'état d'avant.** Ce qui y est
+écrit reste exact sur *comment* chaque source se localise ; ce qui a changé, c'est que
+plus rien n'est figé sur le français.
+
+🔑 **DEUX RÉGLAGES, PAS UN.** « Français » voulait dire à la fois interface française,
+descriptions françaises, prix en euros, tarification française et liens vers un revendeur
+français. Ça tient tant qu'on ne s'adresse qu'à la France. Dès qu'on en sort, les deux se
+séparent : un Belge veut le français et des prix belges, un Canadien anglophone veut
+l'anglais et des dollars canadiens. Les lier obligerait chacun à choisir ce qui le dérange
+le moins.
+
+| | Où | Ce que ça pilote |
+|---|---|---|
+| **Langue** | `src/i18n/`, `locale.rs` | interface, `l=` Steam, `locale=` GOG, fichier de cache |
+| **Région** | `src/i18n/regions.ts`, `locale.rs` | `country=` ITAD, devise, Instant Gaming |
+
+- **Source de vérité = `localStorage`** (`usePreferences`, clés `language` / `region`).
+  Région : `null` = suivre Windows. Langue : `"fr"`/`"en"` = choisie, `"system"` = suivre
+  Windows (choix explicite), `null` = jamais choisie → **anglais**.
+- 🔑 **L'ANGLAIS EST LE DÉFAUT, SAUF POUR LES UTILISATEURS D'AVANT LES LANGUES.** Une
+  installation neuve démarre en anglais quelle que soit la langue de Windows. Mais Torii a
+  été français pendant vingt versions sans réglage de langue : ses utilisateurs n'ont jamais
+  « choisi » le français, et la mise à jour ne doit pas les basculer. Rust reconnaît une
+  installation antérieure au démarrage (`locale::charger` : pas de `locale.json`, mais un
+  cache de bibliothèque ou de métadonnées présent) ; l'interface le demande
+  (`langue_heritee`) **avant** de choisir sa langue et épingle « fr » dans les préférences.
+  ⚠️ Pas le journal comme indice : il est créé à chaque démarrage, y compris le premier.
+  Vérifié sur une vraie installation (`%APPDATA%\com.tompo.ludo`) : pas de `locale.json`,
+  `library_cache_v1.json` présent → reconnue. Le front la pousse vers Rust au démarrage et à chaque
+  changement via la commande **`set_locale`**. `locale.rs` n'en est qu'une **copie**.
+- 🔑 **`locale.rs` est un verrou global, et c'est délibéré.** Les paramètres partent dans
+  des requêtes émises au fond de `metadata/`, depuis des fonctions libres appelées en
+  tâche de fond. Faire descendre un `&State` jusque-là toucherait trente signatures dont
+  aucune ne parle de Tauri. ⚠️ Toute la logique vit dans `Locale` (pur, testé) ; les
+  fonctions globales ne font que lire le verrou — sans quoi un test qui change la langue
+  change celle des autres tests, qui tournent en parallèle dans le même processus.
+- 🔑 **LE CACHE DE MÉTADONNÉES EST SÉPARÉ PAR LANGUE.** Une entrée contient description et
+  genres dans la langue demandée. Le problème s'est déjà posé (cf. le passage à v4
+  ci-dessous, réglé en jetant tout le cache) ; le rejeter à chaque bascule serait absurde.
+  ⚠️ **Le français garde le nom historique `metadata_cache_v5.json`**, l'anglais prend
+  `_en` : suffixer les deux rendrait invisibles les centaines de fiches déjà en place chez
+  les utilisateurs actuels, pour un changement dont ils n'ont que faire.
+- ⚠️ **Instant Gaming n'est proposé qu'en zone euro** (`locale::zone_euro`). Ses prix sont
+  en euros sans équivalent local : au milieu d'une liste en livres ou en dollars, sa ligne
+  ne se compare à rien — alors que comparer est ce qu'on vient faire. Mieux vaut une offre
+  de moins qu'une offre trompeuse.
+- 🔑 **`fr.ts` est la langue source** : il définit les clés, `en.ts` les traduit. Une clé
+  manquante en anglais est une erreur de compilation (voir « Catalogues » plus bas) ; le
+  repli sur le français à l'exécution ne reste qu'en filet.
+- **Pas de `vue-i18n`** : deux langues aux règles de pluriel identiques, aucun formatage à
+  déléguer qu'`Intl` ne fasse déjà. L'API imite la sienne (`t("cle", { nom })`) pour que
+  le remplacement reste un changement d'import.
+
+### Catalogues (`src/i18n/fr/*.ts`, `src/i18n/en/*.ts`)
+
+Une zone par partie de l'application : `commun`, `bibliotheque`, `fiche`, `boutique`,
+`prix`, `amis`, `comptes`, `reglages`, `systeme`, `demo`.
+
+- 🔑 **LES OUBLIS NE COMPILENT PAS.** `t()` n'accepte que les clés de `fr.ts` (type `Cle`,
+  chemins pointés calculés depuis le catalogue), et chaque zone anglaise est déclarée
+  `Forme<typeof fr>` — le catalogue racine `en.ts` aussi. Clé mal orthographiée, traduction
+  manquante, clé en trop : `vue-tsc` échoue. Ajouter un texte = l'écrire dans `fr/`, puis
+  dans `en/`, puis l'utiliser.
+- ⚠️ **PAS DE CONCATÉNATION.** « Il y a » + nombre ne marche pas en anglais, où le nombre
+  passe devant. Les dates relatives passent par `Intl.RelativeTimeFormat` (`ilYA` dans
+  `lib/format.ts`, `relativeTime` dans `lib/covers.ts`), les pluriels par `"un | {n} plusieurs"`.
+- ⚠️ **PAS DE BALISE DANS UNE TRADUCTION** (et pas de `v-html`). Un passage en gras au milieu
+  d'une phrase est découpé en trois clés `…Avant` / `…Gras` / `…Apres`.
+- ⚠️ **UNE LISTE DE LIBELLÉS DOIT ÊTRE UN `computed`**, pas une constante de module : figée
+  au chargement, elle garde la langue du démarrage (tris, filtres, modes de présence,
+  cartes de comptes…). Même raison pour `platformName()` : « Hors launcher » est lu à
+  l'appel, pas rangé dans `PLATFORMS`.
+- ⚠️ **`t` EST UN NOM PRIS dans les gabarits.** Une boucle `v-for="t in …"` masque la fonction
+  de traduction — renommer la variable (`th`, `tost`…).
+- **Français en source, anglais en « they ».** Le français accorde au masculin comme il l'a
+  toujours fait ; l'anglais parle des amis au neutre (« their library »).
+- La démo en ligne est traduite aussi (`demo.ts`) : genres, description, succès fictifs.
+  Elle accepte `?lang=fr|en` (lu par `langueParDefaut`), pour que chaque page du site
+  ouvre la démo dans sa langue quel que soit le navigateur — la page française passe
+  `?lang=fr`, sans quoi la démo démarrerait en anglais. Sans effet dans l'application, et
+  toujours derrière un choix explicite fait dans les Paramètres.
+  Les dates de la bibliothèque fictive sont des horodatages (`lastPlayedAt`) mis en mots à
+  l'appel, et `mockGames()` est une fonction pour la même raison que les `computed`.
+
+### Changer de langue en cours de session
+
+L'interface bascule instantanément. Ce qui **ne suit pas** : les descriptions, genres et
+« dernière session » déjà rangés dans les jeux en mémoire. Les Paramètres affichent alors
+une note et un bouton **Redémarrer maintenant** (`relaunchApp` ; dans la démo web, un
+simple rechargement de page, qui reconstruit la bibliothèque fictive dans la bonne langue).
+La note n'apparaît que si la langue **effective** a changé : passer de « Suivre Windows » à
+« Français » sur un Windows français ne change rien à l'écran.
+
+`main.ts` **attend** que la langue soit transmise à Rust avant de monter l'application :
+sans ça, le premier chargement de métadonnées peut partir dans la langue de la session
+précédente. Rust garde de son côté une copie disque (`locale.json`, relue en tout début de
+`setup`) pour ce qui démarre avant la fenêtre : le menu de la zone de notification — qui se
+retraduit à chaud, `TrayItems` — et la présence.
+
+### Région : 61 pays, repli sur les États-Unis
+
+- **`REGIONS` (`src/i18n/regions.ts`) est un relevé, pas une connaissance.** Chaque devise a
+  été lue dans la réponse du comparateur (`scripts/sonde-regions.mjs`, 13 septembre 2026).
+  ⚠️ Le relevé a contredit la mémoire : Suisse, Suède, Norvège, Danemark, Tchéquie,
+  Hongrie, Roumanie, Bulgarie sont tarifées **en euros** ; Mexique, Chili, Singapour,
+  Israël, Émirats… n'ont pas de tarif propre et reçoivent **les prix américains en
+  dollars**. Refaire la sonde avant d'ajouter un pays ; un pays en EUR entre aussi dans
+  `locale::zone_euro` (Instant Gaming). Pas de Russie : pas de tarif local, et Steam y
+  bloque des jeux.
+- 🔑 **Repli sur les États-Unis, plus sur la France** (`regionDuSysteme`, `Locale::region`)
+  quand Windows n'indique pas de pays ou un pays hors table.
+- ⚠️ **Les utilisateurs d'avant les langues sont épinglés en région France** en même temps
+  qu'en français : leurs prix étaient français en dur, et « Suivre Windows » aurait donné
+  des dollars à un Français équipé d'un Windows anglais.
+- ⚠️ **`cc=` DE STEAM NE SUIT PAS LA RÉGION** (`CATALOGUE_STEAM = "us"`). Torii ne lit aucun
+  prix Steam, seulement description et genres — et Steam masque des jeux selon le pays :
+  avec `cc=ru`, la fiche de Cyberpunk 2077 échoue (mesuré). La région ne pilote que le
+  comparateur.
+- ⚠️ **`formatPrix` ne force pas de décimales** : le yen, le won, la roupie indonésienne
+  n'en ont pas, et « ¥8,499.00 » pour un vrai prix japonais était le résultat des deux
+  décimales imposées.
+
+### Devise
+
+- Rust lit `price.currency` dans chaque réponse ITAD et la transmet (`currency` sur
+  `StoreItem`, `StorePrice`, `StoreGame`, `WishlistItem`). L'interface formate avec
+  `formatPrix(montant, devise)` — la devise de la région n'est qu'un repli pour les données
+  qui n'en portent pas (démo).
+- ⚠️ **LE NOTIFICATEUR DE PRIX MÉMORISE DES MONTANTS NUS.** Passer de la France aux
+  États-Unis comparait 59,99 € à 49,99 $ et annonçait une fausse baisse. La devise des
+  relevés est mémorisée à part ; si elle change, on réamorce en silence.
+- Instant Gaming : zone euro seulement, et en anglais on n'interroge que `/en/` (le repli
+  vers l'anglais n'existe que parce que le site français traduit certains titres).
+- Genres IGDB : `genre_fr` en français, `genre_en` en anglais — IGDB est déjà en anglais,
+  mais `clean_genre` abrège « RTS », « TBS », « RPG » ; `genre_en` les redéplie.
+
+### Textes émis par Rust
+
+Paires sur place avec `locale::tr("…", "…")` (ou `if locale::en() { format!… }`) — pas de
+catalogue côté Rust : chaque message n'a de sens qu'à l'endroit où il est émis, et la
+traduction reste sous les yeux de qui le modifie. Les **journaux restent en français** :
+ils sont lus par le développeur, pas par l'utilisateur.
+
+⚠️ **LES MESSAGES DU SERVEUR SONT TRADUITS CÔTÉ CLIENT** (`social::message_serveur`), en
+reconnaissant la phrase française exacte que renvoie `fail(...)` dans `server/src`. Pas par
+le code `error` : `introuvable`, `requete_invalide`, `trop_gros` et `mal_configure` couvrent
+chacun plusieurs messages. **Un `fail(...)` ajouté ou reformulé côté serveur doit être
+reporté dans cette table**, sinon il s'affiche en français à un utilisateur anglophone.
+
+### ⚠️ `cargo test` en parallèle et les exemples
+
+Avec `crate-type = ["staticlib", "cdylib", "rlib"]` (le défaut de Tauri), l'édition de
+liens des 23 exemples échoue par intermittence quand ils sont construits en parallèle
+(« crate X required to be available in rlib format » / « found staticlib instead of
+rlib ») — selon l'état du cache, pas selon le code. `cargo check --examples` et
+`cargo test --lib` passent ; `cargo test -j 1` passe en entier. Ne pas y chercher une
+régression.
+
 ## Tout en français, au possible
 
 Les prix étaient déjà en euros (ITAD interrogé en `country=FR`), mais tout le reste

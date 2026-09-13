@@ -126,19 +126,79 @@ fn api_error(err: ureq::Error) -> String {
         ureq::Error::Status(code, resp) => {
             let body: serde_json::Value = resp.into_json().unwrap_or_default();
             match body["message"].as_str() {
-                Some(msg) => msg.to_string(),
+                Some(msg) => message_serveur(msg),
+                None if crate::locale::en() => format!("The server responded {code}."),
                 None => format!("Le serveur a répondu {code}."),
             }
         }
-        ureq::Error::Transport(_) => "Service injoignable. Vérifie ta connexion.".into(),
+        ureq::Error::Transport(_) => crate::locale::tr(
+            "Service injoignable. Vérifie ta connexion.",
+            "Service unreachable. Check your connection.",
+        )
+        .into(),
     }
+}
+
+/// Le message d'erreur du serveur, dans la langue de l'interface.
+///
+/// 🔑 TRADUIT ICI, ET PAS SUR LE SERVEUR. Le service est déployé et utilisé par des
+/// versions de Torii qui ne savent pas demander une langue ; lui faire parler anglais
+/// imposerait de versionner son API. Il renvoie des phrases françaises fixes, écrites pour
+/// être affichées telles quelles : on les reconnaît et on les remplace.
+///
+/// ⚠️ PAR LE TEXTE, PAS PAR LE CODE (`error`). Plusieurs messages différents partagent le
+/// même code — `introuvable` couvre un compte, une bibliothèque et une demande. Un message
+/// inconnu (ajouté au serveur depuis) traverse en français : mieux qu'un message vide.
+/// ⚠️ À COMPLÉTER EN MÊME TEMPS qu'un `fail(...)` ajouté dans `server/src`.
+fn message_serveur(message: &str) -> String {
+    if !crate::locale::en() {
+        return message.to_string();
+    }
+    let traduit = match message {
+        "Identifiant d'appareil invalide." => "Invalid device ID.",
+        "Ce code n'est plus valable. Demandes-en un nouveau." => "This code is no longer valid. Ask for a new one.",
+        "Code incorrect." => "Incorrect code.",
+        "Ce code d'ami n'est pas valide." => "This friend code isn't valid.",
+        "Vous êtes déjà amis." => "You're already friends.",
+        "Ta demande est déjà partie ; il faut qu'elle soit acceptée." => "Your request has already been sent; it needs to be accepted.",
+        "L'envoi d'e-mails n'est pas configuré sur ce serveur." => "Sending emails isn't configured on this server.",
+        "Cette adresse e-mail n'est pas valide." => "This email address isn't valid.",
+        "Impossible d'envoyer le code pour l'instant." => "Couldn't send the code right now.",
+        "Une erreur est survenue côté serveur." => "Something went wrong on the server.",
+        "Cette inscription a expiré. Recommence depuis ton adresse." => "This sign-up has expired. Start again from your email address.",
+        "Ce compte est introuvable." => "This account can't be found.",
+        "Cette bibliothèque n'est plus disponible." => "This library is no longer available.",
+        "Cette bibliothèque n'existe pas." => "This library doesn't exist.",
+        "Cette demande n'existe plus." => "This request no longer exists.",
+        "Le serveur n'est pas configuré (PEPPER manquant)." => "The server isn't configured (missing PEPPER).",
+        "Le serveur n'est pas configuré (limites absentes)." => "The server isn't configured (missing limits).",
+        "Le stockage des bibliothèques n'est pas configuré." => "Library storage isn't configured.",
+        "Le nom affiché ne peut pas être vide." => "The display name can't be empty.",
+        "Session expirée ou absente." => "Session expired or missing.",
+        "Cette personne ne partage pas sa bibliothèque." => "This person doesn't share their library.",
+        "Choisis un pseudo." => "Choose a display name.",
+        "Adresse ou code manquant." => "Missing address or code.",
+        "Corps de requête absent, illisible ou trop gros." => "Request body missing, unreadable or too large.",
+        "Demande introuvable." => "Request not found.",
+        "Il manque la liste des jeux." => "The game list is missing.",
+        "Cette route n'existe pas." => "This route doesn't exist.",
+        "C'est ton propre code d'ami." => "That's your own friend code.",
+        "Un SteamID compte 17 chiffres." => "A SteamID has 17 digits.",
+        "Trop de codes demandés. Réessaie dans une heure." => "Too many codes requested. Try again in an hour.",
+        "Trop d'essais. Demande un nouveau code." => "Too many attempts. Ask for a new code.",
+        "Un code vient d'être envoyé. Réessaie dans une minute." => "A code was just sent. Try again in a minute.",
+        "Cette bibliothèque dépasse la taille acceptée." => "This library is larger than the accepted size.",
+        "Cette requête dépasse la taille acceptée." => "This request is larger than the accepted size.",
+        autre => autre,
+    };
+    traduit.to_string()
 }
 
 /// Jeton de session stocké, ou une erreur explicite si personne n'est connecté.
 pub(crate) fn token(config_dir: &Path) -> Result<String, String> {
     secrets::load(config_dir)
         .torii_token
-        .ok_or_else(|| "Non connecté à Torii.".to_string())
+        .ok_or_else(|| crate::locale::tr("Non connecté à Torii.", "Not signed in to Torii.").to_string())
 }
 
 /// Requête authentifiée. `body` absent = GET.
@@ -226,12 +286,12 @@ pub fn verify(config_dir: &Path, email: &str, code: &str) -> Result<SignIn, Stri
     if verified.needs_profile {
         let jeton = verified
             .signup_token
-            .ok_or("Le serveur n'a pas renvoyé de laissez-passer d'inscription.")?;
+            .ok_or(crate::locale::tr("Le serveur n'a pas renvoyé de laissez-passer d'inscription.", "The server didn't return a sign-up pass."))?;
         return Ok(SignIn { account: None, created: true, signup_token: Some(jeton) });
     }
 
     let (Some(token), Some(account)) = (verified.token, verified.account) else {
-        return Err("Réponse de connexion incomplète.".into());
+        return Err(crate::locale::tr("Réponse de connexion incomplète.", "Incomplete sign-in response.").into());
     };
     let mut creds = secrets::load(config_dir);
     creds.torii_token = Some(token);
@@ -752,7 +812,12 @@ fn signaler_lancements(
                     "INFO",
                     &format!("bandeau : {} lance {jeu}", ami.display_name),
                 );
-                toast::show(app, &format!("{} joue", ami.display_name), &jeu);
+                let titre = if crate::locale::en() {
+                    format!("{} is playing", ami.display_name)
+                } else {
+                    format!("{} joue", ami.display_name)
+                };
+                toast::show(app, &titre, &jeu);
             }
         }
         courant.insert(ami.id.clone(), jeu);

@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import "./style.css";
 import App from "./App.vue";
 import { logFrontError } from "./lib/tauri";
+import { localeTransmise } from "./composables/usePreferences";
 
 /**
  * Tout ce qui casse dans l'interface part dans le journal de l'application.
@@ -30,4 +31,13 @@ app.config.errorHandler = (err, _instance, info) => {
   void logFrontError(`composant (${info}) : ${e}`);
   console.error(err);
 };
-app.mount("#app");
+/**
+ * 🔑 On monte l'application une fois la langue arrivée côté natif — voir
+ * `localeTransmise`. L'attente est de l'ordre de la milliseconde (un appel local, sans
+ * réseau) et l'écran de démarrage est déjà affiché par le HTML pendant ce temps.
+ *
+ * ⚠️ Un échec ne doit pas bloquer le démarrage : `setLocale` ne rejette jamais (`call`
+ * absorbe les erreurs), mais le `finally` le garantit même si ça changeait un jour.
+ * Pas d'`await` au niveau du module : la cible de compilation ne l'accepte pas.
+ */
+void localeTransmise.finally(() => app.mount("#app"));

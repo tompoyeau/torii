@@ -149,10 +149,15 @@ export interface StoreItem {
   title: string;
   /** Jaquette (ITAD boxart) si disponible, sinon dégradé côté front. */
   coverUrl?: string | null;
-  /** Prix actuel le plus bas (EUR). */
+  /** Prix actuel le plus bas, dans la devise `currency`. */
   price: number;
   /** Prix normal (hors promo) ; == price si inconnu. */
   normalPrice: number;
+  /**
+   * Devise des montants (`EUR`, `USD`…), renvoyée par Rust avec eux. À passer à
+   * `formatPrix` : jamais supposée côté interface. Absente des données fictives.
+   */
+  currency?: string;
   /** Remise en % entier (0 = pas de promo / inconnu). */
   savings: number;
   /** Boutique de la meilleure offre (vide si non résolu). */
@@ -173,6 +178,11 @@ export interface StorePrice {
   storeName: string;
   price: number;
   retailPrice: number;
+  /**
+   * Devise des montants (`EUR`, `USD`…), renvoyée par Rust avec eux. À passer à
+   * `formatPrix` : jamais supposée côté interface. Absente des données fictives.
+   */
+  currency?: string;
   savings: number;
   /** Lien d'achat direct vers la boutique. */
   buyUrl: string;
@@ -186,8 +196,10 @@ export interface StoreGame {
   title: string;
   coverUrl?: string | null;
   heroUrl?: string | null;
-  /** Prix le plus bas jamais atteint (EUR), si connu. */
+  /** Prix le plus bas jamais atteint, si connu. */
   cheapestEver?: number | null;
+  /** Devise de `cheapestEver` (chaque offre porte la sienne). */
+  currency?: string;
   /** Offres par boutique, triées par prix croissant. */
   prices: StorePrice[];
   description?: string | null;
@@ -433,13 +445,18 @@ export interface WishlistItem {
    * de beaucoup de jeux récents ou pas encore sortis.
    */
   coverFallbackUrl?: string | null;
-  /** Meilleur prix actuel (EUR) ; null si aucune offre / non résolu. */
+  /** Meilleur prix actuel ; null si aucune offre / non résolu. */
   price?: number | null;
+  /**
+   * Devise des montants (`EUR`, `USD`…), renvoyée par Rust avec eux. À passer à
+   * `formatPrix` : jamais supposée côté interface. Absente des données fictives.
+   */
+  currency?: string;
   normalPrice?: number | null;
   savings: number;
   storeName: string;
   buyUrl: string;
-  /** Plus bas prix historique (EUR), si connu. */
+  /** Plus bas prix historique, si connu (même devise que `price`). */
   historyLow?: number | null;
 }
 
