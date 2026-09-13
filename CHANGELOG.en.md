@@ -5,6 +5,16 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.21.0
+- **Torii speaks English.** The whole interface is translated, down to error messages, the menu of the icon next to the clock and the banner telling you a friend is playing. Pick the language in Settings → General: Français, English, or follow Windows.
+- **If you were already using Torii, nothing changes for you**: it stays in French, with French prices. Only new installations start in English — the language the most people can read.
+- **Game descriptions and genres follow the language you pick.** Torii asks Steam and GOG for them again in that language, and keeps what it already got in the other one: switching back downloads nothing. Game pages already on screen change on restart, and a button offers to do it right away.
+- **A region, separate from the language.** It decides the prices in the Store and your wishlist: you can read Torii in English with prices in euros. Sixty-one countries are available, with the amounts and currency the price comparison actually uses for each — Switzerland and Sweden are in euros, Mexico in dollars. An unknown country falls back to US prices.
+- **Every price shows in its own currency, its own way**: “44,99 €”, “$44.99”, “¥8,499” — the yen has no cents.
+- **Instant Gaming only shows up when the other prices are in euros.** This seller only sells in euros: next to prices in dollars or pounds, its row wouldn't compare to anything. The comparison says so, instead of suggesting an offer is missing.
+- **Price alerts no longer go haywire when you change region.** Switching currencies would have compared euros to dollars and announced fake price drops: tracking starts over, silently.
+- **Game pages that were missing may come back.** Descriptions are now requested from Steam's widest catalog, no longer your country's, where some games are hidden.
+
 ## 0.20.3
 - **Overwatch 2 gets its page back: cover, description, screenshots and genre.** The previous two versions had each ruled out a wrong answer without managing to find the right one. The reason: the database only knows this game as “Overwatch”, and its search never brings up that entry when asked for “Overwatch 2” — it only returns add-ons. Torii now explicitly asks for a game's other names, instead of hoping to come across them. Games left without a page for this reason catch up on their own the next time Torii starts.
 

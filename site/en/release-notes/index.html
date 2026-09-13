@@ -14,7 +14,7 @@
       d'être revisité.
     -->
     <title>Torii release notes — every change, version by version</title>
-    <meta name="description" content="Every new feature and fix in Torii, version by version. Latest: 0.20.3, released September 9, 2026. A unified game library for Windows, free, in English and French." />
+    <meta name="description" content="Every new feature and fix in Torii, version by version. Latest: 0.21.0. A unified game library for Windows, free, in English and French." />
     <link rel="canonical" href="https://torii-app.fr/en/release-notes/" />
     <!-- Réciproques sur les deux pages, comme partout ailleurs sur le site. -->
     <link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
@@ -63,11 +63,26 @@
       </div>
 
       <div class="notes">
+        <article class="note-version" id="v0-21-0">
+          <header>
+            <h2><a href="#v0-21-0">Version 0.21.0</a></h2>
+            <span class="etiquette">Latest version</span>
+          </header>
+          <ul>
+            <li><strong>Torii speaks English.</strong> The whole interface is translated, down to error messages, the menu of the icon next to the clock and the banner telling you a friend is playing. Pick the language in Settings → General: Français, English, or follow Windows.</li>
+            <li><strong>If you were already using Torii, nothing changes for you</strong>: it stays in French, with French prices. Only new installations start in English — the language the most people can read.</li>
+            <li><strong>Game descriptions and genres follow the language you pick.</strong> Torii asks Steam and GOG for them again in that language, and keeps what it already got in the other one: switching back downloads nothing. Game pages already on screen change on restart, and a button offers to do it right away.</li>
+            <li><strong>A region, separate from the language.</strong> It decides the prices in the Store and your wishlist: you can read Torii in English with prices in euros. Sixty-one countries are available, with the amounts and currency the price comparison actually uses for each — Switzerland and Sweden are in euros, Mexico in dollars. An unknown country falls back to US prices.</li>
+            <li><strong>Every price shows in its own currency, its own way</strong>: “44,99 €”, “$44.99”, “¥8,499” — the yen has no cents.</li>
+            <li><strong>Instant Gaming only shows up when the other prices are in euros.</strong> This seller only sells in euros: next to prices in dollars or pounds, its row wouldn't compare to anything. The comparison says so, instead of suggesting an offer is missing.</li>
+            <li><strong>Price alerts no longer go haywire when you change region.</strong> Switching currencies would have compared euros to dollars and announced fake price drops: tracking starts over, silently.</li>
+            <li><strong>Game pages that were missing may come back.</strong> Descriptions are now requested from Steam's widest catalog, no longer your country's, where some games are hidden.</li>
+          </ul>
+        </article>
         <article class="note-version" id="v0-20-3">
           <header>
             <h2><a href="#v0-20-3">Version 0.20.3</a></h2>
             <time datetime="2026-09-09">September 9, 2026</time>
-            <span class="etiquette">Latest version</span>
           </header>
           <ul>
             <li><strong>Overwatch 2 gets its page back: cover, description, screenshots and genre.</strong> The previous two versions had each ruled out a wrong answer without managing to find the right one. The reason: the database only knows this game as “Overwatch”, and its search never brings up that entry when asked for “Overwatch 2” — it only returns add-ons. Torii now explicitly asks for a game's other names, instead of hoping to come across them. Games left without a page for this reason catch up on their own the next time Torii starts.</li>

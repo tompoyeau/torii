@@ -7,7 +7,7 @@ import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { openExternal } from "../lib/tauri";
 import { formatPrix } from "../lib/format";
 import { t } from "../i18n";
-import { deviseAttendue } from "../i18n/regions";
+import { deviseAttendue, instantGamingPertinent } from "../i18n/regions";
 import type { StorePrice } from "../types";
 
 const { product, productLoading, selectedGameId, closeProduct, isStoreExcluded, toggleStoreExcluded } =
@@ -219,6 +219,11 @@ watch([selectedGameId, shots], () => {
           </div>
 
           <p class="disclaimer">{{ t("boutique.produit.avertissement", { devise: deviseFiche }) }}</p>
+          <!--
+            Hors euros, Instant Gaming est écarté (voir `locale::zone_euro`) : on le dit ici,
+            à l'endroit où il manquerait, plutôt que de laisser croire à une offre perdue.
+          -->
+          <p v-if="!instantGamingPertinent" class="disclaimer">{{ t("prix.revendeurIndisponible") }}</p>
         </aside>
       </div>
 

@@ -14,7 +14,7 @@
       d'être revisité.
     -->
     <title>Notes de version de Torii — toutes les nouveautés, version par version</title>
-    <meta name="description" content="Toutes les nouveautés et corrections de Torii, version par version. Dernière en date : 0.20.3, publiée le 9 septembre 2026. Bibliothèque de jeux unifiée pour Windows, gratuite, en français et en anglais." />
+    <meta name="description" content="Toutes les nouveautés et corrections de Torii, version par version. Dernière en date : 0.21.0. Bibliothèque de jeux unifiée pour Windows, gratuite, en français et en anglais." />
     <link rel="canonical" href="https://torii-app.fr/notes-de-version/" />
     <!-- Réciproques sur les deux pages, comme partout ailleurs sur le site. -->
     <link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
@@ -64,11 +64,26 @@
       </div>
 
       <div class="notes">
+        <article class="note-version" id="v0-21-0">
+          <header>
+            <h2><a href="#v0-21-0">Version 0.21.0</a></h2>
+            <span class="etiquette">Dernière version</span>
+          </header>
+          <ul>
+            <li><strong>Torii parle anglais.</strong> Toute l'interface est traduite, jusqu'aux messages d'erreur, au menu de l'icône près de l'horloge et au bandeau qui annonce qu'un ami joue. La langue se choisit dans Paramètres → Paramètres généraux : Français, English, ou suivre celle de Windows.</li>
+            <li><strong>Si tu utilisais déjà Torii, rien ne change pour toi</strong> : il reste en français, avec les prix français. Seules les nouvelles installations démarrent en anglais — la langue que le plus de monde pourra lire.</li>
+            <li><strong>Les descriptions et les genres des jeux suivent la langue choisie.</strong> Torii les redemande à Steam et à GOG dans cette langue, et garde de côté ce qu'il a déjà obtenu dans l'autre : revenir en arrière ne retélécharge rien. Les fiches déjà affichées changent au redémarrage, et un bouton le propose tout de suite.</li>
+            <li><strong>Une région, séparée de la langue.</strong> C'est elle qui décide des prix de la Boutique et de la wishlist : on peut lire Torii en anglais avec des prix en euros. Soixante et un pays sont proposés, avec les montants et la devise que le comparateur pratique réellement pour chacun — la Suisse et la Suède sont en euros, le Mexique en dollars. Un pays inconnu retombe sur les prix américains.</li>
+            <li><strong>Chaque prix s'affiche dans sa devise, à sa façon</strong> : « 44,99 € », « $44.99 », « ¥8,499 » — le yen n'a pas de centimes.</li>
+            <li><strong>Instant Gaming n'apparaît que quand les autres prix sont en euros.</strong> Ce revendeur ne vend qu'en euros : au milieu de prix en dollars ou en livres, sa ligne ne se comparerait à rien. Le comparatif le dit, au lieu de laisser croire à une offre manquante.</li>
+            <li><strong>Les alertes de prix ne s'emballent plus quand tu changes de région.</strong> Passer d'une devise à une autre aurait fait comparer des euros à des dollars et annoncer de fausses baisses : le suivi repart de zéro, en silence.</li>
+            <li><strong>Des fiches de jeux qui manquaient peuvent revenir.</strong> Les descriptions sont désormais demandées au catalogue Steam le plus large, et plus à celui de ton pays, où certains jeux sont masqués.</li>
+          </ul>
+        </article>
         <article class="note-version" id="v0-20-3">
           <header>
             <h2><a href="#v0-20-3">Version 0.20.3</a></h2>
             <time datetime="2026-09-09">9 septembre 2026</time>
-            <span class="etiquette">Dernière version</span>
           </header>
           <ul>
             <li><strong>Overwatch 2 retrouve sa fiche : jaquette, description, captures et genre.</strong> Les deux versions précédentes avaient chacune écarté une mauvaise réponse sans réussir à trouver la bonne. La raison : la base de données ne connaît ce jeu que sous le nom « Overwatch », et sa recherche ne remonte jamais cette fiche-là quand on lui demande « Overwatch 2 » — elle ne renvoie que des extensions. Torii demande donc maintenant explicitement les autres noms d'un jeu, au lieu d'espérer les voir passer. Les jeux restés sans fiche pour cette raison se rattrapent tout seuls au prochain lancement.</li>

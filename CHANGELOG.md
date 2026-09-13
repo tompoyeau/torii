@@ -5,6 +5,16 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.21.0
+- **Torii parle anglais.** Toute l'interface est traduite, jusqu'aux messages d'erreur, au menu de l'icône près de l'horloge et au bandeau qui annonce qu'un ami joue. La langue se choisit dans Paramètres → Paramètres généraux : Français, English, ou suivre celle de Windows.
+- **Si tu utilisais déjà Torii, rien ne change pour toi** : il reste en français, avec les prix français. Seules les nouvelles installations démarrent en anglais — la langue que le plus de monde pourra lire.
+- **Les descriptions et les genres des jeux suivent la langue choisie.** Torii les redemande à Steam et à GOG dans cette langue, et garde de côté ce qu'il a déjà obtenu dans l'autre : revenir en arrière ne retélécharge rien. Les fiches déjà affichées changent au redémarrage, et un bouton le propose tout de suite.
+- **Une région, séparée de la langue.** C'est elle qui décide des prix de la Boutique et de la wishlist : on peut lire Torii en anglais avec des prix en euros. Soixante et un pays sont proposés, avec les montants et la devise que le comparateur pratique réellement pour chacun — la Suisse et la Suède sont en euros, le Mexique en dollars. Un pays inconnu retombe sur les prix américains.
+- **Chaque prix s'affiche dans sa devise, à sa façon** : « 44,99 € », « $44.99 », « ¥8,499 » — le yen n'a pas de centimes.
+- **Instant Gaming n'apparaît que quand les autres prix sont en euros.** Ce revendeur ne vend qu'en euros : au milieu de prix en dollars ou en livres, sa ligne ne se comparerait à rien. Le comparatif le dit, au lieu de laisser croire à une offre manquante.
+- **Les alertes de prix ne s'emballent plus quand tu changes de région.** Passer d'une devise à une autre aurait fait comparer des euros à des dollars et annoncer de fausses baisses : le suivi repart de zéro, en silence.
+- **Des fiches de jeux qui manquaient peuvent revenir.** Les descriptions sont désormais demandées au catalogue Steam le plus large, et plus à celui de ton pays, où certains jeux sont masqués.
+
 ## 0.20.3
 - **Overwatch 2 retrouve sa fiche : jaquette, description, captures et genre.** Les deux versions précédentes avaient chacune écarté une mauvaise réponse sans réussir à trouver la bonne. La raison : la base de données ne connaît ce jeu que sous le nom « Overwatch », et sa recherche ne remonte jamais cette fiche-là quand on lui demande « Overwatch 2 » — elle ne renvoie que des extensions. Torii demande donc maintenant explicitement les autres noms d'un jeu, au lieu d'espérer les voir passer. Les jeux restés sans fiche pour cette raison se rattrapent tout seuls au prochain lancement.
 
