@@ -136,6 +136,18 @@ pub fn definir(langue: &str, region: &str) {
 struct SurDisque {
     langue: String,
     region: String,
+    /// Le réglage tel que l'utilisateur l'a laissé (`None` = « suivre Windows »), absent des
+    /// fichiers écrits par la 0.21.0. Voir `choix_retenu`.
+    #[serde(default)]
+    choix: Option<Choix>,
+}
+
+/// Le réglage de langue et de région tel qu'il apparaît dans les Paramètres — pas la valeur
+/// résolue : `"system"` et `None` y restent tels quels.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Choix {
+    pub language: Option<String>,
+    pub region: Option<String>,
 }
 
 fn fichier(config_dir: &std::path::Path) -> std::path::PathBuf {
@@ -153,13 +165,27 @@ fn fichier(config_dir: &std::path::Path) -> std::path::PathBuf {
 ///
 /// ⚠️ Une écriture ratée n'est pas une erreur : la langue est appliquée en mémoire, et
 /// l'interface la renverra au prochain démarrage de toute façon.
-pub fn definir_et_retenir(config_dir: &std::path::Path, langue: &str, region: &str) {
+pub fn definir_et_retenir(config_dir: &std::path::Path, langue: &str, region: &str, choix: Option<Choix>) {
     definir(langue, region);
-    let contenu = SurDisque { langue: langue.to_string(), region: region.to_string() };
+    let contenu = SurDisque { langue: langue.to_string(), region: region.to_string(), choix };
     if let Ok(json) = serde_json::to_string(&contenu) {
         let _ = std::fs::create_dir_all(config_dir);
         let _ = std::fs::write(fichier(config_dir), json);
     }
+}
+
+/// Le réglage retenu par la dernière session, s'il a été transmis.
+///
+/// 🔑 POURQUOI L'INTERFACE LE RELIT ICI plutôt que dans son `localStorage`. Après un
+/// redémarrage demandé depuis les Paramètres, WebView2 a relu un `localStorage` antérieur
+/// au changement : l'utilisateur passait en français, redémarrait, et retrouvait l'anglais.
+/// Ce fichier-ci est écrit de façon synchrone par `set_locale`, avant que le bouton de
+/// redémarrage ne soit seulement cliquable.
+pub fn choix_retenu(config_dir: &std::path::Path) -> Option<Choix> {
+    std::fs::read_to_string(fichier(config_dir))
+        .ok()
+        .and_then(|t| serde_json::from_str::<SurDisque>(&t).ok())
+        .and_then(|d| d.choix)
 }
 
 /// Une installation de Torii antérieure aux langues a-t-elle été trouvée au démarrage ?
@@ -329,6 +355,32 @@ mod tests {
         let trace = |d: &std::path::Path| TRACES_ANTERIEURES.iter().any(|f| d.join(f).exists());
         assert!(!trace(&neuve), "un dossier neuf, journal compris, n'est pas une ancienne installation");
         assert!(trace(&ancienne), "le cache de bibliothèque trahit une installation antérieure");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Le réglage relu au démarrage est celui écrit — `"system"` et « suivre Windows »
+    /// compris — et un fichier de la 0.21.0, qui n'en portait pas, n'en invente aucun.
+    /// Écrit le fichier à la main : `definir_et_retenir` toucherait au verrou global.
+    #[test]
+    fn le_choix_retenu_se_relit_tel_quel() {
+        let base = std::env::temp_dir().join(format!("torii-choix-{}", std::process::id()));
+        std::fs::create_dir_all(&base).unwrap();
+
+        assert_eq!(choix_retenu(&base), None, "pas de fichier, pas de choix");
+
+        std::fs::write(fichier(&base), r#"{"langue":"en","region":"US"}"#).unwrap();
+        assert_eq!(choix_retenu(&base), None, "un fichier de la 0.21.0 ne porte pas de choix");
+
+        for choix in [
+            Choix { language: Some("fr".into()), region: None },
+            Choix { language: Some("system".into()), region: Some("FR".into()) },
+            Choix { language: None, region: None },
+        ] {
+            let d = SurDisque { langue: "fr".into(), region: "FR".into(), choix: Some(choix.clone()) };
+            std::fs::write(fichier(&base), serde_json::to_string(&d).unwrap()).unwrap();
+            assert_eq!(choix_retenu(&base), Some(choix));
+        }
 
         let _ = std::fs::remove_dir_all(&base);
     }

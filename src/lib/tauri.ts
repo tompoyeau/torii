@@ -87,8 +87,22 @@ async function callOrThrow<T>(cmd: string, args?: Args): Promise<T> {
  * ⚠️ Appelé au démarrage ET à chaque changement — la couche native n'a aucun moyen de
  * lire `localStorage`, qui appartient à la fenêtre.
  */
-export async function setLocale(language: string, region: string): Promise<void> {
-  await call<void>("set_locale", { language, region }, undefined);
+export async function setLocale(language: string, region: string, choice: ChoixLocale): Promise<void> {
+  await call<void>("set_locale", { language, region, choice }, undefined);
+}
+
+/** Le réglage tel qu'il apparaît dans les Paramètres (`"system"` et `null` compris). */
+export interface ChoixLocale {
+  language: string | null;
+  region: string | null;
+}
+
+/**
+ * Le réglage retenu côté natif par la dernière session, `null` s'il n'y en a pas (première
+ * ouverture, fichier écrit par la 0.21.0, hors Tauri). Voir `locale::choix_retenu`.
+ */
+export async function choixLocaleRetenu(): Promise<ChoixLocale | null> {
+  return await call<ChoixLocale | null>("locale_choice", undefined, null);
 }
 
 /**

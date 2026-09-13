@@ -169,7 +169,23 @@ export function nomDeRegion(code: CodeRegion): string {
  * épinglée sur la France, la seule qu'ils aient connue (`usePreferences`).
  */
 export function regionDuSysteme(): CodeRegion {
-  const brut = typeof navigator !== "undefined" ? navigator.language : "";
-  const pays = brut.split("-")[1]?.toUpperCase();
-  return REGIONS.some((r) => r.code === pays) ? (pays as CodeRegion) : "US";
+  if (typeof navigator === "undefined") return "US";
+  const connue = (pays: string | undefined): pays is CodeRegion => REGIONS.some((r) => r.code === pays);
+  // ⚠️ WebView2 peut annoncer une langue SANS PAYS (`fr` tout court) : on cherche d'abord
+  // un pays dans toute la liste, puis on se rabat sur le pays principal de la langue —
+  // sinon « Suivre Windows » donnait des dollars à un Windows français.
+  const langues = navigator.languages?.length ? navigator.languages : [navigator.language];
+  for (const l of langues) {
+    const pays = l.split("-")[1]?.toUpperCase();
+    if (connue(pays)) return pays;
+  }
+  const pays = PAYS_DE_LA_LANGUE[(langues[0] ?? "").split("-")[0].toLowerCase()];
+  return connue(pays) ? pays : "US";
 }
+
+/** Pays principal d'une langue annoncée sans pays. L'anglais n'y est pas : repli US. */
+const PAYS_DE_LA_LANGUE: Record<string, string> = {
+  fr: "FR", de: "DE", es: "ES", it: "IT", pt: "PT", nl: "NL", pl: "PL", ja: "JP",
+  ko: "KR", zh: "CN", tr: "TR", sv: "SE", da: "DK", nb: "NO", no: "NO", fi: "FI",
+  cs: "CZ", el: "GR", hu: "HU", ro: "RO", uk: "UA", id: "ID", th: "TH", vi: "VN",
+};

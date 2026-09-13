@@ -60,9 +60,14 @@ impl Settings {
 /// Ne renvoie rien et ne peut pas échouer : une préférence illisible retombe sur le
 /// français, elle n'interrompt pas le démarrage de l'interface.
 #[tauri::command]
-fn set_locale(app: tauri::AppHandle, language: String, region: String) {
+fn set_locale(
+    app: tauri::AppHandle,
+    language: String,
+    region: String,
+    choice: Option<locale::Choix>,
+) {
     match app.path().app_config_dir() {
-        Ok(dir) => locale::definir_et_retenir(&dir, &language, &region),
+        Ok(dir) => locale::definir_et_retenir(&dir, &language, &region, choice),
         Err(_) => locale::definir(&language, &region),
     }
     // Le menu a été construit au démarrage, dans la langue d'alors : on le retraduit.
@@ -80,6 +85,13 @@ fn set_locale(app: tauri::AppHandle, language: String, region: String) {
 #[tauri::command]
 fn langue_heritee() -> Option<String> {
     locale::installation_anterieure().then(|| "fr".to_string())
+}
+
+/// Le réglage de langue et de région retenu par la dernière session. Voir
+/// `locale::choix_retenu`.
+#[tauri::command]
+fn locale_choice(app: tauri::AppHandle) -> Option<locale::Choix> {
+    app.path().app_config_dir().ok().and_then(|dir| locale::choix_retenu(&dir))
 }
 
 /// Enregistre (ou efface) la clé API Steam et auto-détecte le SteamID.
@@ -1964,6 +1976,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_locale,
             langue_heritee,
+            locale_choice,
             scan_library,
             cached_library,
             enrich_game,

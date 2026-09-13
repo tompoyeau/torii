@@ -1,8 +1,8 @@
 import { reactive, watch } from "vue";
 import type { SortKey } from "../types";
 import { appliquerLangue, langueDuSysteme, langueParDefaut, type Langue } from "../i18n";
-import { appliquerRegion, regionDuSysteme, type CodeRegion } from "../i18n/regions";
-import { langueHeritee, setLocale } from "../lib/tauri";
+import { appliquerRegion, REGIONS, regionDuSysteme, type CodeRegion } from "../i18n/regions";
+import { choixLocaleRetenu, langueHeritee, setLocale } from "../lib/tauri";
 
 /** Densité de la grille de bibliothèque (taille des jaquettes). */
 export type Density = "compact" | "normal" | "large";
@@ -114,7 +114,31 @@ apply();
  * navigateur, démo du site).
  */
 function pousserVersRust(): Promise<void> {
-  return setLocale(langueEffective(), prefs.region ?? regionDuSysteme());
+  return setLocale(langueEffective(), prefs.region ?? regionDuSysteme(), {
+    language: prefs.language,
+    region: prefs.region,
+  });
+}
+
+/**
+ * Reprend le réglage de langue et de région retenu côté natif.
+ *
+ * 🔑 LA COPIE NATIVE GAGNE SUR `localStorage`. Après un redémarrage lancé depuis les
+ * Paramètres, WebView2 a déjà relu un `localStorage` antérieur au changement : on passait
+ * en français, on redémarrait, et l'anglais revenait. La copie native, elle, est écrite
+ * de façon synchrone à chaque changement. Renvoie `false` s'il n'y en a pas.
+ */
+async function reprendreChoixRetenu(): Promise<boolean> {
+  const choix = await choixLocaleRetenu();
+  if (!choix) return false;
+  const { language, region } = choix;
+  if (language === null || language === "system" || language === "fr" || language === "en") {
+    if (prefs.language !== language) prefs.language = language;
+  }
+  if (region === null || REGIONS.some((r) => r.code === region)) {
+    if (prefs.region !== region) prefs.region = region as CodeRegion | null;
+  }
+  return true;
 }
 
 /**
@@ -150,7 +174,9 @@ async function epinglerLangueHeritee(): Promise<void> {
  * relit bien sa copie disque au démarrage, mais au tout premier lancement il n'en a pas —
  * c'est ici que la langue de Windows est détectée pour la première fois.
  */
-export const localeTransmise: Promise<void> = epinglerLangueHeritee().then(pousserVersRust);
+export const localeTransmise: Promise<void> = reprendreChoixRetenu()
+  .then((repris) => (repris ? undefined : epinglerLangueHeritee()))
+  .then(pousserVersRust);
 
 // Persiste + réapplique à chaque changement.
 watch(prefs, () => {
