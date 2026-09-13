@@ -17,19 +17,49 @@
  */
 const DEPOT = "tompoyeau/torii";
 
+/**
+ * Les textes que ce script écrit dans la page, par langue.
+ *
+ * 🔑 LA LANGUE EST CELLE DE LA PAGE (`<html lang>`), pas celle du navigateur : un
+ * anglophone qui ouvre la page française doit lire un bouton cohérent avec le reste de
+ * cette page. Le même script sert les deux versions du site — un seul appel d'API à
+ * maintenir, une seule logique de choix d'installeur.
+ */
+const LANGUE = document.documentElement.lang === "en" ? "en" : "fr";
+const TEXTES = {
+  fr: {
+    telecharger: (v) => `Télécharger Torii ${v}`,
+    meta: (poids, date) => `Windows 10 et 11 · 64 bits · ${poids} · publié le ${date}`,
+    msi: (poids) => `ou le .msi (${poids})`,
+    version: (v) => `version ${v}`,
+    unite: "Mo",
+    decimal: ",",
+    locale: "fr-FR",
+  },
+  en: {
+    telecharger: (v) => `Download Torii ${v}`,
+    meta: (poids, date) => `Windows 10 & 11 · 64-bit · ${poids} · released ${date}`,
+    msi: (poids) => `or the .msi (${poids})`,
+    version: (v) => `version ${v}`,
+    unite: "MB",
+    decimal: ".",
+    locale: "en-US",
+  },
+}[LANGUE];
+
 /** Cherche un fichier de la release par son extension. */
 function fichier(assets, extension) {
   return assets.find((a) => a.name.toLowerCase().endsWith(extension));
 }
 
-/** « 4,3 Mo » — l'ordre de grandeur rassure avant de cliquer. */
+/** « 4,3 Mo » / « 4.3 MB » — l'ordre de grandeur rassure avant de cliquer. */
 function poids(octets) {
-  return `${(octets / 1048576).toFixed(1).replace(".", ",")} Mo`;
+  return `${(octets / 1048576).toFixed(1).replace(".", TEXTES.decimal)} ${TEXTES.unite}`;
 }
 
-/** « 6 septembre 2026 » : une date lisible vaut mieux qu'un horodatage. */
+/** « 6 septembre 2026 » / « September 6, 2026 » : une date lisible vaut mieux qu'un horodatage. */
 function date(iso) {
-  return new Date(iso).toLocaleDateString("fr-FR", {
+  return new Date(iso).toLocaleDateString(TEXTES.locale, {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -75,22 +105,45 @@ async function remplirLeBouton() {
     b.setAttribute("download", "");
   }
   for (const t of textes) {
-    if (t) t.textContent = `Télécharger Torii ${version}`;
+    if (t) t.textContent = TEXTES.telecharger(version);
   }
 
   if (meta) {
-    meta.textContent = `Windows 10 et 11 · 64 bits · ${poids(exe.size)} · publié le ${date(
-      release.published_at,
-    )}`;
+    meta.textContent = TEXTES.meta(poids(exe.size), date(release.published_at));
   }
 
   if (msi && lienMsi) {
     lienMsi.href = msi.browser_download_url;
     lienMsi.setAttribute("download", "");
-    lienMsi.textContent = `ou le .msi (${poids(msi.size)})`;
+    lienMsi.textContent = TEXTES.msi(poids(msi.size));
   }
 
-  if (piedVersion) piedVersion.textContent = `version ${version}`;
+  if (piedVersion) piedVersion.textContent = TEXTES.version(version);
+
+  ecrireLaVersionDansLesDonnees(version);
+}
+
+/**
+ * Ajoute `softwareVersion` aux données structurées de la page.
+ *
+ * 🔑 POURQUOI PAS EN DUR DANS LE HTML. Une version écrite dans `index.html` ment dès la
+ * release suivante, et une donnée structurée fausse vaut moins que pas de donnée : on
+ * préfère l'absence à l'erreur. Le numéro vient donc du même appel d'API que le bouton.
+ *
+ * ⚠️ Google exécute le JavaScript avant de lire le JSON-LD, mais pas tous les robots.
+ * C'est assumé : ceux qui ne l'exécutent pas voient une fiche sans numéro de version —
+ * exactement ce qu'ils voyaient avant ce script — au lieu d'un numéro périmé.
+ */
+function ecrireLaVersionDansLesDonnees(version) {
+  const bloc = document.getElementById("donnees-app");
+  if (!bloc || !version) return;
+  try {
+    const donnees = JSON.parse(bloc.textContent);
+    donnees.softwareVersion = version;
+    bloc.textContent = JSON.stringify(donnees);
+  } catch {
+    // Un JSON-LD illisible ne doit pas empêcher la page de fonctionner.
+  }
 }
 
 remplirLeBouton();

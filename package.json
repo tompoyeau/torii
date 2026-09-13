@@ -8,7 +8,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "build:demo": "vite build --base=./ --outDir site/demo --emptyOutDir"
+    "build:demo": "vite build --base=./ --outDir site/demo --emptyOutDir",
+    "build:notes": "node scripts/notes-de-version.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

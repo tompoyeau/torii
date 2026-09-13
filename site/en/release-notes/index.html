@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--
+      ⚠️ FICHIER GÉNÉRÉ — NE PAS MODIFIER À LA MAIN.
+      Source : CHANGELOG.en.md à la racine du dépôt. Régénérer avec `npm run build:notes`.
+
+      Cette page existe pour deux raisons, dans cet ordre : donner à quelqu'un qui
+      hésite la preuve que le produit est vivant, et donner aux moteurs une page qui
+      change pour de bon à chaque version — un site d'une seule page n'a aucune raison
+      d'être revisité.
+    -->
+    <title>Torii release notes — every change, version by version</title>
+    <meta name="description" content="Every new feature and fix in Torii, version by version. Latest: 0.20.3, released September 9, 2026. A unified game library for Windows, free, in English and French." />
+    <link rel="canonical" href="https://torii-app.fr/en/release-notes/" />
+    <!-- Réciproques sur les deux pages, comme partout ailleurs sur le site. -->
+    <link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
+    <link rel="alternate" hreflang="en" href="https://torii-app.fr/en/release-notes/" />
+    <link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/release-notes/" />
+    <link rel="icon" type="image/png" href="../../favicon.png" />
+    <link rel="stylesheet" href="../../styles.css" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://torii-app.fr/en/release-notes/" />
+    <meta property="og:title" content="Torii release notes" />
+    <meta property="og:description" content="What changed in Torii, version by version." />
+    <meta property="og:image" content="https://torii-app.fr/captures/library-en.jpg" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="fr_FR" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://torii-app.fr/en/"},{"@type":"ListItem","position":2,"name":"Release notes","item":"https://torii-app.fr/en/release-notes/"}]}
+    </script>
+  </head>
+
+  <body>
+    <div class="barre-site">
+      <a class="marque" href="../../en/">
+        <img src="../../torii.svg" alt="" width="30" height="30" />
+        Torii
+      </a>
+      <nav>
+        <a href="../../en/steam/">With Steam</a>
+        <a href="../../en/release-notes/" class="actif" aria-current="page">Release notes</a>
+        <a href="https://github.com/tompoyeau/torii">Source code</a>
+        <a href="../../notes-de-version/" hreflang="fr" lang="fr">Français</a>
+      </nav>
+    </div>
+
+    <main class="page">
+      <div class="page-entete">
+        <p class="sur-titre">Changelog</p>
+        <h1>What changes, version after version</h1>
+        <p class="chapeau">
+          Torii is written by a single person, and every version ships with the list
+          of what it fixes and what it adds. Nothing gets summed up as “various
+          improvements”: if something changed in front of you, it's written here.
+        </p>
+      </div>
+
+      <div class="notes">
+        <article class="note-version" id="v0-20-3">
+          <header>
+            <h2><a href="#v0-20-3">Version 0.20.3</a></h2>
+            <time datetime="2026-09-09">September 9, 2026</time>
+            <span class="etiquette">Latest version</span>
+          </header>
+          <ul>
+            <li><strong>Overwatch 2 gets its page back: cover, description, screenshots and genre.</strong> The previous two versions had each ruled out a wrong answer without managing to find the right one. The reason: the database only knows this game as “Overwatch”, and its search never brings up that entry when asked for “Overwatch 2” — it only returns add-ons. Torii now explicitly asks for a game's other names, instead of hoping to come across them. Games left without a page for this reason catch up on their own the next time Torii starts.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-20-2">
+          <header>
+            <h2><a href="#v0-20-2">Version 0.20.2</a></h2>
+            <time datetime="2026-09-09">September 9, 2026</time>
+          </header>
+          <ul>
+            <li><strong>No more pattern over covers.</strong> The previous version had toned these white lines back down to their original subtlety; they were still visible to anyone who had noticed them. They're simply gone: a cover is a finished image, it doesn't need retouching.</li>
+            <li><strong>Game pages that showed a DLC are finally fixed.</strong> 0.20.1 did fix the search, but the wrong answer stayed stored on your disk — so Overwatch 2 kept showing the description of a coin bundle. Pages guessed from the title are now fetched again; Steam and GOG ones, which can't pick the wrong game, are kept as they are.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-20-1">
+          <header>
+            <h2><a href="#v0-20-1">Version 0.20.1</a></h2>
+            <time datetime="2026-09-08">September 8, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Covers are sharp again.</strong> A white diagonal pattern had settled over every thumbnail in the library — a texture effect meant to stay invisible that, after an optimization, had started to show. It's imperceptible again, without losing the smoothness gained.</li>
+            <li><strong>The featured game finally has its banner.</strong> A game you had never opened showed on a plain gradient, while its page did show its image. Both now fetch the same thing.</li>
+            <li><strong>Games that couldn't be found under their commercial name are recognized.</strong> Overwatch 2 is the example: the database only knows this game as “Overwatch”, with “Overwatch 2” as an alternative name — so it stayed without a cover or description, forever. Alternative names are now taken into account, and missing pages catch up on their own the next time Torii starts.</li>
+            <li><strong>A game page can no longer show a DLC's content.</strong> For games from a launcher without its own catalog, Torii guessed the page by searching the title on the Steam Store — and could land on a coin bundle or a battle pass, taking its description, image and year. Overwatch 2 was the example. Expansions, bundles and add-on content are now ruled out, and the search looks for the exact name everywhere before settling for a close one.</li>
+            <li><strong>A detected game can no longer take a DLC's name.</strong> Same kind of problem in the automatic recognition of games from no launcher: “Overwatch 2: Invasion Bundle” looked enough like “Overwatch 2” to win.</li>
+            <li><strong>Accents no longer break recognition.</strong> “Hadès” and “Hades” were two different games for Torii, one letter apart.</li>
+            <li><strong>On cards, hide and favorite have swapped places.</strong> The star moves to the right: since it's the only one of the two buttons that stays visible when you're not hovering the card, it finally sits in the corner of the cover instead of being pushed away by an invisible button.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-20-0">
+          <header>
+            <h2><a href="#v0-20-0">Version 0.20.0</a></h2>
+            <time datetime="2026-09-08">September 8, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Game pages lost to a network drop come back.</strong> When the connection failed at the wrong moment, Torii remembered “this game doesn't exist” instead of “I couldn't ask” — and never reopened the question: the game stayed without a description, genre or cover, permanently. This has been fixed for new games for a while, but pages already lost stayed lost. They're now looked up again, once, the next time Torii starts. Pages you already have aren't downloaded again: only the missing ones are.</li>
+            <li><strong>A “Report a problem” button</strong>, in Settings → About &amp; maintenance. It opens a report already filled in with your Torii version and reminds you where to find the log. Until now, running into a bug and knowing where to report it were two different things.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-19-0">
+          <header>
+            <h2><a href="#v0-19-0">Version 0.19.0</a></h2>
+            <time datetime="2026-09-06">September 6, 2026</time>
+          </header>
+          <ul>
+            <li><strong>A game bought and then launched from its launcher no longer shows up twice.</strong> You buy a game on Steam and launch it right away: Torii hadn't seen it come in yet and filed it under “No launcher”. The next scan added the real Steam game next to it — the same game, twice, permanently. Torii now checks whether it's a freshly installed game before concluding, and duplicates already there disappear on their own at the next scan.</li>
+            <li><strong>“Manual” and “No launcher” are now a single category.</strong> Two sidebar entries for the same idea — a game no launcher provides — and two different labels on neighboring cards. There's only one now.</li>
+            <li><strong>“In common” has left “Discover” to join your library</strong>, under “Family”. It isn't about buying anything: this view compares your games with your friends'.</li>
+            <li><strong>The Wishlist and “In common” finally have a search that works.</strong> The one in the top bar filtered your library: on these two screens, which show something else, typing in it did nothing. Each one now has its own.</li>
+            <li><strong>A cross to clear the top bar search in one click</strong>, instead of selecting everything by hand.</li>
+            <li><strong>You can see and sign out the devices connected to your Torii account</strong> (Settings → Torii network). An open session used to be invisible: no way to know an old PC was still signed in, so no way to sign it out. A session unused for six months now ends on its own.</li>
+            <li><strong>Torii can finally be used with the keyboard and is read out properly.</strong> The app declared itself as English, which made a screen reader read the whole French interface with an English voice. Windows keep focus instead of letting Tab wander through the page behind them, and give it back to the original button when closing. Confirmation messages are announced. Input fields show they have focus again.</li>
+            <li><strong>Light gray text is readable.</strong> Dates, counters and subtitles fell below the recommended contrast threshold, in both themes. ⚠️ In the light theme, the accent color is a little deeper: white on top of it wasn't readable enough on action buttons.</li>
+            <li><strong>Your friends still see you start a game, but Torii talks a lot less.</strong> It sent its status every 30 seconds all the time, including at night when nobody is online. It now adapts its pace: 30 seconds as soon as someone is playing, a minute and a half when friends are around, five minutes when you're alone. In practice nothing changes, except that the service can hold five times as many people.</li>
+            <li><strong>A game no longer loses its description for good because the network hiccuped.</strong> A drop at the wrong moment was remembered as “this game doesn't exist”, and the game stayed without a description, genre or cover forever. Only a confirmed absence is remembered now.</li>
+            <li><strong>Display fixes</strong>: in Settings, the spacing between a setting's title and its explanation differed from one section to another, to the point where some descriptions touched their title.</li>
+            <li>Under the hood, this is mostly groundwork for a wider release: the service that provides covers and descriptions can no longer be used by just anyone, the Torii network API is protected against abuse, and the app window enforces a strict security policy.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-18-0">
+          <header>
+            <h2><a href="#v0-18-0">Version 0.18.0</a></h2>
+            <time datetime="2026-08-30">August 30, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Every friend has their own page in Torii.</strong> Clicking someone used to open their Steam page in your browser — a page that only knows about Steam, says nothing about their GOG or Epic games, and obviously has no “view their library” button. Everything Torii knows about a person now lives in one place: their avatar, what they're playing, which channel they're connected through, the games you have in common and a preview of their library.</li>
+            <li><strong>Even Steam friends have a page</strong>, and it's deliberately almost empty: it explains what Torii can't know about them, and offers your friend code to copy right there to fix that.</li>
+            <li><strong>The friends list is lighter</strong>: the “library” and “remove” buttons are gone from each row. Everything about a person happens on their page; the list just leads to it. Removing a friend now lives behind the gear on their profile, with a real confirmation — it's the only action in the app that can't be undone.</li>
+            <li><strong>The Steam profile opens in a Torii window</strong>, no longer in your browser: going outside to look for information you came looking for inside meant losing the app along the way.</li>
+            <li><strong>Steam Family Sharing games no longer count as owned games.</strong> A game borrowed from family showed up in “In common” as if your friend owned it: no way to tell who owned what, or whether you could play it together. “In common” now means what it says — you both own it. These games stay visible in your friend's library, where they're tagged “Steam family”.</li>
+            <li><strong>In a friend's library, clicking a game you don't have finally opens something</strong>: its price comparison, on top of the page. Until now the click did nothing at all — even though browsing someone's library is precisely about finding what you don't have.</li>
+            <li><strong>No more star or crossed-out eye on other people's games.</strong> These buttons act on YOUR library; offering them on someone else's covers suggested otherwise. Same for the right-click menu, which offered “Uninstall” on a friend's game.</li>
+            <li><strong>Text is in French.</strong> Descriptions and genres of Steam and GOG games, categories, and Instant Gaming links point to the French site. Descriptions of games that aren't on Steam or GOG stay in English: the database that provides them only exists in that language.</li>
+            <li><strong>Display fixes</strong>: filter buttons showed as raw Windows buttons in a friend's library, in “In common” and in the Wishlist; covers there took the width of their text instead of a uniform size; and a library preview now follows the cover size chosen in settings.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-17-0">
+          <header>
+            <h2><a href="#v0-17-0">Version 0.17.0</a></h2>
+            <time datetime="2026-08-28">August 28, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Your friends finally see what you own, not just what you play.</strong> Your library can be stored on your Torii account: your friends browse it from the Friends view, with your Steam, GOG, Epic, Ubisoft and manually added games together in a single list. A filter shows what you have that they don't, or what you both have.</li>
+            <li><strong>Two settings, not one.</strong> <em>Sync</em> stores your library so you get it back on your other devices; <em>share</em> also lets your friends see it. One works without the other, and both are <strong>off by default</strong>: after this update, nothing leaves your PC until you ask for it. Everything turns off in one click, and turning it off deletes what was sent.</li>
+            <li><strong>Your hidden games stay hidden.</strong> They and games marked “don't share” are never sent, even with sharing on.</li>
+            <li><strong>“In common” is no longer limited to Steam.</strong> The view now cross-checks both sources: a friend who isn't on Steam can show up there, and a GOG, Epic or manually installed game can finally be “in common”. Each friend is counted only once.</li>
+            <li><strong>The Friends view shows how each person is connected</strong>: Steam, Torii, or both. A dimmed badge flags a friend on that side who isn't connected there right now — useful to know when Torii can't see what they're playing.</li>
+            <li>Under the hood, these libraries are what the mobile app will rely on to know yours.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-16-1">
+          <header>
+            <h2><a href="#v0-16-1">Version 0.16.1</a></h2>
+            <time datetime="2026-08-22">August 22, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Minecraft is finally detected.</strong> It runs in a Java virtual machine, which Torii set aside out of caution: the file path only mentions the engine, never the game. Torii now asks Windows for its name, which Windows knows. Same for other games launched through a shared engine.</li>
+            <li><strong>A brand-new game is seen from its very first session.</strong> Windows only adds a game to its list when it notices it, sometimes a few seconds after launch — Torii concluded too quickly and waited for the next session. It now gives an unknown game two minutes.</li>
+            <li><strong>No more double notifications for your friends.</strong> A freshly detected game is only announced once its real title is known, instead of going out under its temporary name and then being corrected — which counted as two launches.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-16-0">
+          <header>
+            <h2><a href="#v0-16-0">Version 0.16.0</a></h2>
+            <time datetime="2026-08-22">August 22, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Your friends finally see games that come from no launcher.</strong> Genshin Impact, Dofus, a Game Pass game, a manually installed game: until now Torii didn't see them, so nobody knew you were playing them. They're now spotted on their own, added to your library under “No launcher”, with their real title and cover — and they count in “Recently played” like the rest.</li>
+            <li>Torii doesn't guess at random: it relies on the list of games <strong>Windows already keeps</strong> for its Game Bar. So a browser or a word processor won't be announced to your friends. If a title still comes out wrong, fix it from the game's page, and “Remove from library” sets it aside for good.</li>
+            <li><strong>New startup screen</strong>: the gate builds itself — the pillars rise, the crossbeams open, the lintel settles.</li>
+            <li><strong>Couch mode has been removed.</strong> Nobody used it, and it dragged its own navigation, screens and settings along. Torii now has a single interface, and the “Startup mode” setting is gone from Settings.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-15-0">
+          <header>
+            <h2><a href="#v0-15-0">Version 0.15.0</a></h2>
+            <time datetime="2026-08-22">August 22, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Account creation redesigned</strong>: everything happens in a single window — email address, code received by email, then display name. The display name is no longer a suggestion you could skip: your account is created with the one you choose, not with a name derived from your email address.</li>
+            <li><strong>Nothing is created until you're done.</strong> If you close Torii in the middle of signing up, no account is saved and your address stays free.</li>
+            <li><strong>Delete your Torii account</strong>, from Settings → Torii network. Display name, friend code and connections are removed from the server; your library and settings stay on your computer. You have to type your display name to confirm — it's permanent.</li>
+            <li><strong>Remove a friend</strong>: a trash icon appears when hovering each Torii friend in the Friends view, with a confirmation right there. Removal applies on both sides. Steam friends are managed from Steam.</li>
+            <li><strong>A Steam account can no longer be linked to two Torii accounts.</strong> It created duplicates for your friends — one of them an inert row — and let someone use another person's Steam avatar.</li>
+            <li>Scrollbars in the app's colors, in both light and dark themes.</li>
+            <li>Friends view: button aligned at the bottom of cards, and “right now” for everyone.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-14-0">
+          <header>
+            <h2><a href="#v0-14-0">Version 0.14.0</a></h2>
+            <time datetime="2026-08-21">August 22, 2026</time>
+          </header>
+          <ul>
+            <li><strong>A friend starts a game, you see it</strong>: a banner shows for a few seconds at the top right of the screen, above other windows, without ever stealing your keyboard. Can be turned off in Settings → Torii network. A game in exclusive fullscreen may hide it.</li>
+            <li><strong>Diagnostic log</strong>: Torii now writes what happens to it in a file (Settings → About → “Open log”). If the app closes on its own or a screen stays blank, this file says why. Three crashes hit by players had left no trace until now.</li>
+            <li><strong>Your Steam account and your Torii account find each other on their own</strong>: as soon as both are connected, your Steam ID is added to your Torii account and your Steam friends already on Torii can find you. It only happens once: if you turn this visibility off, it stays off.</li>
+            <li>Friends view: the “Play” button is aligned at the bottom of each card, and every friend in a game shows “right now” — the duration was only known for some of them, which looked like missing information.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-13-0">
+          <header>
+            <h2><a href="#v0-13-0">Version 0.13.0</a></h2>
+            <time datetime="2026-08-21">August 21, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Friends view redesigned</strong>: people who are playing come first, on cards showing the game large and for how long. Offline friends are collapsed, available ones fit on a single line.</li>
+            <li><strong>“You have it too”</strong>: when a friend is playing a game you own, their card tells you and offers to launch it — even if you don't have it on the same launcher. That's something Torii does that nobody else does.</li>
+            <li><strong>Choose what your friends see</strong>: game visible, online only, or invisible. In “online” mode, nobody knows what you're playing, even mid-game.</li>
+            <li><strong>A display name</strong>: chosen when signing up and editable in settings. Before, your name was derived from your email address without you asking for it.</li>
+            <li>The account button at the top right now opens your Torii account settings instead of your Steam profile in the browser.</li>
+            <li><strong>“Don't share this game”</strong> is now also in the gear menu on a game's page, not just in the right-click menu.</li>
+            <li>Windows' context menu (“Inspect”, “Save as”…) no longer opens in the app. It's still available in input fields, so you can paste.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-12-2">
+          <header>
+            <h2><a href="#v0-12-2">Version 0.12.2</a></h2>
+            <time datetime="2026-08-21">August 21, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Fix</strong>: the “Visible to my Steam friends” button stopped responding once turned off. It's reliable again, both ways.</li>
+            <li><strong>Fix</strong>: unlinking your Steam account from Torii didn't work — the ID stayed stored on the server while the app showed otherwise.</li>
+            <li>The button becomes clickable as soon as you connect Steam, without restarting Torii.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-12-1">
+          <header>
+            <h2><a href="#v0-12-1">Version 0.12.1</a></h2>
+            <time datetime="2026-08-21">August 21, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Major fix</strong>: Torii closed on its own right after signing in to Steam (or GOG / Epic). The sign-in window, when closing, was mistaken for the main window and made the app quit. It affected every new installation.</li>
+            <li><strong>Finding your Steam friends</strong> finally works: the search existed on the server but no screen called it. It's now in Settings → Torii network, and you can add the people found directly.</li>
+            <li>The “visible to my Steam friends” option is disabled, with an explanation, as long as no Steam account is connected — it had no effect in that case.</li>
+            <li><strong>Torii now stays running in the background</strong> when you close the window, to keep detecting your sessions. This can be turned off in Settings, and “Quit” stays available by right-clicking the icon next to the clock.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-12-0">
+          <header>
+            <h2><a href="#v0-12-0">Version 0.12.0</a></h2>
+            <time datetime="2026-08-21">August 21, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Torii network</strong>: create an account and see what your friends are playing <strong>whatever their launcher</strong> — Steam, Epic, GOG, Riot, a manually added game… Something neither Steam nor Discord can do.</li>
+            <li><strong>Passwordless sign-in</strong>: you enter your address, you get a 6-digit code, and that's it. Nothing to remember, nothing to lose.</li>
+            <li><strong>Adding a friend</strong> uses a short code you give them directly. Nobody can find you by guessing your email address.</li>
+            <li><strong>Sharing is off by default.</strong> Until you turn it on, absolutely nothing about what you play leaves your PC. A “Visible / Invisible” badge lets you disappear in one click, and right-clicking a game is enough to never share it.</li>
+            <li><strong>A single friends list</strong>, fed by Steam and by Torii: the same person only appears once, with their Steam avatar and the game seen by Torii. Neither source replaces the other — Steam knows who's online even when Torii is closed, Torii sees games from every launcher.</li>
+            <li><strong>No history</strong> is kept: your status expires after 90 seconds and is never archived.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-11-0">
+          <header>
+            <h2><a href="#v0-11-0">Version 0.11.0</a></h2>
+            <time datetime="2026-08-21">August 21, 2026</time>
+          </header>
+          <ul>
+            <li><strong>“Recently played” is finally right</strong>: Torii spots sessions launched <strong>from anywhere</strong> — Steam, the desktop, a shortcut — not just those started from Torii. A game moves to the top of the list within seconds, dated from the actual time it started (not the moment Torii noticed it).</li>
+            <li><strong>Lighter while you play</strong>: session tracking now uses about 140 times less than before. In practice, it's invisible to in-game performance.</li>
+            <li>A game already running when Torii starts is dated correctly, instead of jumping to the top every time the app opens.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-10-0">
+          <header>
+            <h2><a href="#v0-10-0">Version 0.10.0</a></h2>
+            <time datetime="2026-08-21">August 21, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Adding to the Steam wishlist fixed</strong>: adding a game from the Store finally pushes it to your real Steam wishlist. The API Torii used had been retired by Valve and silently refused every addition; the confirmation message now says whether Steam followed.</li>
+            <li><strong>Missing covers in the wishlist</strong>: more than half of the games (new releases, unreleased games) have no cover on the Steam CDN and showed as a gradient. Torii now falls back to a backup cover.</li>
+            <li><strong>Consistent display</strong>: wishlist games use the same card as the library and the Store (same size, same overlaid title, same hover).</li>
+            <li><strong>Hidden sellers respected everywhere</strong>: a hidden seller was only left out on a game's page — it came back as the best price in the storefront, the search and the wishlist. Fixed.</li>
+            <li><strong>Instant startup</strong>: your library shows immediately at launch, without waiting for accounts to sync, then updates on its own.</li>
+            <li><strong>Protected credentials</strong>: sign-in tokens for your accounts (Steam, GOG, Epic) are now encrypted on disk by Windows. The conversion is automatic on first launch, and your accounts stay connected.</li>
+            <li><strong>Add a game by hand, without typing a path</strong>: “Browse…” opens Windows Explorer to pick the executable, the folder and the cover (an image from your disk works). The title and folder are guessed from the chosen file.</li>
+            <li><strong>Edit a manually added game</strong>: title, executable, folder and cover can be fixed afterwards, from its page or by right-clicking. Favorite and hidden status are kept.</li>
+            <li><strong>Fix</strong>: on a manually added game's page, the “Uninstall” button did nothing. It becomes “Remove from library” and works.</li>
+            <li><strong>Back from the price comparison</strong>: checking a library game's prices and then going back takes you to the game's page, instead of leaving you on the Store's storefront.</li>
+            <li><strong>Display fix</strong>: the library scrollbar stayed visible — and usable — behind a game's page or Settings.</li>
+            <li><strong>Price alerts</strong>: fixed tracking that could mix up several games added from the Store.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-9">
+          <header>
+            <h2><a href="#v0-9-9">Version 0.9.9</a></h2>
+            <time datetime="2026-08-16">August 16, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Universal wishlist</strong>: add any game to your wishlist from the Store (♥ button on the page and on cards). If the game exists on Steam, it's also added to your Steam wishlist. A short message confirms it.</li>
+            <li><strong>Price alerts</strong>: they now track your whole wishlist (Steam + games added in Torii).</li>
+            <li><strong>Instant Gaming</strong>: out-of-stock offers are flagged (“Out of stock”) and are no longer offered as the best price.</li>
+            <li><strong>Startup screen</strong> while the library loads.</li>
+            <li><strong>Notification area fixes</strong>: no more “ghost” instance stuck in the tray, relaunching properly reopens the existing window, and startup no longer makes the window flicker.</li>
+            <li>Removed the “Recent” category and the grid/list button (the default layout is set in Settings).</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-8">
+          <header>
+            <h2><a href="#v0-9-8">Version 0.9.8</a></h2>
+            <time datetime="2026-08-16">August 16, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Fix</strong>: when Torii keeps running in the background (“close to the notification area” option), relaunching it now brings the existing window to the front instead of opening a second instance that prevented it from opening.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-7">
+          <header>
+            <h2><a href="#v0-9-7">Version 0.9.7</a></h2>
+            <time datetime="2026-08-16">August 16, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Settings redesigned</strong>: a real settings window with navigation by category (General, Hidden games, Hidden sellers, Accounts &amp; launchers, About). Launcher connection management is built in.</li>
+            <li><strong>Launch Torii when Windows starts</strong> (option).</li>
+            <li><strong>Notification area</strong>: Torii can start minimized and/or minimize to the notification area when closed instead of quitting.</li>
+            <li><strong>Come back when a game closes</strong> (option): Torii minimizes during the session and reopens the game's page when you close it.</li>
+            <li><strong>New settings</strong>: startup mode (Desktop/Couch), default filter/sort/layout, library density, theme (light/dark/system), reduce motion.</li>
+            <li><strong>About &amp; maintenance</strong>: version number, manual update check, button to clear the cache.</li>
+            <li><strong>Store</strong>: you can hide the sellers of your choice from the price comparison (list managed from Settings), and scroll arrows on the screenshot gallery.</li>
+            <li><strong>Navigation</strong>: the mouse “back” button goes back in the app.</li>
+            <li><strong>Battle.net</strong>: “Uninstall” now opens the client on the game's page instead of File Explorer.</li>
+            <li>Removed the “Recent” category from the sidebar.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-6">
+          <header>
+            <h2><a href="#v0-9-6">Version 0.9.6</a></h2>
+            <time datetime="2026-08-15">August 15, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Battle.net</strong>: “Play” and “Install” now work even when the Battle.net client is already open (before, nothing happened). “Play” launches the game directly.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-5">
+          <header>
+            <h2><a href="#v0-9-5">Version 0.9.5</a></h2>
+            <time datetime="2026-08-15">August 15, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Install a game from Torii</strong>: for a game you own but haven't installed, the button becomes “Install” and starts the installation through the launcher (without counting it as a session played).</li>
+            <li><strong>Fixed Epic launching/installing</strong> of games that aren't installed (e.g. Just Cause 4).</li>
+            <li><strong>Detection of installed EA games</strong> (the EA app), for real “Play / Install” like other launchers.</li>
+            <li><strong>Store</strong>: a “Surprise me” button to show a random selection of games.</li>
+            <li><strong>Game page</strong>: arrows to scroll through the screenshot gallery.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-4">
+          <header>
+            <h2><a href="#v0-9-4">Version 0.9.4</a></h2>
+            <time datetime="2026-08-15">August 15, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Steam achievements on a game's page</strong>: your real achievements (icon, description, unlock date) with actual progress and a collapsible preview.</li>
+            <li><strong>Playing now</strong>: the live number of players on Steam games, in the page's stats.</li>
+            <li><strong>Real launcher logos</strong>: Epic, Ubisoft, Battle.net and Riot now show their official logo.</li>
+            <li><strong>Game page</strong>: options button back to the right size, new “Open file location” shortcut, and the Play / Options menus no longer stay open at the same time.</li>
+            <li><strong>Store</strong>: a “Surprise me” button to pick a selection of games to discover.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-3">
+          <header>
+            <h2><a href="#v0-9-3">Version 0.9.3</a></h2>
+            <time datetime="2026-08-14">August 14, 2026</time>
+          </header>
+          <ul>
+            <li><strong>Sidebar redesigned</strong>: cleaner navigation, official launcher icons, and a much more readable selected item.</li>
+            <li><strong>Friends</strong> moved to the top bar, with a badge showing how many friends are online.</li>
+            <li>New right-click <strong>“Open file location”</strong> on an installed game, to open its folder in File Explorer.</li>
+            <li>Fix: some <strong>uninstalled Epic games still showed as installed</strong> (e.g. Palia) — they're now detected correctly.</li>
+            <li>The <strong>profile icon</strong> at the top now shows your real Steam identity (name and avatar).</li>
+            <li>Interface cleanup: the fake storage bar is gone; the button at the bottom of the sidebar now says <strong>“Connect a launcher”</strong> or <strong>“Manage connections”</strong> depending on your accounts.</li>
+            <li>Fewer <strong>antivirus false positives</strong> (Windows Defender).</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-2">
+          <header>
+            <h2><a href="#v0-9-2">Version 0.9.2</a></h2>
+            <time datetime="2026-08-09">August 9, 2026</time>
+          </header>
+          <ul>
+            <li>New <strong>Wishlist</strong> section: your Steam wishlist with, for each game, the current best price, the discount and the all-time low — to spot at a glance what's on sale.</li>
+            <li>Fixed the <strong>Steam friends list</strong> staying empty for accounts with a custom URL.</li>
+            <li>Store: <strong>navigation arrows</strong> (and keyboard) in the screenshot viewer.</li>
+            <li>New <strong>“View in store”</strong> button on a game's page, to compare its prices in one click.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-1">
+          <header>
+            <h2><a href="#v0-9-1">Version 0.9.1</a></h2>
+            <time datetime="2026-08-09">August 9, 2026</time>
+          </header>
+          <ul>
+            <li>Fixed the <strong>empty Steam friends list</strong> for some users: the community session is now regenerated automatically (like the library), and signing in to Steam generates a clean cookie even when an old session from a previous version is present. If your friends list wasn't showing, reconnect your Steam account once.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-9-0">
+          <header>
+            <h2><a href="#v0-9-0">Version 0.9.0</a></h2>
+            <time datetime="2026-08-09">August 9, 2026</time>
+          </header>
+          <ul>
+            <li>New <strong>In common</strong> section: find all the games you share with your Steam friends, with a multi-friend filter to see what you all own and play together.</li>
+            <li>On every game page: <strong>friends who also own the game</strong> (clickable to their Steam profile) and, for Family Sharing games, the <strong>number of copies available in the family</strong>.</li>
+            <li>Fixed <strong>uninstalling Epic games</strong>: Epic now opens directly on the right game.</li>
+            <li>New, more recognizable icons for Riot, Ubisoft Connect and Battle.net.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-8-0">
+          <header>
+            <h2><a href="#v0-8-0">Version 0.8.0</a></h2>
+            <time datetime="2026-08-08">August 8, 2026</time>
+          </header>
+          <ul>
+            <li>New <strong>Store</strong>: discover games to buy and compare prices across every PC store (Steam, GOG, Epic, Humble, Fanatical…) in euros, with the all-time low and a direct buy link. Search with instant suggestions. Instant Gaming prices are also shown on the product page.</li>
+            <li>New <strong>Friends</strong> panel: find your Steam friends in one place, see who's online and what they're playing, with live refresh.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-7-0">
+          <header>
+            <h2><a href="#v0-7-0">Version 0.7.0</a></h2>
+            <time datetime="2026-08-07">August 7, 2026</time>
+          </header>
+          <ul>
+            <li>Last session recorded when launching from Torii: games without stats (Riot, EA, Battle.net…) now show their last played date and move up in “Recently played”.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-6-1">
+          <header>
+            <h2><a href="#v0-6-1">Version 0.6.1</a></h2>
+            <time datetime="2026-08-07">August 7, 2026</time>
+          </header>
+          <ul>
+            <li>Game page: fixed the stats panel going off-screen when there were screenshots, and a wider “About” area.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-6-0">
+          <header>
+            <h2><a href="#v0-6-0">Version 0.6.0</a></h2>
+            <time datetime="2026-08-07">August 7, 2026</time>
+          </header>
+          <ul>
+            <li>Metadata enriched through IGDB for every game: description, screenshots, studio, year and backup cover — including games outside Steam (Fortnite, Valorant, Battle.net…) that had nothing until now.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-5-0">
+          <header>
+            <h2><a href="#v0-5-0">Version 0.5.0</a></h2>
+            <time datetime="2026-08-07">August 7, 2026</time>
+          </header>
+          <ul>
+            <li>Genres through IGDB: the category filter now works for the whole library, including games outside Steam (Fortnite, Valorant, WoW…).</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-4-0">
+          <header>
+            <h2><a href="#v0-4-0">Version 0.4.0</a></h2>
+            <time datetime="2026-08-07">August 7, 2026</time>
+          </header>
+          <ul>
+            <li>Update banner redesigned (display fixed: full-width buttons, readable notes).</li>
+            <li>Richer release notes (a real changelog per version).</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-3-0">
+          <header>
+            <h2><a href="#v0-3-0">Version 0.3.0</a></h2>
+            <time datetime="2026-08-07">August 7, 2026</time>
+          </header>
+          <ul>
+            <li>Category filter: filter games by genre, combinable with platforms and search.</li>
+          </ul>
+        </article>
+        <article class="note-version" id="v0-2-0">
+          <header>
+            <h2><a href="#v0-2-0">Version 0.2.0</a></h2>
+            <time datetime="2026-08-07">August 7, 2026</time>
+          </header>
+          <ul>
+            <li>Context menu (right-click) on games: play, favorite, hide, uninstall.</li>
+            <li>Add a game manually (title, executable, cover).</li>
+            <li>Automatic app updates.</li>
+          </ul>
+        </article>
+      </div>
+
+      <section class="rappel">
+        <h2>Still not installed?</h2>
+        <p>Free, no ads, no account needed. Windows 10 and 11.</p>
+        <a class="cta" href="https://github.com/tompoyeau/torii/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+            <path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5" />
+            <path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
+          </svg>
+          Download Torii
+        </a>
+      </section>
+    </main>
+
+    <footer>
+      <img class="mark-mini" src="../../torii.svg" alt="" width="28" height="28" />
+      <p>Torii — game library for Windows</p>
+      <nav>
+        <a href="../../en/">Home</a>
+        <a href="../../en/steam/">With Steam</a>
+        <a href="https://github.com/tompoyeau/torii">Source code</a>
+        <a href="https://github.com/tompoyeau/torii/issues">Report an issue</a>
+      </nav>
+    </footer>
+  </body>
+</html>

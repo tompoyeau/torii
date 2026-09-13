@@ -1,66 +1,54 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <!--
-      RÉFÉRENCEMENT. Le titre porte ce qu'on tape vraiment quand on cherche ce genre
-      d'outil — « regrouper ses jeux », « bibliothèque unique », les noms des launchers —
-      et pas seulement le nom du produit, que personne ne cherche encore.
+      VERSION ANGLAISE DE L'ACCUEIL. Même structure, mêmes dessins, mêmes identifiants que
+      `../index.html` — `telechargement.js` et `animations.js` s'y appuient. Toute section
+      ajoutée ou retirée d'une page doit l'être de l'autre.
 
-      ⚠️ Aucun concurrent n'est nommé, volontairement : Torii ne se positionne contre
-      personne. On decrit ce qu'il fait, on laisse le visiteur conclure.
+      🔑 Ce n'est pas une traduction mot à mot. Trois choses changent de fond :
+        - le bandeau « FR, interface en français » devient « EN·FR » : l'application est
+          bilingue, c'est ça l'argument pour un visiteur étranger ;
+        - « des prix en euros » devient « les prix de ta région » (la région est un réglage) ;
+        - une question de plus dans la FAQ : « Is Torii available in English? », parce que
+          c'est exactement ce que tapera quelqu'un qui tombe sur un domaine en .fr.
+
+      ⚠️ Aucun concurrent n'est nommé, comme sur la page française.
     -->
-    <title>Torii — regroupe tes jeux Steam, Epic et GOG dans une seule bibliothèque</title>
+    <title>Torii — All your Steam, Epic and GOG games in one library</title>
     <meta
       name="description"
-      content="Torii réunit Steam, Epic, GOG, Ubisoft, EA et Battle.net dans une seule bibliothèque, et compare le prix d'un jeu chez les boutiques officielles comme chez les revendeurs. Gratuit, en français, pour Windows 10 et 11."
+      content="Torii brings Steam, Epic, GOG, Ubisoft, EA and Battle.net together in one library, and compares a game's price across official stores and key resellers. Free, in English and French, for Windows 10 and 11."
     />
-    <link rel="canonical" href="https://torii-app.fr/" />
+    <link rel="canonical" href="https://torii-app.fr/en/" />
     <!--
-      🔑 LES DEUX VERSIONS SE DÉSIGNENT MUTUELLEMENT : ces trois lignes sont identiques sur
-      `en/index.html`. Une annonce non réciproque est ignorée. `x-default` vise l'anglais,
-      la version à montrer à qui ne lit ni l'une ni l'autre langue.
-
-      ⚠️ PAS DE REDIRECTION AUTOMATIQUE selon la langue du navigateur. Les robots d'indexation
-      se présentent souvent en anglais : rediriger `/` vers `/en/` rendrait la page française
-      invisible pour eux. On propose le lien, on n'impose rien.
+      🔑 LES DEUX VERSIONS SE DÉSIGNENT MUTUELLEMENT, et ces trois lignes sont identiques sur
+      les deux pages. Une annonce qui n'est pas réciproque est ignorée par les moteurs.
+      `x-default` pointe vers l'anglais : c'est la version à montrer à quelqu'un dont la
+      langue n'est ni l'une ni l'autre.
     -->
     <link rel="alternate" hreflang="fr" href="https://torii-app.fr/" />
     <link rel="alternate" hreflang="en" href="https://torii-app.fr/en/" />
     <link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/" />
-    <link rel="icon" type="image/png" href="favicon.png" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/png" href="../favicon.png" />
+    <link rel="stylesheet" href="../styles.css" />
 
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://torii-app.fr/" />
-    <meta property="og:title" content="Torii — tous tes jeux dans une seule bibliothèque" />
+    <meta property="og:url" content="https://torii-app.fr/en/" />
+    <meta property="og:title" content="Torii — all your games in one library" />
     <meta
       property="og:description"
-      content="Steam, Epic, GOG, Ubisoft, EA, Battle.net — et les jeux qui ne viennent d'aucun launcher. Gratuit, en français, pour Windows."
+      content="Steam, Epic, GOG, Ubisoft, EA, Battle.net — and games that come from no launcher at all. Free, in English and French, for Windows."
     />
-    <meta property="og:image" content="https://torii-app.fr/captures/bibliotheque.jpg" />
-    <meta property="og:locale" content="fr_FR" />
-    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:image" content="https://torii-app.fr/captures/library-en.jpg" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="fr_FR" />
     <meta name="twitter:card" content="summary_large_image" />
 
-    <!--
-      Données structurées : elles disent explicitement aux moteurs qu'il s'agit d'une
-      application Windows gratuite. C'est ce qui permet d'apparaître avec le prix et la
-      plateforme dans les résultats, au lieu d'un simple lien bleu.
-    -->
-    <!--
-      ⚠️ `softwareVersion` N'EST PAS ÉCRIT ICI, volontairement. Une version en dur dans une
-      page statique ment dès la release suivante — et une donnée structurée fausse vaut
-      moins que pas de donnée du tout. `telechargement.js` l'ajoute au chargement, à partir
-      du même appel d'API qui remplit déjà le bouton : jamais périmée, rien à toucher à
-      chaque version. D'où l'`id` sur ce bloc, qui sert au script à le retrouver.
-
-      🔑 `alternateName` porte ce qu'on tape vraiment pour retrouver le produit. « Torii »
-      seul est un mot déjà pris (les portails japonais, une société SaaS américaine) : la
-      requête qui doit mener ici, c'est « torii app » ou « torii launcher ».
-    -->
+    <!-- Voir `../index.html` pour pourquoi `softwareVersion` est absent et pourquoi cet `id`. -->
     <script type="application/ld+json" id="donnees-app">
       {
         "@context": "https://schema.org",
@@ -68,117 +56,95 @@
         "name": "Torii",
         "alternateName": ["Torii App", "Torii Launcher"],
         "applicationCategory": "GameApplication",
-        "applicationSubCategory": "Gestionnaire de bibliothèque de jeux",
+        "applicationSubCategory": "Game library manager",
         "operatingSystem": "Windows 10, Windows 11",
-        "inLanguage": ["fr", "en"],
-        "url": "https://torii-app.fr/",
+        "inLanguage": ["en", "fr"],
+        "url": "https://torii-app.fr/en/",
         "downloadUrl": "https://github.com/tompoyeau/torii/releases/latest",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
-        "description": "Bibliothèque de jeux unifiée pour Windows : Steam, Epic, GOG, Ubisoft, EA, Battle.net et les jeux hors launcher, avec le partage familial Steam, la présence des amis et un comparateur de prix."
+        "description": "Unified game library for Windows: Steam, Epic, GOG, Ubisoft, EA, Battle.net and games from no launcher, with Steam Family Sharing, friends' presence and a price comparison."
       }
     </script>
   </head>
 
   <body>
     <!-- `lang` et `hreflang` : le lien s'annonce dans la langue qu'il ouvre. -->
-    <a class="bascule-langue" href="en/" hreflang="en" lang="en">English</a>
+    <a class="bascule-langue" href="../" hreflang="fr" lang="fr">Français</a>
 
     <header class="hero">
       <div class="hero-texte">
-        <img class="mark" src="torii.svg" alt="" width="88" height="88" />
-        <h1>Tous tes jeux.<br />Une seule porte.</h1>
+        <img class="mark" src="../torii.svg" alt="" width="88" height="88" />
+        <h1>All your games.<br />One gate.</h1>
         <p class="lead">
-          Steam, Epic, GOG, Ubisoft, EA, Battle.net — et même ceux qui ne viennent
-          d'aucun launcher. Torii les réunit dans une bibliothèque, avec leurs jaquettes,
-          leur temps de jeu et ce que jouent tes amis.
+          Steam, Epic, GOG, Ubisoft, EA, Battle.net — and even the games that come from
+          no launcher at all. Torii brings them into one library, with their covers, your
+          playtime and what your friends are playing.
         </p>
 
-        <!--
-          Le bouton se remplit au chargement depuis l'API GitHub : le nom du fichier
-          contient le numéro de version, il n'existe donc aucune URL fixe vers « le
-          dernier installeur ». Sans JavaScript, le lien ci-dessous mène à la page des
-          versions — qui marche depuis toujours.
-        -->
         <a id="telecharger" class="cta" href="https://github.com/tompoyeau/torii/releases/latest">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
             <path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5" />
             <path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
           </svg>
-          <span id="cta-texte">Télécharger pour Windows</span>
+          <span id="cta-texte">Download for Windows</span>
         </a>
         <p class="sous-cta">
-          <span id="meta">Windows 10 et 11 · 64 bits · gratuit</span>
+          <span id="meta">Windows 10 &amp; 11 · 64-bit · free</span>
           <a id="lien-msi" class="discret" href="https://github.com/tompoyeau/torii/releases/latest">
-            ou télécharger le .msi
+            or download the .msi
           </a>
         </p>
 
         <!--
-          Deuxieme porte d'entree, pour qui n'installe pas un .exe inconnu sur parole.
-          Deliberement en retrait du bouton principal : c'est une alternative, pas une
-          concurrence — le telechargement reste l'action attendue.
+          🔑 `?lang=en` : la démo suit sinon la langue du navigateur. Quelqu'un qui lit cette
+          page en anglais avec un navigateur français doit arriver sur une démo anglaise.
         -->
-        <!-- `?lang=fr` : sans lui, la démo démarre en anglais, sa langue par défaut. -->
         <p class="sous-cta essai appel-demo">
-          <a class="cta-secondaire" href="demo/?lang=fr">
+          <a class="cta-secondaire" href="../demo/?lang=en">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
               <path d="M8 5.5v13l11-6.5z" />
             </svg>
-            Essayer la démo dans le navigateur
+            Try the demo in your browser
           </a>
-          <span class="dim">sans rien installer</span>
+          <span class="dim">nothing to install</span>
         </p>
       </div>
 
-      <!--
-        🔑 LA SEULE CAPTURE DE LA PAGE. Les sections plus bas sont illustrées par des
-        dessins, pas par des copies d'écran : une capture par section obligeait à
-        anonymiser des pseudonymes de tiers à chaque nouvelle version, pesait plus d'un
-        mégaoctet, et vieillissait au premier changement d'interface. Mais une page qui
-        ne montre jamais le produit ne convainc personne — d'où celle-ci, en grand, tout
-        en haut. Pour le reste, c'est la démo qui prouve.
-      -->
       <div class="hero-image">
         <img
-          src="captures/bibliotheque.jpg"
+          src="../captures/library-en.jpg"
           width="1700" height="1020"
-          alt="La bibliothèque de Torii : barre latérale par plateforme, jeu mis en avant et grille de jaquettes."
+          alt="The Torii library: a sidebar by platform, a featured game and a grid of covers."
           fetchpriority="high"
         />
       </div>
     </header>
 
     <main>
-      <!-- Les chiffres du produit, en une ligne : ce que la page doit prouver d'emblée. -->
-      <section class="bandeau" aria-label="En bref">
-        <div><strong>8</strong><span>launchers réunis</span></div>
-        <!-- ⚠️ Pas de nombre de vendeurs ici : le « 60+ » du code vient d'un commentaire,
-             pas d'une source vérifiable, et une page publique n'est pas l'endroit où
-             avancer un chiffre qu'on ne peut pas défendre. -->
-        <div><strong>€</strong><span>prix comparés avant d'acheter</span></div>
-        <div><strong>0 €</strong><span>gratuit, sans compte obligatoire</span></div>
-        <div><strong>~5 Mo</strong><span>application native, pas un onglet</span></div>
-        <div><strong>FR</strong><span>interface et descriptions en français</span></div>
+      <section class="bandeau" aria-label="At a glance">
+        <div><strong>8</strong><span>launchers in one place</span></div>
+        <div><strong>€$£</strong><span>prices compared before you buy</span></div>
+        <div><strong>Free</strong><span>no account required</span></div>
+        <div><strong>~5 MB</strong><span>a native app, not a browser tab</span></div>
+        <div><strong>EN·FR</strong><span>in English and French, descriptions included</span></div>
       </section>
 
       <section class="section" id="bibliotheque">
         <div class="section-texte">
-          <p class="sur-titre">Une bibliothèque, pas cinq</p>
-          <h2>Tes jeux arrêtent d'être éparpillés</h2>
+          <p class="sur-titre">One library, not five</p>
+          <h2>Your games stop being scattered</h2>
           <p>
-            Torii lit tes launchers installés <em>et</em> tes comptes en ligne. Un jeu
-            possédé sur Steam et sur GOG n'apparaît qu'une fois, avec le choix du launcher
-            au moment de jouer. Les jaquettes, le temps de jeu et la date de la dernière
-            partie viennent avec.
+            Torii reads your installed launchers <em>and</em> your online accounts. A game
+            you own on both Steam and GOG shows up once, and you pick the launcher when you
+            hit play. Covers, playtime and the date of your last session come along.
           </p>
           <ul class="puces">
             <li>Steam, Epic Games, GOG, Ubisoft Connect, EA, Battle.net, Riot</li>
-            <li>Les jeux <strong>possédés</strong> autant que les jeux installés</li>
-            <li>Doublons fusionnés, jamais deux fois le même jeu</li>
+            <li>The games you <strong>own</strong>, not just the ones installed</li>
+            <li>Duplicates merged — never the same game twice</li>
           </ul>
         </div>
 
-        <!-- Six launchers chacun dans son coin, qui se déversent dans une grille unique. -->
         <div class="section-illu">
           <div class="illu-cadre">
             <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
@@ -228,30 +194,28 @@
 
       <section class="section inverse" id="prix">
         <div class="section-texte">
-          <p class="sur-titre">Avant d'acheter</p>
-          <h2>Le même jeu, à son meilleur prix</h2>
+          <p class="sur-titre">Before you buy</p>
+          <h2>The same game, at its best price</h2>
           <p>
-            Une boutique est intégrée à Torii. Pour un jeu donné, elle compare ce que
-            demandent <strong>des dizaines de vendeurs</strong> — les boutiques officielles des
-            launchers comme les revendeurs de clés — et place le
-            <em>plus bas prix jamais atteint</em> à côté du prix du jour. Tu sais donc si
-            l'offre est vraiment bonne, pas seulement si elle affiche une remise.
+            Torii has a store built in. For any game, it compares what
+            <strong>dozens of sellers</strong> are asking — the launchers' official stores
+            as well as key resellers — and puts the <em>lowest price ever recorded</em> next
+            to today's. So you know whether a deal is actually good, not just whether it
+            shows a discount.
           </p>
           <ul class="puces">
-            <li>Des prix en euros, pas une conversion approximative</li>
-            <li>La disponibilité affichée : une bonne affaire en rupture n'en est pas une</li>
-            <li>Ta wishlist Steam suivie, avec une alerte quand un jeu tombe au plus bas</li>
-            <li>Les vendeurs qui ne t'inspirent pas confiance, tu les masques</li>
+            <li>Local prices for your region, not a rough conversion</li>
+            <li>Stock shown: a great deal that's out of stock isn't one</li>
+            <li>Your Steam wishlist tracked, with an alert when a game hits its lowest</li>
+            <li>Sellers you don't trust, you hide</li>
           </ul>
           <p class="fin">
-            <strong>Torii ne vend rien</strong> et ne prend rien au passage : le bouton
-            d'achat ouvre la boutique du vendeur, chez lui. Et les jeux prêtés par ta
-            famille via le partage Steam apparaissent aussi — inutile d'acheter ce que tu
-            peux déjà lancer.
+            <strong>Torii sells nothing</strong> and takes no cut: the buy button opens the
+            seller's own store. And games lent to you through Steam Family Sharing show up
+            too — no point buying what you can already play.
           </p>
         </div>
 
-        <!-- La courbe d'un prix, son plus bas marqué, et les revendeurs comparés. -->
         <div class="section-illu">
           <div class="illu-cadre">
             <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
@@ -281,20 +245,19 @@
 
       <section class="section" id="hors-launcher">
         <div class="section-texte">
-          <p class="sur-titre">Sans launcher, ni raccourci à créer</p>
-          <h2>Même les jeux hors launcher</h2>
+          <p class="sur-titre">No launcher, no shortcut to create</p>
+          <h2>Even games from no launcher</h2>
           <p>
-            Genshin Impact, Dofus, un jeu du Game Pass, un exécutable posé sur le disque :
-            Torii les repère tout seuls quand tu y joues, retrouve leur vrai titre et leur
-            jaquette, et les range avec les autres.
+            Genshin Impact, Minecraft, a Game Pass title, an executable sitting on your
+            disk: Torii spots them on its own while you play, finds their real title and
+            cover, and files them with the rest.
           </p>
           <p class="fin">
-            Il ne devine pas au hasard — il s'appuie sur la liste de jeux que Windows tient
-            déjà. Un navigateur ou un traitement de texte ne risque pas d'y entrer.
+            It doesn't guess at random — it relies on the list of games Windows already
+            keeps. A browser or a word processor won't sneak in.
           </p>
         </div>
 
-        <!-- Un exécutable anonyme à gauche, une vraie fiche de jeu à droite. -->
         <div class="section-illu">
           <div class="illu-cadre">
             <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
@@ -332,21 +295,19 @@
 
       <section class="section inverse" id="amis">
         <div class="section-texte">
-          <p class="sur-titre">Jouer ensemble</p>
-          <h2>Tes amis, tous launchers confondus</h2>
+          <p class="sur-titre">Playing together</p>
+          <h2>Your friends, whatever their launcher</h2>
           <p>
-            Vois qui joue à quoi en ce moment, ce que vous avez en commun, et lance la même
-            partie même si vous ne l'avez pas sur le même launcher. Un ami sur GOG et toi
-            sur Steam, c'est le même jeu.
+            See who's playing what right now and what you have in common, and jump into
+            the same game even if you don't own it on the same launcher. A friend on GOG
+            and you on Steam — it's the same game.
           </p>
           <p class="fin">
-            <strong>Rien ne part tant que tu ne l'as pas autorisé.</strong> Trois niveaux de
-            partage, jeux masqués exclus, et aucun historique de ce que tu joues n'est
-            conservé.
+            <strong>Nothing leaves your PC until you allow it.</strong> Three levels of
+            sharing, hidden games always left out, and no history of what you play is kept.
           </p>
         </div>
 
-        <!-- Une liste d'amis : pastille de présence, ce qu'ils jouent, sur quel launcher. -->
         <div class="section-illu">
           <div class="illu-cadre">
             <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
@@ -359,9 +320,6 @@
                 <circle cx="76" cy="198" r="17" />
                 <circle cx="76" cy="244" r="17" />
               </g>
-              <!-- Connecté = pastille pleine ; hors ligne = pastille creuse. Remplie d'un
-                   gris à 28 % elle disparaissait dans l'avatar : on ne voyait plus qu'une
-                   tache, au lieu de lire « cet ami-là n'est pas là ». -->
               <circle class="plein" cx="89" cy="118" r="6" />
               <circle class="plein" cx="89" cy="164" r="6" />
               <circle class="doux" cx="89" cy="210" r="6" />
@@ -400,20 +358,19 @@
 
       <section class="section" id="commun">
         <div class="section-texte">
-          <p class="sur-titre">À quoi on joue ce soir ?</p>
-          <h2>Ce que vous avez en commun</h2>
+          <p class="sur-titre">What are we playing tonight?</p>
+          <h2>What you have in common</h2>
           <p>
-            Torii croise ta bibliothèque avec celle de tes amis et sort la liste des jeux
-            que vous possédez <em>tous les deux</em>. Fini les « tu l'as, toi ? » à
-            rallonge avant de trouver quoi lancer.
+            Torii cross-checks your library with your friends' and lists the games you
+            <em>both</em> own. No more endless “do you have this one?” before finding
+            something to launch.
           </p>
           <p class="fin">
-            Coche plusieurs amis d'un coup : tu obtiens ce que le groupe entier peut
-            lancer ensemble, ce soir, sans que personne n'ait à racheter quoi que ce soit.
+            Tick several friends at once: you get what the whole group can play together
+            tonight, without anyone buying anything.
           </p>
         </div>
 
-        <!-- Deux bibliothèques, et au milieu ce qu'on peut lancer ensemble. -->
         <div class="section-illu">
           <div class="illu-cadre">
             <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
@@ -437,9 +394,6 @@
               </g>
               <rect x="205" y="148" width="50" height="30" rx="8" class="accent" />
 
-              <!-- Les deux avatars sont posés SUR l'arc de leur cercle : flottant au-dessus,
-                   ils ressemblaient à deux points perdus au lieu de dire à qui appartient
-                   chaque bibliothèque. -->
               <circle class="cadre" cx="140" cy="68" r="21" />
               <circle class="cadre" cx="320" cy="68" r="21" />
               <g class="barre-faible">
@@ -454,21 +408,20 @@
 
       <section class="section inverse" id="fiche">
         <div class="section-texte">
-          <p class="sur-titre">Chaque jeu, sa page</p>
-          <h2>Plus qu'une vignette dans une grille</h2>
+          <p class="sur-titre">Every game gets a page</p>
+          <h2>More than a thumbnail in a grid</h2>
           <p>
-            Bannière, description <strong>en français</strong>, genre, développeur, taille
-            sur le disque, captures d'écran, succès débloqués, temps de jeu et nombre de
-            joueurs connectés en ce moment. Le tout sans quitter Torii.
+            Banner, description <strong>in your language</strong>, genre, developer, size
+            on disk, screenshots, unlocked achievements, playtime and how many people are
+            playing right now. All without leaving Torii.
           </p>
           <ul class="puces">
-            <li>Les amis qui possèdent le jeu, d'un coup d'œil</li>
-            <li>Succès Steam et progression</li>
-            <li>Un bouton « Jouer » qui lance le bon launcher tout seul</li>
+            <li>Which friends own the game, at a glance</li>
+            <li>Steam achievements and progress</li>
+            <li>A “Play” button that launches the right launcher on its own</li>
           </ul>
         </div>
 
-        <!-- La fiche : bannière, bouton Jouer, description, succès, amis qui l'ont. -->
         <div class="section-illu">
           <div class="illu-cadre">
             <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
@@ -507,17 +460,11 @@
         </div>
       </section>
 
-
-      <!--
-        Cette section porte les termes que les gens tapent — « regrouper ses jeux »,
-        « gestionnaire de bibliothèque », les noms des launchers — en decrivant simplement
-        ce que Torii fait. Aucun concurrent n'y est nomme.
-      -->
       <section class="comparaison" id="pourquoi">
-        <h2>Pourquoi regrouper ses jeux dans Torii</h2>
+        <h2>Why bring your games together in Torii</h2>
         <p class="intro">
-          Si tu cherches un gestionnaire de bibliothèque de jeux pour Windows, voilà en
-          clair ce que Torii apporte — à toi de juger ce qui compte pour toi.
+          If you're looking for a game library manager for Windows, here's plainly what
+          Torii brings — you decide what matters to you.
         </p>
         <div class="grille-comparaison">
           <article>
@@ -525,10 +472,10 @@
               <rect x="3" y="4" width="18" height="16" rx="2.5" />
               <path d="M3 9h18M9 9v11" />
             </svg>
-            <h3>Interface moderne, en français</h3>
+            <h3>A modern interface, in two languages</h3>
             <p>
-              Jaquettes en grand, thème clair et sombre, et des descriptions de jeux
-              réellement en français — pas une traduction automatique de l'anglais.
+              Big covers, light and dark themes, and game descriptions fetched in your
+              language from the stores themselves — not machine-translated.
             </p>
           </article>
           <article>
@@ -538,10 +485,10 @@
               <circle cx="12" cy="17.5" r="2.6" />
               <path d="M8.6 7h6.8M7.4 9.4l3.2 5.8M16.6 9.4l-3.2 5.8" />
             </svg>
-            <h3>Un réseau social intégré</h3>
+            <h3>A built-in social layer</h3>
             <p>
-              La présence de tes amis, les jeux en commun et la possibilité de lancer la
-              même partie, quel que soit le launcher de chacun.
+              Your friends' status, the games you share and the ability to join the same
+              game, whatever launcher each of you uses.
             </p>
           </article>
           <article>
@@ -550,10 +497,10 @@
               <circle cx="15.5" cy="15.5" r="5" />
               <path d="M19.2 19.2L22 22" />
             </svg>
-            <h3>Détection automatique hors launcher</h3>
+            <h3>Automatic detection outside launchers</h3>
             <p>
-              Les jeux qu'aucun launcher ne déclare sont repérés pendant que tu y joues,
-              puis identifiés et rangés tout seuls.
+              Games that no launcher reports are spotted while you play, then identified
+              and filed on their own.
             </p>
           </article>
           <article>
@@ -561,20 +508,20 @@
               <path d="M20.6 12.6l-8 8a2 2 0 0 1-2.8 0l-6.2-6.2a2 2 0 0 1-.6-1.4V5a2 2 0 0 1 2-2h7.9a2 2 0 0 1 1.4.6l6.3 6.2a2 2 0 0 1 0 2.8z" />
               <circle cx="7.6" cy="7.6" r="1.5" />
             </svg>
-            <h3>Comparateur de prix intégré</h3>
+            <h3>A built-in price comparison</h3>
             <p>
-              Les vendeurs comparés pour un même jeu, le plus bas prix historique en
-              regard, la wishlist Steam suivie et une alerte quand un titre y retombe.
+              Sellers compared for the same game, the all-time low alongside, your Steam
+              wishlist tracked and an alert when a title drops back to it.
             </p>
           </article>
           <article>
             <svg class="ico-carte" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M13.2 2.5L4.6 13.6h6.2l-1 7.9 8.6-11.1h-6.2z" />
             </svg>
-            <h3>Léger et natif</h3>
+            <h3>Light and native</h3>
             <p>
-              Quelques mégaoctets, un vrai exécutable Windows. Il surveille tes parties
-              sans peser sur la machine pendant que tu joues.
+              A few megabytes, a real Windows executable. It keeps track of your sessions
+              without weighing on your machine while you play.
             </p>
           </article>
           <article>
@@ -582,84 +529,90 @@
               <path d="M12 2.8l7.5 3v5.6c0 4.6-3.1 8.2-7.5 9.8-4.4-1.6-7.5-5.2-7.5-9.8V5.8z" />
               <path d="M9 11.8l2.2 2.2L15.2 10" />
             </svg>
-            <h3>Gratuit, sans publicité</h3>
+            <h3>Free, no ads</h3>
             <p>
-              Aucune publicité, aucune revente de données. Le compte n'est nécessaire que
-              pour la partie sociale, et reste facultatif.
+              No ads, no selling of data. An account is only needed for the social
+              features, and stays optional.
             </p>
           </article>
         </div>
       </section>
 
       <section class="faq" id="questions">
-        <h2>Questions fréquentes</h2>
+        <h2>Frequently asked questions</h2>
+
+        <details>
+          <summary>Is Torii available in English?</summary>
+          <p>
+            Yes. Torii follows your Windows language, and you can switch between English and
+            French at any time in Settings. Game descriptions and genres are fetched in the
+            language you pick. The region used for prices is a separate setting.
+          </p>
+        </details>
 
         <details class="appel-demo">
-          <summary>La démo du site, c'est vraiment l'application ?</summary>
+          <summary>Is the website demo really the app?</summary>
           <p>
-            Oui — le même code, compilé pour le navigateur. Seule la bibliothèque change :
-            celle de la démo est inventée. Tout ce qui doit parler à Windows (lancer un
-            jeu, lire tes launchers, se connecter à un compte) reste évidemment sans effet
-            dans un onglet. <a href="demo/?lang=fr">Ouvrir la démo</a>.
+            Yes — the same code, built for the browser. Only the library is different: the
+            demo's is made up. Anything that has to talk to Windows (launching a game,
+            reading your launchers, signing in to an account) does nothing in a browser tab,
+            of course. <a href="../demo/?lang=en">Open the demo</a>.
           </p>
         </details>
 
         <details>
-          <summary>Torii est-il gratuit ?</summary>
+          <summary>Is Torii free?</summary>
           <p>
-            Oui, entièrement, et sans publicité. Le téléchargement ne demande pas de compte.
+            Yes, completely, and without ads. Downloading it doesn't require an account.
           </p>
         </details>
 
         <details>
-          <summary>Quels launchers sont pris en charge ?</summary>
+          <summary>Which launchers are supported?</summary>
           <p>
-            Steam, Epic Games, GOG, Ubisoft Connect, EA, Battle.net et Riot Games. Les jeux
-            ajoutés à la main et ceux détectés hors launcher s'y ajoutent.
-            <a href="steam/">Ce que Torii lit dans Steam, en détail</a>.
+            Steam, Epic Games, GOG, Ubisoft Connect, EA, Battle.net and Riot Games — plus
+            games you add by hand and games detected outside any launcher.
+            <a href="steam/">What Torii reads from Steam, in detail</a>.
           </p>
         </details>
 
         <details>
-          <summary>Faut-il un compte pour utiliser Torii ?</summary>
+          <summary>Do I need an account to use Torii?</summary>
           <p>
-            Non. La bibliothèque fonctionne sans aucun compte Torii. Il n'est nécessaire que
-            pour la partie sociale — voir tes amis et leur présence — et reste facultatif.
+            No. The library works without any Torii account. You only need one for the
+            social features — seeing your friends and what they're playing — and it stays
+            optional.
           </p>
         </details>
 
         <details>
-          <summary>Windows affiche un avertissement à l'installation, est-ce normal ?</summary>
+          <summary>Windows shows a warning when installing — is that normal?</summary>
           <p>
-            Oui. Windows signale toute application dont l'auteur n'a pas payé de certificat
-            de signature, indépendamment du contenu du fichier. Pour continuer :
-            <strong>Informations complémentaires</strong> puis
-            <strong>Exécuter quand même</strong>. Le fichier est construit publiquement par
-            GitHub Actions à partir du code du dépôt.
+            Yes. Windows flags any app whose author hasn't paid for a code-signing
+            certificate, regardless of what the file contains. To continue: <strong>More
+            info</strong>, then <strong>Run anyway</strong>. The installer is built publicly
+            by GitHub Actions from the repository's source code.
           </p>
         </details>
 
         <details>
-          <summary>Torii fonctionne-t-il sur Mac ou Linux ?</summary>
+          <summary>Does Torii work on Mac or Linux?</summary>
           <p>
-            Pas aujourd'hui : Torii est une application Windows (10 et 11, 64 bits).
+            Not today: Torii is a Windows app (10 and 11, 64-bit).
           </p>
         </details>
 
         <details>
-          <summary>Mes données de jeu sont-elles envoyées quelque part ?</summary>
+          <summary>Is my gaming data sent anywhere?</summary>
           <p>
-            Rien ne part tant que tu ne l'as pas activé. La présence et le partage de
-            bibliothèque sont éteints par défaut, les jeux masqués n'en font jamais partie,
-            et aucun historique de ce que tu joues n'est conservé sur le serveur.
+            Nothing leaves your PC until you turn it on. Status sharing and library sharing
+            are off by default, hidden games are never included, and no history of what you
+            play is kept on the server.
           </p>
         </details>
       </section>
 
-      <!--
-        Même contenu que la FAQ visible, en données structurées : c'est ce qui permet aux
-        questions d'apparaître directement dans les résultats de recherche.
-      -->
+      <!-- Même contenu que la FAQ visible — sept questions de chaque côté. -->
       <script type="application/ld+json">
         {
           "@context": "https://schema.org",
@@ -667,70 +620,69 @@
           "mainEntity": [
             {
               "@type": "Question",
-              "name": "Peut-on essayer Torii sans l'installer ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui : une démo tourne directement dans le navigateur sur torii-app.fr. C'est la même application, posée sur une bibliothèque de jeux fictive. Seules les actions qui touchent à Windows — lancer un jeu, lire les launchers installés, connecter un compte — y sont sans effet." }
+              "name": "Is Torii available in English?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes. Torii follows your Windows language, and you can switch between English and French at any time in Settings. Game descriptions and genres are fetched in the language you pick. The region used for prices is a separate setting." }
             },
             {
               "@type": "Question",
-              "name": "Torii est-il gratuit ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui, entièrement, et sans publicité. Le téléchargement ne demande pas de compte." }
+              "name": "Is the website demo really the app?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes — the same code, built for the browser, on a made-up library. Anything that has to talk to Windows, such as launching a game, reading your launchers or signing in to an account, does nothing in a browser tab." }
             },
             {
               "@type": "Question",
-              "name": "Quels launchers sont pris en charge ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Steam, Epic Games, GOG, Ubisoft Connect, EA, Battle.net et Riot Games, ainsi que les jeux ajoutés à la main et ceux détectés hors launcher." }
+              "name": "Is Torii free?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes, completely, and without ads. Downloading it doesn't require an account." }
             },
             {
               "@type": "Question",
-              "name": "Faut-il un compte pour utiliser Torii ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Non. La bibliothèque fonctionne sans aucun compte. Un compte Torii n'est nécessaire que pour la partie sociale, et reste facultatif." }
+              "name": "Which launchers are supported?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Steam, Epic Games, GOG, Ubisoft Connect, EA, Battle.net and Riot Games, plus games added by hand and games detected outside any launcher." }
             },
             {
               "@type": "Question",
-              "name": "Windows affiche un avertissement à l'installation, est-ce normal ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Oui. Windows signale toute application dont l'auteur n'a pas payé de certificat de signature, indépendamment du contenu du fichier. Pour continuer : Informations complémentaires, puis Exécuter quand même. Le fichier est construit publiquement par GitHub Actions à partir du code du dépôt." }
+              "name": "Do I need an account to use Torii?",
+              "acceptedAnswer": { "@type": "Answer", "text": "No. The library works without any account. A Torii account is only needed for the social features, and stays optional." }
             },
             {
               "@type": "Question",
-              "name": "Torii fonctionne-t-il sur Mac ou Linux ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Pas aujourd'hui : Torii est une application Windows 10 et 11 en 64 bits." }
+              "name": "Windows shows a warning when installing — is that normal?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes. Windows flags any app whose author hasn't paid for a code-signing certificate, regardless of what the file contains. To continue, click More info, then Run anyway. The installer is built publicly by GitHub Actions from the repository's source code." }
             },
             {
               "@type": "Question",
-              "name": "Mes données de jeu sont-elles envoyées quelque part ?",
-              "acceptedAnswer": { "@type": "Answer", "text": "Rien ne part tant que ce n'est pas activé. La présence et le partage de bibliothèque sont éteints par défaut, les jeux masqués en sont toujours exclus, et aucun historique de jeu n'est conservé." }
+              "name": "Does Torii work on Mac or Linux?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Not today: Torii is a Windows 10 and 11 app, 64-bit." }
+            },
+            {
+              "@type": "Question",
+              "name": "Is my gaming data sent anywhere?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Nothing leaves your PC until you turn it on. Status sharing and library sharing are off by default, hidden games are never included, and no history of what you play is kept." }
             }
           ]
         }
       </script>
 
-      <!--
-        ⚠️ `appel-demo` marque TOUT ce qui propose la démo : cette section, la ligne sous
-        le bouton de téléchargement et la question correspondante de la FAQ. Sur un
-        téléphone, ces trois endroits disparaissent — voir la règle dans `styles.css`.
-      -->
       <section class="essai-libre appel-demo" id="demo">
         <div class="essai-texte">
-          <p class="sur-titre">Avant d'installer quoi que ce soit</p>
-          <h2>Essaie Torii sans l'installer</h2>
+          <p class="sur-titre">Before installing anything</p>
+          <h2>Try Torii without installing it</h2>
           <p>
-            La démo, c'est l'application elle-même, telle quelle, dans ton navigateur —
-            posée sur une bibliothèque inventée d'une trentaine de vrais jeux. Clique dans
-            la grille, ouvre une fiche, change de thème, fouille les amis.
+            The demo is the app itself, as is, in your browser — running on a made-up
+            library of about thirty real games. Click around the grid, open a game page,
+            switch themes, browse the friends list.
           </p>
           <p class="fin">
-            Ce qui touche à ta machine — lancer un jeu, connecter un compte — n'y fait
-            rien, forcément&nbsp;: il n'y a pas de machine derrière.
+            Anything that touches your machine — launching a game, connecting an account —
+            does nothing there, naturally: there's no machine behind it.
           </p>
-          <a class="cta" href="demo/?lang=fr">
+          <a class="cta" href="../demo/?lang=en">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
               <path d="M8 5.5v13l11-6.5z" />
             </svg>
-            Ouvrir la démo
+            Open the demo
           </a>
         </div>
 
-        <!-- L'application dans un onglet : c'est littéralement ce que propose le bouton. -->
         <div class="essai-illu">
           <div class="illu-cadre">
             <svg class="illu" viewBox="0 0 460 300" aria-hidden="true">
@@ -769,41 +721,35 @@
       </section>
 
       <section class="final">
-        <h2>Prêt à ranger ta bibliothèque ?</h2>
-        <p>Installation en une minute. Rien à configurer : Torii trouve tes jeux tout seul.</p>
+        <h2>Ready to tidy up your library?</h2>
+        <p>Installs in a minute. Nothing to set up: Torii finds your games on its own.</p>
         <a id="telecharger-bas" class="cta" href="https://github.com/tompoyeau/torii/releases/latest">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
             <path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5" />
             <path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
           </svg>
-          <span id="cta-texte-bas">Télécharger pour Windows</span>
+          <span id="cta-texte-bas">Download for Windows</span>
         </a>
         <p class="note">
-          Windows affichera un avertissement d'éditeur inconnu :
-          <strong>Informations complémentaires</strong> → <strong>Exécuter quand même</strong>.
+          Windows will show an unknown publisher warning:
+          <strong>More info</strong> → <strong>Run anyway</strong>.
         </p>
       </section>
     </main>
 
     <footer>
-      <img class="mark-mini" src="torii.svg" alt="" width="28" height="28" />
-      <p>Torii — <span id="pied-version">bibliothèque de jeux pour Windows</span></p>
-      <!--
-        🔑 « Nouveautés » menait au CHANGELOG sur GitHub — un lien qui faisait sortir du
-        site pour lire un fichier brut. La même chose existe maintenant ici, mise en page
-        et indexable : c'est la seule page dont le contenu change à chaque version, donc
-        la seule raison qu'un moteur a de repasser.
-      -->
+      <img class="mark-mini" src="../torii.svg" alt="" width="28" height="28" />
+      <p>Torii — <span id="pied-version">game library for Windows</span></p>
       <nav>
-        <a href="steam/">Avec Steam</a>
-        <a href="notes-de-version/">Notes de version</a>
-        <a href="https://github.com/tompoyeau/torii">Le code</a>
-        <a href="https://github.com/tompoyeau/torii/issues">Signaler un problème</a>
-        <a href="en/" hreflang="en" lang="en">English</a>
+        <a href="steam/">With Steam</a>
+        <a href="release-notes/">Release notes</a>
+        <a href="https://github.com/tompoyeau/torii">Source code</a>
+        <a href="https://github.com/tompoyeau/torii/issues">Report an issue</a>
+        <a href="../" hreflang="fr" lang="fr">Français</a>
       </nav>
     </footer>
 
-    <script src="telechargement.js"></script>
-    <script src="animations.js"></script>
+    <script src="../telechargement.js"></script>
+    <script src="../animations.js"></script>
   </body>
 </html>

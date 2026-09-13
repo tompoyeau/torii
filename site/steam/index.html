@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--
+      RÉFÉRENCEMENT. Cette page vise une question précise, que l'accueil ne peut pas
+      viser sans se disperser : « comment voir mes jeux Steam ailleurs que dans Steam ».
+      Le titre porte donc la formulation de la question, pas le nom du produit.
+
+      🔑 UNE PAGE PAR INTENTION, PAS PAR MOT-CLÉ. Ce qui justifie cette page, c'est
+      qu'elle répond vraiment — y compris sur ce que Torii ne sait PAS faire avec Steam
+      (la section « ce que Torii ne fait pas »). Une page qui répéterait l'accueil en
+      remplaçant « tes launchers » par « Steam » serait du remplissage, et se ferait
+      traiter comme tel.
+    -->
+    <title>Voir tous ses jeux Steam, Epic et GOG au même endroit — Torii</title>
+    <meta
+      name="description"
+      content="Torii lit ta bibliothèque Steam — jeux installés, jeux possédés, partage familial, temps de jeu et amis — et l'affiche avec tes jeux Epic, GOG, Ubisoft, EA et Battle.net dans une seule liste. Gratuit, en français, pour Windows."
+    />
+    <link rel="canonical" href="https://torii-app.fr/steam/" />
+    <!-- Réciproques de celles de `en/steam/index.html` : voir l'accueil pour le pourquoi. -->
+    <link rel="alternate" hreflang="fr" href="https://torii-app.fr/steam/" />
+    <link rel="alternate" hreflang="en" href="https://torii-app.fr/en/steam/" />
+    <link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/steam/" />
+    <link rel="icon" type="image/png" href="../favicon.png" />
+    <link rel="stylesheet" href="../styles.css" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://torii-app.fr/steam/" />
+    <meta property="og:title" content="Ta bibliothèque Steam, avec tout le reste autour" />
+    <meta
+      property="og:description"
+      content="Jeux installés, jeux possédés, partage familial, temps de jeu, amis — réunis avec Epic, GOG, Ubisoft, EA et Battle.net."
+    />
+    <meta property="og:image" content="https://torii-app.fr/captures/bibliotheque.jpg" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Accueil", "item": "https://torii-app.fr/" },
+          { "@type": "ListItem", "position": 2, "name": "Avec Steam", "item": "https://torii-app.fr/steam/" }
+        ]
+      }
+    </script>
+  </head>
+
+  <body>
+    <div class="barre-site">
+      <a class="marque" href="../">
+        <img src="../torii.svg" alt="" width="30" height="30" />
+        Torii
+      </a>
+      <nav>
+        <a href="../steam/" class="actif" aria-current="page">Avec Steam</a>
+        <a href="../notes-de-version/">Notes de version</a>
+        <a href="https://github.com/tompoyeau/torii">Le code</a>
+        <a href="../en/steam/" hreflang="en" lang="en">English</a>
+      </nav>
+    </div>
+
+    <main class="page">
+      <div class="page-entete">
+        <p class="sur-titre">Torii et Steam</p>
+        <h1>Ta bibliothèque Steam, et tout le reste avec</h1>
+        <p class="chapeau">
+          Steam sait très bien montrer les jeux Steam. Le problème commence au jeu
+          d'à côté : celui qui est sur Epic, celui offert sur GOG, celui que ton frère
+          partage depuis son compte, celui que tu as installé sans launcher. Torii lit
+          Steam en entier et pose le résultat à côté du reste, dans une seule liste.
+        </p>
+      </div>
+
+      <h2>Ce que Torii lit dans Steam</h2>
+      <p>
+        Deux sources bien distinctes, et elles ne demandent pas la même chose. Ce qui est
+        <strong>sur ton disque</strong> se lit sans rien connecter du tout ; ce que tu
+        <strong>possèdes</strong> suppose de relier ton compte.
+      </p>
+
+      <div class="cadre-tableau">
+        <table>
+          <thead>
+            <tr>
+              <th>Ce que tu obtiens</th>
+              <th>D'où ça vient</th>
+              <th>Ce qu'il faut</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Jeux installés, taille sur le disque, dernière partie</td>
+              <td>Les fichiers de Steam sur ton PC</td>
+              <td>Rien — Steam installé suffit</td>
+            </tr>
+            <tr>
+              <td>Jeux possédés, même non installés</td>
+              <td>Ton compte Steam</td>
+              <td>Compte relié, profil « Détails du jeu » public</td>
+            </tr>
+            <tr>
+              <td>Jeux de la bibliothèque familiale</td>
+              <td>Ton compte Steam</td>
+              <td>Idem</td>
+            </tr>
+            <tr>
+              <td>Temps de jeu par jeu</td>
+              <td>Ton compte Steam</td>
+              <td>Idem</td>
+            </tr>
+            <tr>
+              <td>Liste d'envies</td>
+              <td>Ton compte Steam</td>
+              <td>Idem</td>
+            </tr>
+            <tr>
+              <td>Amis, et ce qu'ils jouent</td>
+              <td>Ton compte Steam</td>
+              <td>Liste d'amis non privée</td>
+            </tr>
+            <tr>
+              <td>Jaquettes, description et genre, en français</td>
+              <td>Le Steam Store</td>
+              <td>Rien</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Un jeu se lance depuis Torii comme depuis Steam : le clic passe la main à Steam,
+        qui fait ce qu'il a toujours fait. Torii ne se met pas entre les deux et ne
+        remplace pas le client — il n'en a ni l'ambition ni les droits.
+      </p>
+
+      <h2>Posséder un jeu et l'avoir installé sont deux choses</h2>
+      <p>
+        C'est la différence qui rend la question intéressante. Beaucoup d'outils se
+        contentent de lister ce qui occupe de la place sur le disque : tu retrouves les
+        dix jeux installés, pas les trois cents achetés en solde et jamais lancés.
+      </p>
+      <p>
+        Torii affiche les deux, et le dit. Un filtre <strong>Installés</strong> montre ce
+        qui est prêt à jouer ; sans lui, tu vois ta collection entière, tous magasins
+        confondus. C'est accessoirement la seule façon de répondre à « est-ce que je l'ai
+        déjà, celui-là ? » avant de le racheter ailleurs.
+      </p>
+
+      <h2>Toute la bibliothèque familiale, sans confusion sur qui possède quoi</h2>
+      <p>
+        Les jeux partagés par ta famille Steam apparaissent avec les tiens, marqués
+        <strong>Famille Steam</strong>. Ils ne sont pas comptés comme des jeux que tu
+        possèdes, et c'est délibéré : une copie familiale reste une seule licence, et deux
+        personnes ne peuvent pas y jouer en même temps. Les présenter comme des jeux
+        possédés reviendrait à mentir sur ce qu'on peut lancer ce soir.
+      </p>
+
+      <h2>Le même jeu acheté deux fois ne s'affiche qu'une fois</h2>
+      <p>
+        Beaucoup de jeux finissent dans deux bibliothèques — offert sur Epic, soldé sur
+        Steam, repris dans un bundle GOG. Torii les rapproche par leur titre et n'en garde
+        qu'une carte, qui indique les magasins où tu l'as. Tu choisis d'où le lancer.
+      </p>
+
+      <h2>Tes amis Steam, à côté de ceux qui n'y sont pas</h2>
+      <p>
+        Torii reprend ta liste d'amis Steam et affiche qui joue à quoi. L'intérêt n'est pas
+        de refaire ce que Steam fait déjà : c'est que cette liste se mélange à celle de tes
+        amis venus d'ailleurs. Une vue <strong>En commun</strong> croise ta bibliothèque
+        avec la leur, tous launchers confondus, pour répondre à la seule question qui
+        compte un soir de semaine — à quoi on peut jouer ensemble.
+      </p>
+      <p>
+        Cette partie est <strong>facultative et éteinte par défaut</strong>. Rien de ta
+        bibliothèque ne quitte ton PC tant que tu ne l'as pas activée, les jeux masqués
+        n'en font jamais partie, et aucun historique de ce que tu joues n'est conservé.
+      </p>
+
+      <h2>Ce que Torii ne fait pas avec Steam</h2>
+      <p>
+        Autant le dire avant l'installation plutôt qu'après.
+      </p>
+      <ul class="puces">
+        <li>
+          <strong>Il n'installe ni ne désinstalle à ta place.</strong> Ces actions
+          appartiennent au client Steam ; Torii ouvre Steam et le laisse faire.
+        </li>
+        <li>
+          <strong>Il ne t'inscrit rien sur ta liste d'envies Steam.</strong> L'interface
+          qui permettait de le faire depuis l'extérieur n'existe plus. Torii lit ta liste,
+          il ne l'écrit pas.
+        </li>
+        <li>
+          <strong>Il ne voit rien d'un profil privé.</strong> Si « Détails du jeu » est
+          réglé sur privé, tes jeux possédés ne remontent pas — les jeux installés, si,
+          puisqu'ils sont sur ton disque.
+        </li>
+        <li>
+          <strong>Il ne touche ni aux cartes à collectionner ni à l'inventaire.</strong>
+          Torii affiche les succès d'un jeu sur sa fiche ; pour le reste, Steam est déjà là.
+        </li>
+        <li>
+          <strong>Ce n'est pas un client Steam.</strong> Pas de boutique, pas de forums,
+          pas de chat. Steam reste installé et continue de faire son travail.
+        </li>
+      </ul>
+
+      <h2>Questions fréquentes</h2>
+
+      <section class="faq">
+        <details>
+          <summary>Faut-il donner son mot de passe Steam à Torii ?</summary>
+          <p>
+            Non. La connexion se fait dans une fenêtre qui ouvre la page de connexion de
+            Steam elle-même : tu t'identifies chez Steam, comme dans un navigateur. Torii
+            ne voit pas ton mot de passe et ne le stocke nulle part.
+          </p>
+        </details>
+
+        <details>
+          <summary>Est-ce que mes jeux Steam apparaissent sans connecter mon compte ?</summary>
+          <p>
+            Ceux qui sont installés, oui, immédiatement : Torii les lit dans les fichiers
+            de Steam sur ton disque. Pour voir les jeux que tu possèdes sans les avoir
+            installés, le temps de jeu et les amis, il faut relier le compte.
+          </p>
+        </details>
+
+        <details>
+          <summary>Mes jeux possédés ne remontent pas, pourquoi ?</summary>
+          <p>
+            Presque toujours la confidentialité du profil. Sur ta page Steam :
+            <strong>Modifier le profil</strong> → <strong>Confidentialité</strong> →
+            <strong>Détails du jeu</strong> doit être sur <em>Public</em>. C'est ce
+            réglage-là, pas celui du profil lui-même, qui rend la liste lisible.
+          </p>
+        </details>
+
+        <details>
+          <summary>Torii remplace-t-il Steam ?</summary>
+          <p>
+            Non, et ce n'est pas le but. Steam télécharge, met à jour et lance les jeux ;
+            Torii donne la vue d'ensemble qu'aucun launcher ne peut donner, puisque chacun
+            ne connaît que ses propres jeux. Les deux restent installés.
+          </p>
+        </details>
+
+        <details>
+          <summary>Et si je n'ai pas Steam, seulement Epic ou GOG ?</summary>
+          <p>
+            Ça marche pareil. Steam n'est pas nécessaire : Epic, GOG, Ubisoft Connect, EA,
+            Battle.net et Riot sont pris en charge de la même façon, et les jeux installés
+            sans aucun launcher sont détectés sur le disque.
+          </p>
+        </details>
+      </section>
+
+      <!--
+        Même contenu que la FAQ visible. ⚠️ Si une question change au-dessus, elle doit
+        changer ici aussi : un balisage qui ne correspond pas au texte affiché est une
+        raison d'être ignoré, parfois de se faire sanctionner.
+      -->
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Faut-il donner son mot de passe Steam à Torii ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Non. La connexion se fait dans une fenêtre qui ouvre la page de connexion de Steam elle-même : on s'identifie chez Steam, comme dans un navigateur. Torii ne voit pas le mot de passe et ne le stocke nulle part." }
+            },
+            {
+              "@type": "Question",
+              "name": "Est-ce que mes jeux Steam apparaissent sans connecter mon compte ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Les jeux installés, oui, immédiatement : Torii les lit dans les fichiers de Steam sur le disque. Pour voir les jeux possédés mais non installés, le temps de jeu et les amis, il faut relier le compte Steam." }
+            },
+            {
+              "@type": "Question",
+              "name": "Mes jeux Steam possédés ne remontent pas, pourquoi ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Presque toujours la confidentialité du profil. Dans Steam : Modifier le profil, puis Confidentialité, puis Détails du jeu, qui doit être réglé sur Public. C'est ce réglage précis, et non celui du profil lui-même, qui rend la liste des jeux lisible." }
+            },
+            {
+              "@type": "Question",
+              "name": "Torii remplace-t-il Steam ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Non. Steam télécharge, met à jour et lance les jeux ; Torii donne la vue d'ensemble qu'aucun launcher ne peut donner, puisque chacun ne connaît que ses propres jeux. Les deux restent installés." }
+            },
+            {
+              "@type": "Question",
+              "name": "Et si je n'ai pas Steam, seulement Epic ou GOG ?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Steam n'est pas nécessaire. Epic Games, GOG, Ubisoft Connect, EA, Battle.net et Riot sont pris en charge de la même façon, et les jeux installés sans aucun launcher sont détectés sur le disque." }
+            }
+          ]
+        }
+      </script>
+
+      <section class="rappel">
+        <h2>Réunis tes jeux Steam et les autres</h2>
+        <p>Gratuit, sans publicité, sans compte obligatoire. Windows 10 et 11.</p>
+        <a class="cta" href="https://github.com/tompoyeau/torii/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+            <path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5" />
+            <path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
+          </svg>
+          Télécharger Torii
+        </a>
+        <p class="sous-cta essai appel-demo">
+          <a class="cta-secondaire" href="../demo/?lang=fr">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M8 5.5v13l11-6.5z" />
+            </svg>
+            Essayer la démo dans le navigateur
+          </a>
+          <span class="dim">sans rien installer</span>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <img class="mark-mini" src="../torii.svg" alt="" width="28" height="28" />
+      <p>Torii — bibliothèque de jeux pour Windows</p>
+      <nav>
+        <a href="../">Accueil</a>
+        <a href="../notes-de-version/">Notes de version</a>
+        <a href="https://github.com/tompoyeau/torii">Le code</a>
+        <a href="https://github.com/tompoyeau/torii/issues">Signaler un problème</a>
+      </nav>
+    </footer>
+  </body>
+</html>

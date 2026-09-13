@@ -459,6 +459,215 @@ footer nav a:hover { color: var(--text); text-decoration: underline; }
   }
 }
 
+/* --- Lien vers l'autre langue (accueil) ---------------------------------------
+   L'accueil n'a pas de barre de navigation : le lien flotte en haut à droite, discret.
+   🔑 `position: absolute` et pas `fixed` : il reste en haut de page au lieu de suivre
+   le défilement, où il recouvrirait la capture et les sections. */
+.bascule-langue {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.bascule-langue:hover { color: var(--text); border-color: var(--border-strong); }
+
+/* ============================================================================
+   PAGES SECONDAIRES (/notes-de-version/, /steam/)
+   ============================================================================
+
+   L'accueil vend le produit ; ces pages-là répondent à une question précise. Elles
+   n'ont donc ni capture qui déborde, ni dessins, ni mise en page sur deux colonnes :
+   une colonne de texte lisible, et le bouton de téléchargement au bout.
+
+   🔑 ELLES PARTAGENT CETTE FEUILLE, volontairement. Trois fichiers CSS pour trois
+   pages, c'est trois endroits où la couleur d'accent peut diverger le jour où on la
+   change. Tout ce qui suit est préfixé, rien ici ne touche à l'accueil. */
+
+/* --- Barre de navigation des pages secondaires ------------------------------
+   L'accueil n'en a pas : on y arrive par le haut, le logo est déjà dans l'en-tête.
+   Sur une page interne, il faut un chemin de retour visible — sans quoi le seul
+   moyen de revenir au téléchargement est le bouton « précédent » du navigateur. */
+.barre-site {
+  max-width: var(--large);
+  margin: 0 auto;
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.barre-site .marque {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.barre-site .marque img { width: 30px; height: 30px; border-radius: 9px; }
+.barre-site nav { margin-left: auto; display: flex; gap: 22px; align-items: center; }
+.barre-site nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+.barre-site nav a:hover { color: var(--text); }
+.barre-site nav a.actif { color: var(--text); }
+
+/* --- Colonne de lecture ------------------------------------------------------
+   66 caractères par ligne environ : au-delà, l'œil perd le début de la ligne
+   suivante. C'est la seule raison de cette largeur, bien plus étroite que --large. */
+.page {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 40px 24px 96px;
+}
+.page-entete { margin-bottom: 56px; }
+.page-entete .sur-titre { margin-bottom: 10px; }
+.page-entete h1 {
+  font-size: clamp(2rem, 4.6vw, 3rem);
+  margin: 0 0 18px;
+}
+.page-entete .chapeau {
+  font-size: 1.16rem;
+  color: var(--text-dim);
+  margin: 0;
+  max-width: 62ch;
+}
+.page h2 {
+  font-size: 1.62rem;
+  margin: 54px 0 14px;
+}
+.page h3 {
+  font-size: 1.16rem;
+  margin: 32px 0 10px;
+}
+.page p { color: var(--text-dim); margin: 0 0 16px; }
+.page strong { color: var(--text); font-weight: 620; }
+.page code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+/* --- Tableau (pages de plateforme) ------------------------------------------
+   ⚠️ `overflow-x` sur l'enveloppe, pas sur le tableau : un tableau qui déborde
+   pousse toute la page vers la droite sur un téléphone, et c'est le `body` entier
+   qui se met à défiler de travers. */
+.cadre-tableau { overflow-x: auto; margin: 0 0 22px; }
+.page table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: 0.97rem;
+}
+.page th, .page td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.page th { color: var(--text); font-weight: 620; }
+.page td { color: var(--text-dim); }
+.page tr:last-child td { border-bottom: none; }
+
+/* --- Notes de version --------------------------------------------------------
+   Une version = un bloc. La pastille de version reste visible pendant qu'on lit la
+   liste : sur une page de 35 versions, savoir où l'on est compte plus que le style. */
+.notes { display: grid; gap: 18px; }
+.note-version {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 26px 28px;
+}
+.note-version > header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.note-version h2 {
+  margin: 0;
+  font-size: 1.34rem;
+  scroll-margin-top: 24px;
+}
+.note-version h2 a { color: inherit; text-decoration: none; }
+.note-version h2 a:hover { color: var(--accent); }
+.note-version time { color: var(--text-faint); font-size: 0.92rem; }
+.note-version .etiquette {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+.note-version ul { margin: 14px 0 0; padding: 0; list-style: none; }
+.note-version li {
+  color: var(--text-dim);
+  padding-left: 22px;
+  position: relative;
+  margin-bottom: 14px;
+}
+.note-version li:last-child { margin-bottom: 0; }
+.note-version li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+/* --- Renvoi vers le téléchargement, en fin de page secondaire ---------------- */
+.rappel {
+  margin-top: 64px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 34px 30px;
+  text-align: center;
+}
+.rappel h2 { margin: 0 0 10px; font-size: 1.5rem; }
+.rappel p { margin: 0 0 22px; }
+
+/* ⚠️ Sur un téléphone, `margin-left: auto` pousse les trois liens contre le logo et les
+   fait passer à la ligne au milieu d'un intitulé (« Avec / Steam »). La barre passe donc
+   en deux rangs : la marque, puis la navigation sur toute la largeur. */
+@media (max-width: 640px) {
+  .barre-site {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 16px 20px;
+  }
+  .barre-site nav {
+    margin-left: 0;
+    width: 100%;
+    gap: 18px;
+    font-size: 0.9rem;
+  }
+  .note-version { padding: 22px 20px; }
+  .page { padding: 24px 20px 72px; }
+  .page-entete { margin-bottom: 40px; }
+}
+
 /* --- La démo ne se propose pas sur un téléphone --------------------------------
    La démo, c'est l'interface d'une application de bureau — barre latérale, grille de
    jaquettes, fiche sur deux colonnes — compilée pour le navigateur. Sur un écran de

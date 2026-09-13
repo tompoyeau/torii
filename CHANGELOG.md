@@ -2,7 +2,8 @@
 
 Les notes de chaque version sont extraites automatiquement par la CI (section
 `## X.Y.Z` correspondant au tag) et affichées dans la bannière de mise à jour.
-Ajoute une section en tête avant de tagger une nouvelle version.
+Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
+dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
 ## 0.20.3
 - **Overwatch 2 retrouve sa fiche : jaquette, description, captures et genre.** Les deux versions précédentes avaient chacune écarté une mauvaise réponse sans réussir à trouver la bonne. La raison : la base de données ne connaît ce jeu que sous le nom « Overwatch », et sa recherche ne remonte jamais cette fiche-là quand on lui demande « Overwatch 2 » — elle ne renvoie que des extensions. Torii demande donc maintenant explicitement les autres noms d'un jeu, au lieu d'espérer les voir passer. Les jeux restés sans fiche pour cette raison se rattrapent tout seuls au prochain lancement.

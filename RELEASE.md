@@ -76,6 +76,10 @@ Get-Content $HOME\.tauri\torii-updater.key -Raw | Set-Clipboard
 2. **Ajouter une section en tête de `CHANGELOG.md`** avec le numéro exact
    (`## 0.4.0`) et la liste des changements. La CI l'extrait automatiquement pour
    en faire le corps de la Release **et** les notes affichées dans la bannière.
+   **Ajouter la même section, traduite, en tête de `CHANGELOG.en.md`** — même titre
+   `## X.Y.Z`. Elle n'est pas lue par la CI, seulement par `npm run build:notes`, qui
+   génère la page anglaise du site. Oubliée, la version y apparaît en français avec la
+   mention « Not yet translated », et la génération l'annonce en console.
 
 3. Commit + tag + push :
 

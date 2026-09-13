@@ -1,5 +1,9 @@
 # Torii ⛩️
 
+**[Télécharger pour Windows](https://github.com/tompoyeau/torii/releases/latest)** ·
+**[Essayer la démo dans le navigateur](https://torii-app.fr/demo/)** ·
+**[torii-app.fr](https://torii-app.fr)**
+
 > Nom de code du dépôt : `ludo` (crate Rust, package npm). Le produit s'appelle **Torii**,
 > en référence aux portails 鳥居 des sanctuaires japonais — la porte d'entrée vers tes jeux.
 

@@ -1,9 +1,68 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<!--
+  Les pages qui existent dans les deux langues déclarent leurs équivalents (`xhtml:link`).
+  🔑 Même règle que dans les `<head>` : chaque URL liste TOUTES les versions, elle-même
+  comprise. Une déclaration à sens unique est ignorée.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://torii-app.fr/</loc>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://torii-app.fr/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://torii-app.fr/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/" />
+  </url>
+  <url>
+    <loc>https://torii-app.fr/en/</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://torii-app.fr/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://torii-app.fr/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/" />
+  </url>
+  <!--
+    Les notes de version changent à chaque release : ce sont les seules pages du site dont
+    le contenu bouge vraiment, d'où `weekly`. `lastmod` est à remettre à jour en même
+    temps que les pages (`npm run build:notes`), dans les deux langues.
+  -->
+  <url>
+    <loc>https://torii-app.fr/notes-de-version/</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://torii-app.fr/en/release-notes/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/release-notes/" />
+  </url>
+  <url>
+    <loc>https://torii-app.fr/en/release-notes/</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://torii-app.fr/en/release-notes/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/release-notes/" />
+  </url>
+  <url>
+    <loc>https://torii-app.fr/steam/</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://torii-app.fr/steam/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://torii-app.fr/en/steam/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/steam/" />
+  </url>
+  <url>
+    <loc>https://torii-app.fr/en/steam/</loc>
+    <lastmod>2026-09-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://torii-app.fr/steam/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://torii-app.fr/en/steam/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://torii-app.fr/en/steam/" />
   </url>
 </urlset>

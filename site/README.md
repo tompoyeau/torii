@@ -92,7 +92,7 @@ portaient de vrais pseudonymes avant la mise en ligne de la démo :
 
 | Fichier | Contenu |
 |---|---|
-| `src/data/games.ts` | `MOCK_GAMES` — vrais jeux, vraies jaquettes (CDN Steam), stats inventées |
+| `src/data/games.ts` | `mockGames()` — vrais jeux, vraies jaquettes (CDN Steam), stats inventées |
 | `src/composables/useFriends.ts` | `MOCK_FRIENDS` — amis fictifs, avatars générés |
 | `src/composables/useFriendsCommon.ts` | `MOCK` — les mêmes amis, vue « en commun » |
 
@@ -103,6 +103,111 @@ démo, elle, les montre toujours.)
 
 La coquille `index.html` (racine du dépôt) porte un `noindex` : une application monopage
 n'offre qu'un `<div>` vide à un robot, et serait indexée comme une page sans contenu.
+
+## La version anglaise (`en/`)
+
+| Français | Anglais |
+|---|---|
+| `index.html` | `en/index.html` |
+| `steam/index.html` | `en/steam/index.html` |
+| `notes-de-version/` | `en/release-notes/` (générées, voir plus bas) |
+
+⚠️ **À METTRE EN LIGNE AVEC LA VERSION DE TORII QUI PARLE ANGLAIS, PAS AVANT.** Le bouton
+télécharge la dernière release : tant qu'elle est française, un visiteur de la page anglaise
+installe une application qu'il ne peut pas lire. Même chose pour la démo reconstruite
+(`demo/`), qui passe en anglais sur un navigateur anglais.
+
+🔑 **LES DEUX VERSIONS SONT DEUX COPIES, À TENIR EN PHASE.** Même structure, mêmes
+identifiants (`telechargement.js` et `animations.js` s'appuient dessus), mêmes dessins.
+Une section ajoutée d'un côté doit l'être de l'autre. Pas de gabarit commun : le site n'a
+pas de build, et un moteur de gabarits pour deux pages coûterait plus qu'il ne rapporte.
+
+🔑 **`hreflang` RÉCIPROQUE, OU RIEN.** Chaque page d'une paire liste les deux versions et
+`x-default` (qui vise l'anglais), à l'identique des deux côtés — dans le `<head>` et dans
+`sitemap.xml`. Une annonce à sens unique est ignorée par les moteurs.
+
+⚠️ **PAS DE REDIRECTION SELON LA LANGUE DU NAVIGATEUR.** Les robots d'indexation se
+présentent souvent en anglais : rediriger `/` vers `/en/` rendrait la page française
+invisible pour eux. Un lien « English » / « Français » est proposé, jamais imposé.
+
+- **`telechargement.js` lit `<html lang>`** pour écrire le bouton (« Download Torii 0.20.3 »,
+  « released September 9, 2026 ») — la langue de la page, pas celle du navigateur.
+- **La démo s'ouvre avec `?lang=fr` depuis les pages françaises, `?lang=en` depuis les
+  anglaises.** Sans paramètre, elle démarre en anglais — la langue par défaut de
+  l'application, quel que soit le navigateur. ⚠️ Un lien vers `demo/` sans `?lang=fr` sur
+  une page française enverrait donc ses visiteurs sur une démo anglaise. Le paramètre ne
+  s'enregistre pas ; un choix fait dans les Paramètres de la démo passe devant.
+- **Une adresse inconnue sous `/en/` tombe sur l'accueil français** : `.htaccess` renvoie
+  toutes les 404 vers `/index.html`. Un `ErrorDocument` conditionnel (`<If>`) le réglerait, mais une
+  directive mal acceptée par l'hébergement casse le site entier — pas tenté sans pouvoir
+  le vérifier sur OVH.
+
+### La capture anglaise
+
+`captures/library-en.jpg` est prise **sur la démo**, pas sur une vraie bibliothèque : rien à
+anonymiser, et elle se refait en une commande (`scripts/capture-demo.mjs`, mode d'emploi en
+tête du fichier). Même taille que la française (1700×1020), JPEG qualité 82.
+
+⚠️ L'ordre de la bibliothèque fictive est réglé pour elle : le jeu mis en avant est le plus
+récent, et VALORANT ou Minecraft (sans jaquette publique) donnaient un bandeau uni et des
+cartes vides en tête. Voir le commentaire de `mockGames()` dans `src/data/games.ts`.
+
+## Les pages secondaires (`steam/`, `notes-de-version/`)
+
+L'accueil vend le produit ; ces deux pages répondent à une question précise que l'accueil
+ne peut pas viser sans se disperser. Elles partagent `styles.css` — tout ce qu'elles
+utilisent y est regroupé sous « PAGES SECONDAIRES », et rien n'y touche à l'accueil.
+
+🔑 **Ce sont des dossiers, pas des fichiers `.html`.** `steam/index.html` donne l'URL
+`torii-app.fr/steam/` sans une ligne de réécriture dans `.htaccess`. Les liens internes
+portent tous la barre finale : sans elle, Apache répond par une redirection avant de
+servir la page.
+
+| Page | Ce qu'elle vise | Écrite |
+|---|---|---|
+| `steam/` | « voir mes jeux Steam ailleurs que dans Steam » | à la main |
+| `notes-de-version/` | ce qui change à chaque version | **générée** |
+
+⚠️ **Les deux pages de notes sont générées — ne pas les modifier à la main.**
+
+| Page | Source |
+|---|---|
+| `notes-de-version/index.html` | `CHANGELOG.md` (fait foi) |
+| `en/release-notes/index.html` | `CHANGELOG.en.md` (traduction) |
+
+```bash
+npm run build:notes     # → les deux pages, à envoyer par FTP
+```
+
+**À relancer après chaque ajout aux deux changelogs, avant l'envoi FTP.** Les dates
+viennent de l'API GitHub (un appel) ; sans réseau les pages se génèrent quand même, sans
+les dates.
+
+🔑 **Une version oubliée dans `CHANGELOG.en.md` ne disparaît pas de la page anglaise** :
+elle y figure avec son texte français, balisé `lang="fr"` et étiqueté « Not yet
+translated », et la génération l'annonce en console. Masquer une release aux anglophones
+serait pire qu'une note en français. Vérifié en retirant temporairement la 0.20.3.
+
+⚠️ Les libellés d'interface cités dans les notes anglaises (« No launcher », « Torii
+network », « Report a problem »…) sont **ceux de l'application anglaise** : un utilisateur
+doit retrouver le bouton dont parle la note.
+
+🔑 **Pourquoi générer, alors que le bouton de téléchargement, lui, interroge l'API dans le
+navigateur.** Parce que les deux ne jouent pas le même rôle. Le bouton affiche une donnée
+d'une ligne, qu'aucun moteur n'a besoin de lire. Cette page-là n'existe **que** pour son
+contenu : trente-cinq versions de prose française, soit la seule partie du site qui change
+pour de bon et donne à un robot une raison de repasser. Un texte injecté par JavaScript
+dépend du bon vouloir de celui qui passe — et un aperçu de lien partagé n'en voit jamais
+rien. Il va donc dans le HTML, en dur.
+
+⚠️ La section « ce que Torii ne fait pas » de `steam/` n'est pas de la modestie : c'est ce
+qui distingue une page qui répond d'une page qui répète l'accueil en remplaçant « tes
+launchers » par « Steam ». Si elle disparaît, la page devient du remplissage et sera
+traitée comme tel.
+
+⚠️ **La FAQ de `steam/` est dupliquée en JSON-LD dans la même page.** Les deux doivent
+dire la même chose : un balisage qui ne correspond pas au texte affiché est une raison
+d'être ignoré, parfois de se faire sanctionner. Cinq questions des deux côtés, vérifié.
 
 ## Une seule capture, et sept dessins
 
