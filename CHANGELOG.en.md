@@ -5,6 +5,10 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.21.1
+- **The language you pick sticks after a restart.** Switching to French or to “Follow Windows”, then clicking “Restart now”, could bring Torii back in English: on startup, it sometimes read a setting from before the change. Your choice is now kept somewhere that can't fall behind. If it happened to you, pick your language one last time: it will stay.
+- **“Follow Windows” gives a French Windows euros.** When Windows reported the language without the country, Torii fell back to US prices. It now goes by the language's country.
+
 ## 0.21.0
 - **Torii speaks English.** The whole interface is translated, down to error messages, the menu of the icon next to the clock and the banner telling you a friend is playing. Pick the language in Settings → General: Français, English, or follow Windows.
 - **If you were already using Torii, nothing changes for you**: it stays in French, with French prices. Only new installations start in English — the language the most people can read.

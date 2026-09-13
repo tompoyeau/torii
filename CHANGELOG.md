@@ -5,6 +5,10 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.21.1
+- **La langue choisie tient après le redémarrage.** Passer en français ou sur « Suivre Windows », puis cliquer sur « Redémarrer maintenant », pouvait ramener Torii en anglais : au démarrage, il relisait parfois un réglage antérieur au changement. Le choix est maintenant retenu à un endroit qui ne peut plus prendre de retard. Si c'est arrivé chez toi, choisis ta langue une dernière fois : elle restera.
+- **« Suivre Windows » donne bien des euros à un Windows français.** Quand Windows annonçait la langue sans le pays, Torii retombait sur les prix américains. Il se fie désormais au pays de la langue.
+
 ## 0.21.0
 - **Torii parle anglais.** Toute l'interface est traduite, jusqu'aux messages d'erreur, au menu de l'icône près de l'horloge et au bandeau qui annonce qu'un ami joue. La langue se choisit dans Paramètres → Paramètres généraux : Français, English, ou suivre celle de Windows.
 - **Si tu utilisais déjà Torii, rien ne change pour toi** : il reste en français, avec les prix français. Seules les nouvelles installations démarrent en anglais — la langue que le plus de monde pourra lire.
