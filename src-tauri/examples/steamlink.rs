@@ -28,20 +28,25 @@ fn main() {
     social::verify(&dir, &mail, &code).unwrap();
     println!("départ        : {}", etat(&dir));
 
+    // ⚠️ Le dernier argument est `share_library`, et il reste `None` dans les quatre
+    // appels : cet exemple ne parle que du lien Steam, et `None` veut dire « je ne
+    // touche pas à ce champ ». Y mettre une valeur ferait mentir le dernier appel, dont
+    // tout le propos est qu'on peut modifier un champ sans en déranger un autre.
+
     // Activer : le bouton envoie le SteamID ET la découvrabilité.
-    social::set_profile(&dir, None, Some("76561198258753323".into()), Some(true)).unwrap();
+    social::set_profile(&dir, None, Some("76561198258753323".into()), Some(true), None).unwrap();
     println!("après ON      : {}", etat(&dir));
 
     // Désactiver : chaîne VIDE = délier. C'est là que `null` échouait silencieusement.
-    social::set_profile(&dir, None, Some(String::new()), Some(false)).unwrap();
+    social::set_profile(&dir, None, Some(String::new()), Some(false), None).unwrap();
     println!("après OFF     : {}", etat(&dir));
 
     // Réactiver, pour vérifier qu'on peut refaire l'aller-retour.
-    social::set_profile(&dir, None, Some("76561198258753323".into()), Some(true)).unwrap();
+    social::set_profile(&dir, None, Some("76561198258753323".into()), Some(true), None).unwrap();
     println!("après ON (2e) : {}", etat(&dir));
 
     // Modifier le nom seul ne doit RIEN changer au lien Steam.
-    social::set_profile(&dir, Some("Nouveau nom".into()), None, None).unwrap();
+    social::set_profile(&dir, Some("Nouveau nom".into()), None, None, None).unwrap();
     println!("après renommage : {}", etat(&dir));
 
     let _ = std::fs::remove_dir_all(&dir);

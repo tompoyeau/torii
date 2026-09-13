@@ -70,7 +70,9 @@ fn main() {
 
     println!("── me() : {:?}", social::me(&dir).map(|a| a.email));
 
-    let renamed = social::set_profile(&dir, Some("Testeur renommé".into()), Some(steam_id.clone()), Some(true)).unwrap();
+    // ⚠️ Dernier argument = `share_library`, laissé à `None` : cet exemple ne parle que
+    // du profil et du lien Steam, et `None` veut dire « je ne touche pas à ce champ ».
+    let renamed = social::set_profile(&dir, Some("Testeur renommé".into()), Some(steam_id.clone()), Some(true), None).unwrap();
     println!("── Profil : {} | steam {:?} | découvrable {}", renamed.display_name, renamed.steam_id, renamed.steam_discoverable);
 
     // Un SteamID ne se relie qu'à UN compte Torii. Deuxième compte, même Steam : refus.
@@ -83,7 +85,7 @@ fn main() {
         let code2 = social::request_code(&email2).unwrap().unwrap();
         let jeton2 = social::verify(&dir2, &email2, &code2).unwrap().signup_token.unwrap();
         social::signup(&dir2, &jeton2, "Sosie").unwrap();
-        let vol = social::set_profile(&dir2, None, Some(steam_id.clone()), Some(true));
+        let vol = social::set_profile(&dir2, None, Some(steam_id.clone()), Some(true), None);
         println!("── Même Steam sur un 2ᵉ compte : {:?}", vol.unwrap_err());
         // Et le premier compte garde son lien, intact.
         let moi = social::me(&dir).unwrap();
@@ -101,6 +103,12 @@ fn main() {
         game_key: Some("igdb:1942".into()),
         game_title: Some("The Witcher 3: Wild Hunt".into()),
         since: Some(stamp as i64 - 3600),
+        // 90 s = ce qu'envoie un client qui joue : cadence rapide (30 s) retenue trois
+        // battements. ⚠️ Écrit en clair parce que `cadence` et `retention` sont privés
+        // dans `social.rs` — un exemple n'y a pas accès. Si la cadence rapide change,
+        // cette valeur ne suit pas toute seule ; elle reste valable, simplement moins
+        // représentative. (`None` marcherait aussi : le serveur retombe sur 90 s.)
+        ttl: Some(90),
     };
     let circle = social::publish(&dir, &presence).unwrap();
     println!("── Présence publiée, cercle reçu : {} amis, {} demandes", circle.friends.len(), circle.incoming.len());
