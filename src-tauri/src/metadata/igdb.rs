@@ -120,6 +120,49 @@ fn save_cache(dir: &Path, cache: &MetaCache) {
     }
 }
 
+/// Quand chaque « introuvable » a été constaté (id du jeu → horodatage Unix).
+///
+/// 🔑 Un jeu absent d'IGDB le jour de sa sortie peut y entrer la semaine suivante. Tant
+/// que le cache ne savait pas DE QUAND datait une absence, il la gardait pour toujours.
+/// Fichier à part plutôt qu'un changement de format du cache : la fiche d'un jeu trouvé
+/// ne change pas de forme, et le cache existant reste lisible tel quel.
+type Absences = HashMap<String, u64>;
+
+/// Délai avant de rechercher de nouveau un jeu introuvable.
+const DUREE_ABSENT: u64 = 7 * 86_400;
+
+fn absences_file(dir: &Path) -> PathBuf {
+    dir.join("igdb_absents_cache_v1.json")
+}
+
+fn load_absences(dir: &Path) -> Absences {
+    std::fs::read_to_string(absences_file(dir))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn save_absences(dir: &Path, absences: &Absences) {
+    if let Ok(json) = serde_json::to_string(absences) {
+        let _ = std::fs::write(absences_file(dir), json);
+    }
+}
+
+fn maintenant() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Oublie un jeu (bouton « Actualiser les infos ») : il sera recherché au prochain passage.
+pub fn oublier(dir: &Path, id: &str) {
+    let mut cache = load_cache(dir);
+    if cache.remove(id).is_some() {
+        save_cache(dir, &cache);
+    }
+}
+
 /// Ce qu'a donné un appel au proxy.
 ///
 /// 🔑 `Corps` veut dire « IGDB a répondu », pas « IGDB a trouvé » : une réponse vide en
@@ -614,6 +657,8 @@ pub fn fill_metadata(
     emit: impl Fn(&[(String, IgdbMeta)]),
 ) -> Vec<(String, IgdbMeta)> {
     let mut cache = load_cache(config_dir);
+    let mut absences = load_absences(config_dir);
+    let t = maintenant();
     let mut out: Vec<(String, IgdbMeta)> = Vec::new();
     let mut dirty = false;
 
@@ -623,11 +668,21 @@ pub fn fill_metadata(
     let mut other_todo: Vec<&GameDto> = Vec::new();
 
     for g in games {
-        if let Some(cached) = cache.get(&g.id) {
-            if let Some(meta) = cached {
+        match cache.get(&g.id) {
+            Some(Some(meta)) => {
                 cached_batch.push((g.id.clone(), meta.clone()));
+                continue;
             }
-            continue; // déjà résolu (Some ou None)
+            // Introuvable récemment : inutile de redemander. Une absence sans date
+            // (d'avant `Absences`) est retentée une fois, puis datée.
+            Some(None)
+                if absences
+                    .get(&g.id)
+                    .is_some_and(|&quand| t.saturating_sub(quand) < DUREE_ABSENT) =>
+            {
+                continue;
+            }
+            _ => {}
         }
         if g.platform == "steam" {
             if let Some(appid) = g.id.strip_prefix("steam:") {
@@ -665,6 +720,7 @@ pub fn fill_metadata(
                 // Interrogé, rien trouvé : IGDB ne connaît pas cet appid, on le note.
                 None if passe.interroges.contains(appid) => {
                     cache.insert(gid.clone(), None);
+                    absences.insert(gid.clone(), t);
                     dirty = true;
                 }
                 // Lot en panne : on ne sait pas, donc on ne dit rien. Retenté au prochain scan.
@@ -689,6 +745,7 @@ pub fn fill_metadata(
             }
             Issue::Absent => {
                 cache.insert(g.id.clone(), None);
+                absences.insert(g.id.clone(), t);
                 dirty = true;
             }
             Issue::Panne => interrompue = true,
@@ -724,7 +781,10 @@ pub fn fill_metadata(
     }
 
     if dirty {
+        // Les jeux trouvés depuis n'ont plus d'absence à dater.
+        absences.retain(|id, _| matches!(cache.get(id), Some(None)));
         save_cache(config_dir, &cache);
+        save_absences(config_dir, &absences);
     }
     out
 }

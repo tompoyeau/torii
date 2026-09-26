@@ -4,6 +4,7 @@ import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { platformName } from "../data/platforms";
 import { t } from "../i18n";
+import { useImageCascade } from "../lib/images";
 const { spotlight, launchOrInstall, ensureEnriched } = useLibrary();
 const { openGame } = useUi();
 
@@ -35,15 +36,13 @@ function play() {
   if (game.value) launchOrInstall(game.value);
 }
 
-function hideBrokenCover(e: Event) {
-  (e.target as HTMLElement).style.display = "none";
-}
+const { src: heroSrc, onError: onHeroError } = useImageCascade(() => [game.value?.heroUrl, game.value?.heroAlt]);
 </script>
 
 <template>
   <section v-if="game" class="hero">
     <div class="hero-art" :style="{ background: game.cover }" />
-    <img v-if="game.heroUrl" class="hero-img" :src="game.heroUrl" alt="" @error="hideBrokenCover" />
+    <img v-if="heroSrc" :key="heroSrc" class="hero-img" :src="heroSrc" alt="" @error="onHeroError" />
     <div class="hero-scrim" />
     <div class="hero-eyebrow"><span class="pulse" />{{ game.recent ? t("bibliotheque.vedette.reprendre") : t("bibliotheque.vedette.honneur") }}</div>
     <h1 class="hero-title">{{ game.title }}</h1>

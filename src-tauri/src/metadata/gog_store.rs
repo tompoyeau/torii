@@ -82,6 +82,7 @@ pub fn product(product_id: &str) -> Option<GameMeta> {
         size_gb,
         // Interrogé en français, et par id produit : aucun doute sur le jeu visé.
         localized: true,
+        fetched_at: 0,
     })
 }
 

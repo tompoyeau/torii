@@ -9,6 +9,7 @@ import {
   installGame,
   launchGame,
   recordLaunch,
+  refreshGameInfo,
   removeManualGame,
   updateManualGame,
   setGameFavorite,
@@ -82,6 +83,46 @@ async function ensureEnriched(id: string) {
   };
 }
 
+/**
+ * Redemande tout d'un jeu, en ignorant les caches (bouton « Actualiser les infos »).
+ *
+ * ⚠️ Contrairement aux fusions ci-dessus, celle-ci ÉCRASE : c'est tout son intérêt. Elle
+ * rejoue leur ordre de priorité à partir des seules réponses fraîches — visuel du
+ * launcher puis IGDB, description traduite d'une source sûre puis IGDB.
+ */
+async function refreshInfo(id: string) {
+  const game = games.value.find((g) => g.id === id);
+  if (!game) return;
+  enrichingId.value = id;
+  try {
+    const r = await refreshGameInfo(game);
+    if (!r) return;
+    const idx = games.value.findIndex((g) => g.id === id);
+    if (idx === -1) return;
+    const cur = games.value[idx];
+    const { meta, igdb } = r;
+    const shots = igdb?.screenshots?.length ? igdb.screenshots : meta.screenshots ?? [];
+    games.value[idx] = {
+      ...cur,
+      title: cur.title.startsWith("App ") && meta.name ? meta.name : cur.title,
+      genre: igdb?.genre ?? meta.genre ?? cur.genre,
+      description:
+        (meta.localized ? meta.description : null) ?? igdb?.description ?? meta.description ?? cur.description,
+      developer: igdb?.developer ?? meta.developer ?? cur.developer,
+      year: igdb?.year ?? meta.year ?? cur.year,
+      coverUrl: r.coverUrl ?? cur.coverUrl ?? igdb?.coverUrl ?? undefined,
+      heroUrl: r.heroUrl ?? cur.heroUrl ?? igdb?.heroUrl ?? undefined,
+      coverAlt: igdb?.coverUrl ?? cur.coverAlt,
+      heroAlt: igdb?.heroUrl ?? cur.heroAlt,
+      screenshots: shots.length ? shots : cur.screenshots,
+      sizeGb: cur.sizeGb ? cur.sizeGb : meta.sizeGb ?? undefined,
+    };
+    enrichedIds.add(id);
+  } finally {
+    if (enrichingId.value === id) enrichingId.value = null;
+  }
+}
+
 /** Le repli sur le cache disque ne sert qu'au tout premier affichage de la session. */
 let usedCache = false;
 /** Passe à true dès que le scan complet a répondu : le cache ne doit plus rien écraser. */
@@ -141,6 +182,8 @@ async function fillIgdb() {
         // Jaquette/hero : launcher d'abord, IGDB en repli.
         coverUrl: g.coverUrl ?? u.coverUrl ?? undefined,
         heroUrl: g.heroUrl ?? u.heroUrl ?? undefined,
+        coverAlt: u.coverUrl ?? undefined,
+        heroAlt: u.heroUrl ?? undefined,
         screenshots: g.screenshots?.length
           ? g.screenshots
           : u.screenshots?.length
@@ -341,6 +384,7 @@ export function useLibrary() {
     filtered,
     reload,
     ensureEnriched,
+    refreshInfo,
     setHidden,
     setFavorite,
     addManual,

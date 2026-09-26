@@ -89,6 +89,7 @@ pub fn appdetails(appid: &str) -> Option<GameMeta> {
         size_gb: None,
         // Interrogé en français, et par appid : aucun doute sur le jeu visé.
         localized: true,
+        fetched_at: 0,
     })
 }
 

@@ -335,6 +335,29 @@ export async function enrichGame(game: Game): Promise<GameMeta | null> {
   );
 }
 
+/** Réponse de `refresh_game_info`. */
+export interface GameRefresh {
+  meta: GameMeta;
+  igdb: MetaUpdate | null;
+  coverUrl: string | null;
+  heroUrl: string | null;
+}
+
+/** Oublie tout ce que les caches savent d'un jeu et le redemande (« Actualiser les infos »). */
+export async function refreshGameInfo(game: Game): Promise<GameRefresh | null> {
+  return await call<GameRefresh | null>(
+    "refresh_game_info",
+    {
+      id: game.id,
+      platform: game.platform,
+      launchTarget: game.launchTarget ?? "",
+      title: game.title,
+      installed: game.installed,
+    },
+    null,
+  );
+}
+
 // --- Service social (comptes, amis, présence) -----------------------------------
 //
 // Ces ponts NE masquent PAS les erreurs, contrairement au reste du fichier : le message

@@ -12,8 +12,9 @@ import { installSource, launchSource, openExternal, openInstallDir, steamAchieve
 import type { FriendLib, GameSource, SteamAchievements } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
 import { etiquetteIntl, t } from "../i18n";
+import { useImageCascade } from "../lib/images";
 
-const { byId, ensureEnriched, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
+const { byId, ensureEnriched, refreshInfo, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
 const { connected: toriiConnected, isMuted, setMuted } = useTorii();
@@ -144,6 +145,12 @@ function onOpenFolder() {
   if (game.value?.installDir) openInstallDir(game.value.installDir);
   uninstallMenuOpen.value = false;
 }
+/** Redemande description, visuels et captures en ignorant les caches. */
+function onRefreshInfo() {
+  if (game.value) void refreshInfo(game.value.id);
+  uninstallMenuOpen.value = false;
+}
+
 /** Ce jeu est-il tenu à l'écart de ce que voient les amis ? */
 const gameMuted = computed(() => !!game.value && isMuted(game.value.id));
 
@@ -221,6 +228,8 @@ const fallbackShots = computed(() =>
       }))
     : [],
 );
+
+const { src: bannerSrc, onError: onBannerError } = useImageCascade(() => [game.value?.heroUrl, game.value?.heroAlt]);
 
 function hideBrokenCover(e: Event) {
   (e.target as HTMLElement).style.display = "none";
@@ -365,7 +374,7 @@ onBeforeUnmount(() => {
     <template v-if="game">
       <div class="detail-banner">
         <div class="detail-banner-art" :style="{ background: game.cover }" />
-        <img v-if="game.heroUrl" class="detail-banner-img" :src="game.heroUrl" alt="" @error="hideBrokenCover" />
+        <img v-if="bannerSrc" :key="bannerSrc" class="detail-banner-img" :src="bannerSrc" alt="" @error="onBannerError" />
         <div class="detail-banner-scrim" />
         <button class="detail-back" @click="closeGame">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>{{ t("fiche.retour") }}
@@ -409,7 +418,9 @@ onBeforeUnmount(() => {
             <button class="btn-ghost solid" :title="t('fiche.voirBoutique')" :aria-label="t('fiche.voirBoutique')" @click.stop="viewInStore">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 13.3 12.8 21a1.5 1.5 0 0 1-2.1 0l-7-7a1.4 1.4 0 0 1-.4-1V4.6A1.5 1.5 0 0 1 4.6 3h8.4a1.4 1.4 0 0 1 1 .4l6.5 6.5a2 2 0 0 1 0 2.8Z" /><circle cx="7.8" cy="7.8" r="1.4" fill="currentColor" stroke="none" /></svg>
             </button>
-            <div v-if="game.installed" class="settings-wrap">
+            <!-- Visible pour tous les jeux : « Actualiser les infos » concerne aussi les
+                 jeux non installés. Les options d'installation restent réservées aux autres. -->
+            <div class="settings-wrap">
               <button
                 class="btn-ghost solid"
                 :title="t('fiche.options')"
@@ -425,6 +436,10 @@ onBeforeUnmount(() => {
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
                   <span>{{ t("bibliotheque.menu.ouvrirEmplacement") }}</span>
                 </button>
+                <button class="settings-opt" :disabled="loadingMeta" @click="onRefreshInfo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 0 0-14.7-4.3L3 9" /><path d="M3 4v5h5" /><path d="M4 13a8 8 0 0 0 14.7 4.3L21 15" /><path d="M21 20v-5h-5" /></svg>
+                  <span>{{ t("fiche.actualiserInfos") }}</span>
+                </button>
                 <button v-if="toriiConnected" class="settings-opt" @click="onToggleMuted">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18" /><path d="M10.6 10.7a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.2A9.3 9.3 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.2 3M6.1 6.2A12.7 12.7 0 0 0 3 12c0 2.5 4 7 9 7a9.4 9.4 0 0 0 3.6-.7" /></svg>
                   <span>{{ gameMuted ? t("bibliotheque.menu.diffuser") : t("bibliotheque.menu.nePasDiffuser") }}</span>
@@ -434,6 +449,7 @@ onBeforeUnmount(() => {
                   <span>{{ t("bibliotheque.menu.modifier") }}</span>
                 </button>
                 <button
+                  v-if="game.installed"
                   class="settings-opt danger"
                   :disabled="uninstalling"
                   @click="isManual ? onRemoveManual() : onUninstall()"

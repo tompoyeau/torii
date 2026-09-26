@@ -1,6 +1,7 @@
 pub mod gog_store;
 pub mod igdb;
 pub mod instant_gaming;
+pub mod steam_art;
 pub mod steam_store;
 pub mod store;
 
@@ -91,17 +92,67 @@ fn save_cache(config_dir: &Path, cache: &Cache) {
     }
 }
 
+/// Une fiche remplie est redemandée au bout d'un mois : descriptions, traductions et
+/// captures évoluent, surtout dans les semaines qui suivent la sortie d'un jeu.
+const DUREE_REMPLIE: u64 = 30 * 86_400;
+/// Une fiche vide l'est dès le lendemain : un jeu qui vient de sortir n'a souvent pas
+/// encore de page complète, et une panne réseau ressemble à s'y méprendre à « rien ».
+const DUREE_VIDE: u64 = 86_400;
+
+fn est_vide(meta: &GameMeta) -> bool {
+    meta.description.is_none() && meta.cover_url.is_none() && meta.name.is_none()
+}
+
+fn maintenant() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// 🔑 **LE CACHE EXPIRE.** Il ne le faisait pas : une fiche récupérée une fois l'était
+/// pour toujours. Un jeu ouvert le jour de sa sortie gardait sa fiche vide, et un texte
+/// que Steam a traduit depuis (Hide and Moo!, relevé le 26 septembre 2026) restait en
+/// anglais indéfiniment. Les entrées d'avant ce changement (`fetched_at` = 0) sont
+/// périmées d'office et se renouvellent une à une, à l'ouverture de leur fiche.
+fn perimee(meta: &GameMeta, t: u64) -> bool {
+    let duree = if est_vide(meta) { DUREE_VIDE } else { DUREE_REMPLIE };
+    t.saturating_sub(meta.fetched_at) >= duree
+}
+
 /// Enrichit un **seul** jeu à la demande (ouverture de la vue détail), avec le
 /// même cache disque que l'enrichissement en masse. Retour vide si rien trouvé.
 pub fn enrich_one(game: &GameDto, config_dir: &Path) -> GameMeta {
     let mut cache = load_cache(config_dir);
-    if let Some(meta) = cache.get(&game.id) {
-        return meta.clone();
+    let t = maintenant();
+    let ancienne = cache.get(&game.id).cloned();
+    if let Some(meta) = &ancienne {
+        if !perimee(meta, t) {
+            return meta.clone();
+        }
     }
-    let fetched = fetch(game).unwrap_or_default();
-    cache.insert(game.id.clone(), fetched.clone());
+    let meta = match (fetch(game), ancienne) {
+        (Some(neuve), _) => GameMeta { fetched_at: t, ..neuve },
+        // ⚠️ Rien obtenu alors qu'on avait une fiche : panne probable. On garde l'ancienne
+        // plutôt que de l'effacer, et on retentera demain (et non à chaque ouverture, qui
+        // attendrait à chaque fois l'expiration du délai réseau).
+        (None, Some(vieille)) if !est_vide(&vieille) => GameMeta {
+            fetched_at: t - (DUREE_REMPLIE - DUREE_VIDE),
+            ..vieille
+        },
+        (None, _) => GameMeta { fetched_at: t, ..GameMeta::default() },
+    };
+    cache.insert(game.id.clone(), meta.clone());
     save_cache(config_dir, &cache);
-    fetched
+    meta
+}
+
+/// Oublie la fiche d'un jeu (bouton « Actualiser les infos »), dans la langue courante.
+pub fn oublier(config_dir: &Path, id: &str) {
+    let mut cache = load_cache(config_dir);
+    if cache.remove(id).is_some() {
+        save_cache(config_dir, &cache);
+    }
 }
 
 /// Récupère les métadonnées d'un jeu selon sa plateforme.
@@ -164,5 +215,20 @@ mod tests {
         assert_eq!(load_cache(&dir).len(), 2, "la relecture repart de la v5");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn une_fiche_vide_expire_plus_vite() {
+        let t = 100 * 86_400;
+        let vide = GameMeta { fetched_at: t - 2 * 86_400, ..Default::default() };
+        let remplie = GameMeta {
+            description: Some("x".into()),
+            fetched_at: t - 2 * 86_400,
+            ..Default::default()
+        };
+        assert!(perimee(&vide, t));
+        assert!(!perimee(&remplie, t));
+        let ancienne = GameMeta { description: Some("x".into()), ..Default::default() };
+        assert!(perimee(&ancienne, t), "une entrée d'avant l'expiration est périmée");
     }
 }

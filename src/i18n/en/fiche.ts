@@ -9,6 +9,7 @@ const en: Forme<typeof fr> = {
   voirBoutique: "View in store",
   options: "Game options",
   optionsTitre: "Options",
+  actualiserInfos: "Refresh details",
   retrait: "Removing…",
   desinstallation: "Uninstalling…",
 

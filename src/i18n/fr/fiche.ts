@@ -7,6 +7,7 @@ export default {
   voirBoutique: "Voir dans la boutique",
   options: "Options du jeu",
   optionsTitre: "Options",
+  actualiserInfos: "Actualiser les infos",
   retrait: "Retrait…",
   desinstallation: "Désinstallation…",
 

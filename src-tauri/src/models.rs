@@ -97,6 +97,10 @@ pub struct GameMeta {
     /// description française serait un net recul.
     #[serde(default)]
     pub localized: bool,
+    /// Horodatage Unix de la récupération (cache de `metadata::enrich_one`). 0 = entrée
+    /// d'avant l'expiration du cache, considérée comme périmée.
+    #[serde(default)]
+    pub fetched_at: u64,
 }
 
 fn yes() -> bool {

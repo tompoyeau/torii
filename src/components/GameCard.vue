@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import type { Game } from "../types";
 import { platformName } from "../data/platforms";
 import { useLibrary } from "../composables/useLibrary";
 import { useContextMenu } from "../composables/useContextMenu";
 import PlatformIcon from "./PlatformIcon.vue";
 import { t } from "../i18n";
+import { useImageCascade } from "../lib/images";
 
 const props = withDefaults(
   defineProps<{
@@ -28,20 +29,17 @@ const { setHidden, setFavorite } = useLibrary();
 const { openContext } = useContextMenu();
 
 /**
- * Image de la carte, en cascade : jaquette portrait (`coverUrl`) → à défaut visuel
- * paysage (`heroUrl`, recadré) → à défaut rien (le dégradé reprend la main). Certains
- * jeux Steam n'ont pas de jaquette 600x900 mais ont un hero → on l'utilise plutôt qu'un dégradé.
+ * Image de la carte, en cascade : jaquette portrait du launcher (`coverUrl`) → celle
+ * d'IGDB (`coverAlt`) → à défaut visuel paysage (`heroUrl`, recadré) → à défaut rien (le
+ * dégradé reprend la main). Certains jeux Steam n'ont pas de jaquette 600x900 mais ont
+ * un hero → on l'utilise plutôt qu'un dégradé.
  */
-const failed = ref(new Set<string>());
-const coverSrc = computed(() => {
-  for (const url of [props.game.coverUrl, props.game.heroUrl]) {
-    if (url && !failed.value.has(url)) return url;
-  }
-  return null;
-});
-function onCoverError() {
-  if (coverSrc.value) failed.value = new Set(failed.value).add(coverSrc.value);
-}
+const { src: coverSrc, onError: onCoverError } = useImageCascade(() => [
+  props.game.coverUrl,
+  props.game.coverAlt,
+  props.game.heroUrl,
+  props.game.heroAlt,
+]);
 
 /** Nombre de copies du jeu dans le groupe familial Steam (≥2 = plusieurs copies). */
 const familyCopies = computed(() => props.game.familyOwners?.length ?? 0);

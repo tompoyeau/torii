@@ -1243,6 +1243,74 @@ async fn enrich_game(
         .map_err(|e| e.to_string())
 }
 
+/// Ce que renvoie `refresh_game_info` : tout ce qu'un jeu reçoit d'ordinaire en trois
+/// passes (scan, IGDB, fiche), redemandé d'un coup.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GameRefresh {
+    meta: GameMeta,
+    igdb: Option<MetaUpdate>,
+    /// Visuels du launcher (Steam seulement : les autres ne changent pas d'adresse).
+    cover_url: Option<String>,
+    hero_url: Option<String>,
+}
+
+/// Bouton « Actualiser les infos » de la fiche : oublie ce que les caches savent de ce
+/// jeu et le redemande à chaque source.
+///
+/// 🔑 Les caches expirent seuls (un mois, un jour quand ils sont vides), mais attendre
+/// n'a rien d'évident pour qui regarde une fiche fausse ou vide : on lui donne la main.
+#[tauri::command]
+async fn refresh_game_info(
+    app: tauri::AppHandle,
+    id: String,
+    platform: String,
+    launch_target: String,
+    title: String,
+    installed: bool,
+) -> Result<GameRefresh, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let game = GameDto {
+        id,
+        platform,
+        launch_target,
+        title,
+        installed,
+        ..Default::default()
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        metadata::oublier(&dir, &game.id);
+        metadata::igdb::oublier(&dir, &game.id);
+        let appid = game
+            .id
+            .strip_prefix("steam:")
+            .filter(|_| game.platform == "steam")
+            .and_then(|a| a.parse::<u64>().ok());
+        if let Some(appid) = appid {
+            metadata::steam_art::oublier(&dir, appid);
+        }
+
+        let meta = metadata::enrich_one(&game, &dir);
+        let igdb = metadata::igdb::fill_metadata(std::slice::from_ref(&game), &dir, |_| {})
+            .into_iter()
+            .next()
+            .map(|(id, m)| MetaUpdate::new(id, m));
+        let mut art = [game.clone()];
+        if appid.is_some() {
+            metadata::steam_art::appliquer(&mut art, &dir);
+        }
+        let [art] = art;
+        GameRefresh {
+            meta,
+            igdb,
+            cover_url: art.cover_url,
+            hero_url: art.hero_url,
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Masque ou réaffiche un jeu (liste d'exclusion) ; renvoie la liste des ids masqués.
 #[tauri::command]
 fn set_game_hidden(
@@ -1980,6 +2048,7 @@ pub fn run() {
             scan_library,
             cached_library,
             enrich_game,
+            refresh_game_info,
             set_game_hidden,
             set_game_favorite,
             get_excluded_stores,

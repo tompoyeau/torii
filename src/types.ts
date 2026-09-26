@@ -94,6 +94,16 @@ export interface Game {
   coverSource?: string;
   /** Visuel paysage (hero, bannière de la fiche) si disponible. */
   heroUrl?: string;
+  /**
+   * Visuels d'IGDB, gardés en réserve quand le launcher a déjà fourni les siens.
+   *
+   * 🔑 Une adresse fournie par le launcher n'est pas une image garantie : celle que
+   * Steam donne pour un jeu tout juste sorti peut répondre 404. Sans cette réserve, le
+   * visuel d'IGDB — pourtant disponible — était jeté à la fusion et la carte tombait
+   * directement sur le dégradé.
+   */
+  coverAlt?: string;
+  heroAlt?: string;
   /** Captures d'écran (fournisseur en ligne). */
   screenshots?: string[];
   installed: boolean;

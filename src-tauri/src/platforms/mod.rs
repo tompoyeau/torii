@@ -106,6 +106,9 @@ pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
 
     // Marque les jeux masqués (exclusion) et favoris (le front s'appuie dessus pour ses filtres).
     if let Some(dir) = config_dir {
+        // Les jeux Steam récents n'ont plus d'image à l'adresse déduite de l'appid.
+        crate::metadata::steam_art::appliquer(&mut games, dir);
+
         let excluded = id_set::HIDDEN.load(dir);
         let favorites = id_set::FAVORITES.load(dir);
         if !excluded.is_empty() || !favorites.is_empty() {
