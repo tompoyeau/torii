@@ -131,7 +131,7 @@ pub fn enrich_one(game: &GameDto, config_dir: &Path) -> GameMeta {
             return meta.clone();
         }
     }
-    let meta = match (fetch(game), ancienne) {
+    let meta = match (fetch(game, config_dir), ancienne) {
         (Some(neuve), _) => GameMeta { fetched_at: t, ..neuve },
         // ⚠️ Rien obtenu alors qu'on avait une fiche : panne probable. On garde l'ancienne
         // plutôt que de l'effacer, et on retentera demain (et non à chaque ouverture, qui
@@ -156,7 +156,7 @@ pub fn oublier(config_dir: &Path, id: &str) {
 }
 
 /// Récupère les métadonnées d'un jeu selon sa plateforme.
-fn fetch(game: &GameDto) -> Option<GameMeta> {
+fn fetch(game: &GameDto, config_dir: &Path) -> Option<GameMeta> {
     match game.platform.as_str() {
         "steam" => {
             let mut meta = steam_store::appdetails(&game.launch_target)?;
@@ -170,17 +170,35 @@ fn fetch(game: &GameDto) -> Option<GameMeta> {
         // L'id produit GOG est dans `id` (« gog:<id> ») : `launch_target` est le
         // chemin de l'exe pour un jeu installé, inutilisable pour l'API.
         "gog" => gog_store::product(game.id.strip_prefix("gog:").unwrap_or(&game.launch_target)),
-        // Epic / manuel : on tente une correspondance par titre sur Steam.
-        _ => {
-            let appid = steam_store::search_appid(&game.title)?;
-            let mut meta = steam_store::appdetails(&appid)?;
-            // ⚠️ Le contenu est bien en français, mais le JEU est deviné : on retire le
-            // drapeau pour que le front ne remplace PAS la description d'IGDB. Une
-            // description française du mauvais jeu est pire qu'une bonne en anglais.
-            meta.localized = false;
-            Some(meta)
+        // Battle.net : identifiant Steam connu pour les jeux aussi vendus sur Steam, donc
+        // aussi sûr qu'un jeu Steam (cf. `battlenet::steam_appid`). Les autres sont devinés.
+        "battlenet" => {
+            let code = game.id.strip_prefix("battlenet:").unwrap_or_default();
+            match crate::accounts::battlenet::steam_appid(code) {
+                Some(appid) => steam_store::appdetails(appid),
+                None => deviner(game),
+            }
         }
+        // Epic : le catalogue Epic, par identifiant (compte connecté). À défaut, devinette.
+        "epic" => {
+            let app = game.id.strip_prefix("epic:").unwrap_or(&game.launch_target);
+            crate::accounts::epic::fiche(config_dir, app).or_else(|| deviner(game))
+        }
+        // Manuel et autres : on tente une correspondance par titre sur Steam.
+        _ => deviner(game),
     }
+}
+
+/// Devine le jeu sur le Steam Store par son titre.
+fn deviner(game: &GameDto) -> Option<GameMeta> {
+    let appid = steam_store::search_appid(&game.title)?;
+    let mut meta = steam_store::appdetails(&appid)?;
+    // ⚠️ Le contenu est bien en français, mais le JEU est deviné : on retire le
+    // drapeau pour que le front ne remplace PAS la description d'IGDB. Une
+    // description française du mauvais jeu est pire qu'une bonne en anglais —
+    // « Control » (Epic) tombe ainsi sur CONTROL Resonant, un autre jeu.
+    meta.localized = false;
+    Some(meta)
 }
 
 #[cfg(test)]

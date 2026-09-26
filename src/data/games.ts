@@ -43,6 +43,7 @@ export function mergeDuplicates(games: Game[]): Game[] {
         PLATFORM_ORDER[a.platform] - PLATFORM_ORDER[b.platform],
     )[0];
     const sources: GameSource[] = group.map((g) => ({
+      id: g.id,
       platform: g.platform,
       launchTarget: g.launchTarget,
       installed: g.installed,

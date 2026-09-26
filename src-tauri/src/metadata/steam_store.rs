@@ -34,7 +34,14 @@ pub fn appdetails(appid: &str) -> Option<GameMeta> {
         "https://store.steampowered.com/api/appdetails?appids={appid}&l={langue}&cc={CATALOGUE_STEAM}"
     );
     let root = get_json(&url)?;
-    let entry = root.get(appid)?;
+    // ⚠️ Steam peut répondre sous un AUTRE identifiant que celui demandé : quand il a
+    // regroupé les éditions d'un jeu, `appids=2357570` (Overwatch) revient sous la clé
+    // `5026450` (relevé le 26 septembre 2026 ; idem Diablo IV, Sea of Thieves, DOOM…).
+    // Un seul appid demandé = une seule entrée : on la prend, quelle que soit sa clé.
+    let entry = root.get(appid).or_else(|| {
+        let obj = root.as_object()?;
+        (obj.len() == 1).then(|| obj.values().next()).flatten()
+    })?;
     if !entry["success"].as_bool().unwrap_or(false) {
         return None;
     }

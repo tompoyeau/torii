@@ -73,6 +73,8 @@ export interface Settings {
 
 /** Une provenance jouable d'un jeu (une plateforme où il est possédé). */
 export interface GameSource {
+  /** Id du jeu sur ce launcher (« steam:359550 »), pour l'enrichir par cette source. */
+  id?: string;
   platform: PlatformId;
   launchTarget?: string;
   installed: boolean;

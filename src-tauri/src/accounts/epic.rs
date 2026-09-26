@@ -76,11 +76,140 @@ const RESOLVE_WORKERS: usize = 16;
 /// Bibliothèque Epic possédée. Rafraîchit le jeton, liste les assets possédés,
 /// puis résout titres/jaquettes via le catalogue — **en parallèle** et caché sur
 /// disque (une fois par jeu). Le 1er scan prend quelques secondes, ensuite instantané.
-pub fn owned_games(config_dir: &Path, refresh_token: &str) -> Vec<GameDto> {
-    let Some(tokens) = refresh(refresh_token) else {
-        return Vec::new();
-    };
+/// Dernier jeton d'accès obtenu, et quand il a été obtenu.
+///
+/// 🔑 **UN SEUL RENOUVELLEMENT À LA FOIS.** Epic fait tourner le jeton de renouvellement :
+/// chaque échange en rend un nouveau, qu'on enregistre. Deux échanges simultanés (le scan
+/// et l'ouverture d'une fiche) partiraient du même jeton, et le second enregistré pourrait
+/// être celui qu'Epic vient d'invalider — il faudrait alors se reconnecter. Le verrou
+/// sérialise les échanges, et le jeton d'accès (valable des heures) est réutilisé entre-temps.
+static JETON: std::sync::Mutex<Option<(String, std::time::Instant)>> = std::sync::Mutex::new(None);
+
+/// Durée pendant laquelle on réutilise un jeton d'accès. Epic en donne plusieurs heures ;
+/// on reste bien en deçà.
+const JETON_VALIDE: Duration = Duration::from_secs(3600);
+
+/// Renouvelle la session (sous le verrou) et mémorise le jeton d'accès.
+fn renouveler(
+    config_dir: &Path,
+    refresh_token: &str,
+    garde: &mut Option<(String, std::time::Instant)>,
+) -> Option<Tokens> {
+    let tokens = refresh(refresh_token)?;
     persist_refresh(config_dir, &tokens.refresh_token);
+    *garde = Some((tokens.access_token.clone(), std::time::Instant::now()));
+    Some(tokens)
+}
+
+/// Un jeton d'accès valide : celui du dernier renouvellement s'il est récent, sinon un neuf.
+fn jeton_acces(config_dir: &Path) -> Option<String> {
+    let mut garde = JETON.lock().ok()?;
+    if let Some((jeton, quand)) = garde.as_ref() {
+        if quand.elapsed() < JETON_VALIDE {
+            return Some(jeton.clone());
+        }
+    }
+    // Relu sur le disque SOUS le verrou : c'est le dernier jeton tourné qui compte.
+    let rt = super::secrets::load(config_dir).epic_refresh_token?;
+    renouveler(config_dir, &rt, &mut garde).map(|t| t.access_token)
+}
+
+/// Fiche d'un jeu Epic dans la langue de l'interface, lue dans le catalogue Epic.
+///
+/// 🔑 PAR IDENTIFIANT, DONC SÛRE. Sans elle, un jeu Epic était deviné par son titre sur
+/// le Steam Store — et « Control » y tombe sur CONTROL Resonant, un autre jeu. Le
+/// catalogue est interrogé avec le namespace et l'id d'item du jeu possédé (relevés par
+/// `owned_games` dans `epic_install_ids.json`) : la réponse ne peut désigner que lui.
+///
+/// ⚠️ Le catalogue exige une session (401 sans jeton) : seulement pour un compte connecté.
+pub fn fiche(config_dir: &Path, app_name: &str) -> Option<crate::models::GameMeta> {
+    let ids: HashMap<String, String> =
+        serde_json::from_str(&std::fs::read_to_string(config_dir.join("epic_install_ids.json")).ok()?)
+            .ok()?;
+    let triplet = ids.get(app_name)?;
+    let mut parts = triplet.split("%3A");
+    let (namespace, catalog_id) = (parts.next()?, parts.next()?);
+
+    let token = jeton_acces(config_dir)?;
+    let locale = if crate::locale::en() { "en-US" } else { "fr" };
+    let url = format!(
+        "https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/{namespace}/bulk/items?id={catalog_id}&includeMainGameDetails=true&country={}&locale={locale}",
+        crate::locale::region()
+    );
+    let root = get_json_auth(&url, &token)?;
+    let item = root.get(catalog_id)?;
+    let titre = item["title"].as_str().unwrap_or_default().trim();
+    // ⚠️ L'élément du catalogue est l'objet TECHNIQUE du jeu : pour les titres anciens, sa
+    // « description » n'est que le titre répété (Control : « Control »). La vraie est sur
+    // l'OFFRE de la boutique, lue alors en second appel.
+    let description = description_utile(item["description"].as_str(), titre)
+        .or_else(|| description_offre(&token, namespace, catalog_id, locale, titre));
+    let screenshots = item["keyImages"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter(|i| i["type"].as_str() == Some("Screenshot"))
+                .filter_map(|i| i["url"].as_str().map(String::from))
+                .take(4)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(crate::models::GameMeta {
+        name: item["title"].as_str().map(str::trim).map(String::from),
+        developer: item["developer"].as_str().map(String::from),
+        cover_url: key_image(item, &["DieselGameBoxTall", "OfferImageTall", "Thumbnail"]),
+        hero_url: key_image(item, &["DieselGameBox", "DieselGameBoxWide", "OfferImageWide"]),
+        // La description d'Epic est parfois vide : on ne la dit traduite que si elle existe,
+        // pour ne pas effacer celle d'IGDB avec rien.
+        localized: description.is_some(),
+        description,
+        screenshots,
+        ..Default::default()
+    })
+}
+
+/// Une description qui dit quelque chose : ni vide, ni le titre répété.
+fn description_utile(texte: Option<&str>, titre: &str) -> Option<String> {
+    let t = texte?.trim();
+    (t.chars().count() >= 40 && !t.eq_ignore_ascii_case(titre)).then(|| t.to_string())
+}
+
+/// Description de l'offre « jeu de base » du namespace, dans la langue demandée.
+///
+/// Le namespace d'un jeu contient aussi ses éditions, DLC, démos et offres internes
+/// (« CallunaQAAudience »…) : on prend l'offre `BASE_GAME` qui contient notre item, à
+/// défaut n'importe quelle `BASE_GAME`, puis une `EDITION` contenant l'item.
+fn description_offre(token: &str, namespace: &str, catalog_id: &str, locale: &str, titre: &str) -> Option<String> {
+    let url = format!(
+        "https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/{namespace}/offers?status=SUNSET%7CACTIVE&country={}&locale={locale}&start=0&count=50",
+        crate::locale::region()
+    );
+    let offres = get_json_auth(&url, token)?["elements"].as_array()?.clone();
+    let contient = |o: &Value| {
+        o["items"]
+            .as_array()
+            .is_some_and(|items| items.iter().any(|i| i["id"].as_str() == Some(catalog_id)))
+    };
+    let type_ = |o: &Value, t: &str| o["offerType"].as_str() == Some(t);
+    let choix = offres
+        .iter()
+        .find(|o| type_(o, "BASE_GAME") && contient(o))
+        .or_else(|| offres.iter().find(|o| type_(o, "BASE_GAME")))
+        .or_else(|| offres.iter().find(|o| type_(o, "EDITION") && contient(o)))?;
+    description_utile(choix["description"].as_str(), titre)
+}
+
+pub fn owned_games(config_dir: &Path, refresh_token: &str) -> Vec<GameDto> {
+    let tokens = {
+        let Ok(mut garde) = JETON.lock() else {
+            return Vec::new();
+        };
+        match renouveler(config_dir, refresh_token, &mut garde) {
+            Some(t) => t,
+            None => return Vec::new(),
+        }
+    };
 
     // Assets possédés (hors Unreal Engine).
     let assets: Vec<Asset> = fetch_assets(&tokens.access_token)
@@ -327,4 +456,19 @@ fn urlencode(s: &str) -> String {
             _ => format!("%{b:02X}"),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Le catalogue répète souvent le titre en guise de description : ce n'en est pas une.
+    #[test]
+    fn une_description_qui_repete_le_titre_est_ignoree() {
+        assert_eq!(description_utile(Some("Control"), "Control"), None);
+        assert_eq!(description_utile(Some("  "), "Control"), None);
+        assert_eq!(description_utile(None, "Control"), None);
+        let vraie = "Suite à l'invasion d'une agence secrète new-yorkaise par une force inconnue";
+        assert_eq!(description_utile(Some(vraie), "Control").as_deref(), Some(vraie));
+    }
 }

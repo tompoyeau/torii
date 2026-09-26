@@ -33,6 +33,23 @@ let started = false;
 const enrichedIds = new Set<string>();
 
 /**
+ * La source par laquelle enrichir un jeu : pour une carte fusionnée, sa copie Steam ou
+ * GOG si elle en a une.
+ *
+ * 🔑 Ces deux-là sont interrogées par IDENTIFIANT, donc sûres, et renvoient une
+ * description traduite. Les autres launchers sont devinés par leur titre, et une
+ * devinette n'a pas le droit de remplacer la description d'IGDB (anglaise). Rainbow Six
+ * Siege, possédé sur Ubisoft ET Steam, affichait ainsi l'anglais parce que la carte
+ * avait pris la copie Ubisoft comme principale.
+ */
+function sourceSure(game: Game): Game {
+  if (game.platform === "steam" || game.platform === "gog") return game;
+  const s = game.sources?.find((x) => x.id && (x.platform === "steam" || x.platform === "gog"));
+  if (!s?.id) return game;
+  return { ...game, id: s.id, platform: s.platform, launchTarget: s.launchTarget, installed: s.installed };
+}
+
+/**
  * Enrichit un jeu à la demande (ouverture de sa vue détail) : description,
  * captures, développeur, année, genre. N'écrase jamais une donnée déjà présente,
  * ne s'exécute qu'une fois par jeu, et met à jour le store de façon réactive.
@@ -44,7 +61,7 @@ async function ensureEnriched(id: string) {
   enrichedIds.add(id);
 
   enrichingId.value = id;
-  const meta = await enrichGame(game);
+  const meta = await enrichGame(sourceSure(game));
   if (enrichingId.value === id) enrichingId.value = null;
   if (!meta) return;
 
@@ -95,7 +112,7 @@ async function refreshInfo(id: string) {
   if (!game) return;
   enrichingId.value = id;
   try {
-    const r = await refreshGameInfo(game);
+    const r = await refreshGameInfo(sourceSure(game));
     if (!r) return;
     const idx = games.value.findIndex((g) => g.id === id);
     if (idx === -1) return;

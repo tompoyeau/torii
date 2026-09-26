@@ -65,6 +65,31 @@ const CATALOG: &[Cat] = &[
     c(1095849281, "AQUA", "aqua", "Avowed", None),
 ];
 
+/// Appid Steam des jeux Blizzard / Activision / Microsoft **aussi vendus sur Steam**, par
+/// code produit Battle.net.
+///
+/// 🔑 C'est ce qui leur donne une description traduite. Sans identifiant sûr, un jeu
+/// Battle.net est deviné par son titre sur le Steam Store — et une devinette n'a pas le
+/// droit de remplacer la description d'IGDB (anglaise), parce qu'elle peut désigner un
+/// autre jeu (« Overwatch 2 » ne ramène que des lots de pièces). Le catalogue Battle.net
+/// étant fixe, la correspondance l'est aussi : vérifiée une à une sur `appdetails`
+/// (26 septembre 2026). Les jeux absents de Steam (WoW, Hearthstone, Warcraft Rumble…)
+/// n'y figurent pas et gardent IGDB.
+pub fn steam_appid(product_id: &str) -> Option<&'static str> {
+    Some(match product_id {
+        "Pro" => "2357570",   // Overwatch
+        "Fen" => "2344520",   // Diablo IV
+        "SCOR" => "1172620",  // Sea of Thieves
+        "ARIS" => "3017860",  // DOOM: The Dark Ages
+        "ARK" => "1449110",   // The Outer Worlds 2
+        "AQUA" => "2457220",  // Avowed
+        "WLBY" => "1378990",  // Crash Bandicoot 4
+        "LBRA" => "2545710",  // Tony Hawk's Pro Skater 3 + 4
+        "ZEUS" => "1985810",  // Call of Duty: Black Ops Cold War
+        _ => return None,
+    })
+}
+
 /// Récupère les jeux possédés à partir du header Cookie de session `account.battle.net`.
 /// Renvoie une liste vide tant que l'utilisateur n'est pas connecté (l'API répond sans jeux).
 pub fn fetch_library(cookie: &str) -> Vec<GameDto> {
