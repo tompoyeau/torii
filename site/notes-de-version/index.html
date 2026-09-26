@@ -14,7 +14,7 @@
       d'être revisité.
     -->
     <title>Notes de version de Torii — toutes les nouveautés, version par version</title>
-    <meta name="description" content="Toutes les nouveautés et corrections de Torii, version par version. Dernière en date : 0.21.1, publiée le 13 septembre 2026. Bibliothèque de jeux unifiée pour Windows, gratuite, en français et en anglais." />
+    <meta name="description" content="Toutes les nouveautés et corrections de Torii, version par version. Dernière en date : 0.21.2. Bibliothèque de jeux unifiée pour Windows, gratuite, en français et en anglais." />
     <link rel="canonical" href="https://torii-app.fr/notes-de-version/" />
     <!-- Réciproques sur les deux pages, comme partout ailleurs sur le site. -->
     <link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
@@ -64,11 +64,23 @@
       </div>
 
       <div class="notes">
+        <article class="note-version" id="v0-21-2">
+          <header>
+            <h2><a href="#v0-21-2">Version 0.21.2</a></h2>
+            <span class="etiquette">Dernière version</span>
+          </header>
+          <ul>
+            <li><strong>Les jeux Steam récents retrouvent leur jaquette et leur bannière.</strong> Steam range désormais les images des nouveaux jeux à une adresse que Torii ne savait pas deviner : Aniimo, par exemple, s'affichait sur un simple dégradé. Torii demande maintenant la bonne adresse à Steam. Et si une image ne se charge pas, celle d'IGDB prend le relais avant le dégradé.</li>
+            <li><strong>Les fiches de jeux se mettent à jour.</strong> Une description récupérée une fois l'était pour toujours : un jeu ouvert le jour de sa sortie gardait une fiche vide, et un texte traduit depuis restait en anglais. Les fiches sont maintenant redemandées au bout d'un mois, dès le lendemain quand elles sont vides, et un jeu introuvable est recherché de nouveau après une semaine.</li>
+            <li><strong>Un bouton « Actualiser les infos »</strong>, dans le menu ⚙ de la fiche d'un jeu, redemande tout sans attendre. Ce menu apparaît aussi pour les jeux non installés.</li>
+            <li><strong>Plus de descriptions en français pour les jeux hors Steam et GOG.</strong> Les jeux Epic sont décrits par le catalogue Epic quand ton compte Epic est connecté (Control, Fortnite, Disco Elysium…). Les jeux Battle.net aussi vendus sur Steam (Overwatch, Diablo IV, Sea of Thieves…) prennent leur fiche Steam. Un jeu possédé sur deux launchers, comme Rainbow Six Siege sur Ubisoft et Steam, passe par sa copie Steam. Valorant reste en anglais : aucune source ne le décrit en français.</li>
+            <li><strong>Les fiches vides de certains gros jeux se remplissent.</strong> Quand Steam a regroupé les éditions d'un jeu, il répond sous un autre numéro que celui demandé, et Torii ne reconnaissait pas la réponse. Overwatch, Diablo IV et Call of Duty en faisaient partie.</li>
+          </ul>
+        </article>
         <article class="note-version" id="v0-21-1">
           <header>
             <h2><a href="#v0-21-1">Version 0.21.1</a></h2>
             <time datetime="2026-09-13">13 septembre 2026</time>
-            <span class="etiquette">Dernière version</span>
           </header>
           <ul>
             <li><strong>La langue choisie tient après le redémarrage.</strong> Passer en français ou sur « Suivre Windows », puis cliquer sur « Redémarrer maintenant », pouvait ramener Torii en anglais : au démarrage, il relisait parfois un réglage antérieur au changement. Le choix est maintenant retenu à un endroit qui ne peut plus prendre de retard. Si c'est arrivé chez toi, choisis ta langue une dernière fois : elle restera.</li>
@@ -544,6 +556,6 @@
         <a href="https://github.com/tompoyeau/torii/issues">Signaler un problème</a>
       </nav>
     </footer>
-      <script src="../mesure.js" defer></script>
+    <script src="../mesure.js" defer></script>
   </body>
 </html>

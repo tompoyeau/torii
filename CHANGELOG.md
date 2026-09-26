@@ -5,6 +5,13 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.21.2
+- **Les jeux Steam récents retrouvent leur jaquette et leur bannière.** Steam range désormais les images des nouveaux jeux à une adresse que Torii ne savait pas deviner : Aniimo, par exemple, s'affichait sur un simple dégradé. Torii demande maintenant la bonne adresse à Steam. Et si une image ne se charge pas, celle d'IGDB prend le relais avant le dégradé.
+- **Les fiches de jeux se mettent à jour.** Une description récupérée une fois l'était pour toujours : un jeu ouvert le jour de sa sortie gardait une fiche vide, et un texte traduit depuis restait en anglais. Les fiches sont maintenant redemandées au bout d'un mois, dès le lendemain quand elles sont vides, et un jeu introuvable est recherché de nouveau après une semaine.
+- **Un bouton « Actualiser les infos »**, dans le menu ⚙ de la fiche d'un jeu, redemande tout sans attendre. Ce menu apparaît aussi pour les jeux non installés.
+- **Plus de descriptions en français pour les jeux hors Steam et GOG.** Les jeux Epic sont décrits par le catalogue Epic quand ton compte Epic est connecté (Control, Fortnite, Disco Elysium…). Les jeux Battle.net aussi vendus sur Steam (Overwatch, Diablo IV, Sea of Thieves…) prennent leur fiche Steam. Un jeu possédé sur deux launchers, comme Rainbow Six Siege sur Ubisoft et Steam, passe par sa copie Steam. Valorant reste en anglais : aucune source ne le décrit en français.
+- **Les fiches vides de certains gros jeux se remplissent.** Quand Steam a regroupé les éditions d'un jeu, il répond sous un autre numéro que celui demandé, et Torii ne reconnaissait pas la réponse. Overwatch, Diablo IV et Call of Duty en faisaient partie.
+
 ## 0.21.1
 - **La langue choisie tient après le redémarrage.** Passer en français ou sur « Suivre Windows », puis cliquer sur « Redémarrer maintenant », pouvait ramener Torii en anglais : au démarrage, il relisait parfois un réglage antérieur au changement. Le choix est maintenant retenu à un endroit qui ne peut plus prendre de retard. Si c'est arrivé chez toi, choisis ta langue une dernière fois : elle restera.
 - **« Suivre Windows » donne bien des euros à un Windows français.** Quand Windows annonçait la langue sans le pays, Torii retombait sur les prix américains. Il se fie désormais au pays de la langue.

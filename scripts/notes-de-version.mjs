@@ -332,6 +332,7 @@ ${articles}
         <a href="https://github.com/tompoyeau/torii/issues">${L.signaler}</a>
       </nav>
     </footer>
+    <script src="${r}mesure.js" defer></script>
   </body>
 </html>
 `;

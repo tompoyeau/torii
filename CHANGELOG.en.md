@@ -5,6 +5,13 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.21.2
+- **Recent Steam games get their cover and banner back.** Steam now stores images for new games at an address Torii couldn't guess: Aniimo, for example, showed a plain gradient. Torii now asks Steam for the right address. And if an image fails to load, IGDB's takes over before the gradient.
+- **Game pages now refresh.** A description fetched once was kept forever: a game opened on its release day kept an empty page, and text translated since stayed in English. Pages are now fetched again after a month, the next day when they're empty, and a game that couldn't be found is searched for again after a week.
+- **A “Refresh details” button**, in the ⚙ menu of a game's page, fetches everything again right away. That menu now also shows for games that aren't installed.
+- **More translated descriptions for games outside Steam and GOG.** Epic games are described by the Epic catalog when your Epic account is connected (Control, Fortnite, Disco Elysium…). Battle.net games also sold on Steam (Overwatch, Diablo IV, Sea of Thieves…) use their Steam page. A game you own on two launchers, like Rainbow Six Siege on Ubisoft and Steam, goes through its Steam copy. Valorant stays in English: no source describes it in French.
+- **Empty pages for some big games fill in.** When Steam has merged a game's editions, it answers under a different number than the one requested, and Torii didn't recognise the answer. Overwatch, Diablo IV and Call of Duty were among them.
+
 ## 0.21.1
 - **The language you pick sticks after a restart.** Switching to French or to “Follow Windows”, then clicking “Restart now”, could bring Torii back in English: on startup, it sometimes read a setting from before the change. Your choice is now kept somewhere that can't fall behind. If it happened to you, pick your language one last time: it will stay.
 - **“Follow Windows” gives a French Windows euros.** When Windows reported the language without the country, Torii fell back to US prices. It now goes by the language's country.

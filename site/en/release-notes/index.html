@@ -14,7 +14,7 @@
       d'être revisité.
     -->
     <title>Torii release notes — every change, version by version</title>
-    <meta name="description" content="Every new feature and fix in Torii, version by version. Latest: 0.21.1, released September 13, 2026. A unified game library for Windows, free, in English and French." />
+    <meta name="description" content="Every new feature and fix in Torii, version by version. Latest: 0.21.2. A unified game library for Windows, free, in English and French." />
     <link rel="canonical" href="https://torii-app.fr/en/release-notes/" />
     <!-- Réciproques sur les deux pages, comme partout ailleurs sur le site. -->
     <link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
@@ -63,11 +63,23 @@
       </div>
 
       <div class="notes">
+        <article class="note-version" id="v0-21-2">
+          <header>
+            <h2><a href="#v0-21-2">Version 0.21.2</a></h2>
+            <span class="etiquette">Latest version</span>
+          </header>
+          <ul>
+            <li><strong>Recent Steam games get their cover and banner back.</strong> Steam now stores images for new games at an address Torii couldn't guess: Aniimo, for example, showed a plain gradient. Torii now asks Steam for the right address. And if an image fails to load, IGDB's takes over before the gradient.</li>
+            <li><strong>Game pages now refresh.</strong> A description fetched once was kept forever: a game opened on its release day kept an empty page, and text translated since stayed in English. Pages are now fetched again after a month, the next day when they're empty, and a game that couldn't be found is searched for again after a week.</li>
+            <li><strong>A “Refresh details” button</strong>, in the ⚙ menu of a game's page, fetches everything again right away. That menu now also shows for games that aren't installed.</li>
+            <li><strong>More translated descriptions for games outside Steam and GOG.</strong> Epic games are described by the Epic catalog when your Epic account is connected (Control, Fortnite, Disco Elysium…). Battle.net games also sold on Steam (Overwatch, Diablo IV, Sea of Thieves…) use their Steam page. A game you own on two launchers, like Rainbow Six Siege on Ubisoft and Steam, goes through its Steam copy. Valorant stays in English: no source describes it in French.</li>
+            <li><strong>Empty pages for some big games fill in.</strong> When Steam has merged a game's editions, it answers under a different number than the one requested, and Torii didn't recognise the answer. Overwatch, Diablo IV and Call of Duty were among them.</li>
+          </ul>
+        </article>
         <article class="note-version" id="v0-21-1">
           <header>
             <h2><a href="#v0-21-1">Version 0.21.1</a></h2>
             <time datetime="2026-09-13">September 13, 2026</time>
-            <span class="etiquette">Latest version</span>
           </header>
           <ul>
             <li><strong>The language you pick sticks after a restart.</strong> Switching to French or to “Follow Windows”, then clicking “Restart now”, could bring Torii back in English: on startup, it sometimes read a setting from before the change. Your choice is now kept somewhere that can't fall behind. If it happened to you, pick your language one last time: it will stay.</li>
@@ -543,6 +555,6 @@
         <a href="https://github.com/tompoyeau/torii/issues">Report an issue</a>
       </nav>
     </footer>
-      <script src="../../mesure.js" defer></script>
+    <script src="../../mesure.js" defer></script>
   </body>
 </html>
