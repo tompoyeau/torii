@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Torii — tableau de bord</title>
+<style>
+  :root {
+    --bg:#131019; --surface:#1b1823; --surface2:#221e2c; --bord:rgba(255,255,255,.1);
+    --texte:#ece9f3; --faible:#a39daf; --accent:#ff6b57; --second:#8b7cf6; --vert:#6ee7a8;
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--texte); line-height:1.5; padding:24px 16px 60px }
+  main { max-width:1080px; margin:0 auto }
+  header { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:18px }
+  h1 { font-size:21px; margin:0; letter-spacing:-.02em }
+  .sous { margin:2px 0 0; color:var(--faible); font-size:13px }
+  nav { display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid var(--bord); margin-bottom:20px }
+  nav button { background:none; border:0; border-bottom:2px solid transparent; color:var(--faible);
+               padding:10px 14px; font:inherit; font-size:14px; cursor:pointer; margin-bottom:-1px }
+  nav button[aria-selected="true"] { color:var(--texte); border-bottom-color:var(--accent); font-weight:600 }
+  .periode { display:flex; gap:4px; background:var(--surface); border:1px solid var(--bord); border-radius:10px; padding:3px }
+  .periode button { background:none; border:0; color:var(--faible); padding:6px 11px; border-radius:7px; font:inherit; font-size:13px; cursor:pointer }
+  .periode button[aria-pressed="true"] { background:var(--surface2); color:var(--texte) }
+  .chiffres { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px }
+  .tuile { background:var(--surface); border:1px solid var(--bord); border-radius:14px; padding:15px 17px }
+  .tuile b { display:block; font-size:26px; font-weight:800; letter-spacing:-.03em; color:var(--accent) }
+  .tuile span { font-size:12.5px; color:var(--faible) }
+  .tuile small { display:block; font-size:11.5px; color:var(--faible); opacity:.8; margin-top:2px }
+  .grille { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px }
+  .carte { background:var(--surface); border:1px solid var(--bord); border-radius:14px; padding:18px; margin-bottom:16px; min-width:0 }
+  .grille .carte { margin-bottom:0 }
+  .carte h2 { font-size:14px; margin:0 0 2px; font-weight:700 }
+  .carte > p { margin:0 0 14px; font-size:12.5px; color:var(--faible) }
+  .legende { display:flex; gap:14px; font-size:12px; color:var(--faible); margin:-6px 0 10px }
+  .legende i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px }
+  svg { display:block; width:100%; height:auto; overflow:visible }
+  svg text { fill:var(--faible); font-size:10px }
+  .axe { stroke:var(--bord); stroke-width:1 }
+  .trace { fill:none; stroke:var(--accent); stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
+  .trace2 { fill:none; stroke:var(--second); stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
+  .aire { fill:var(--accent); opacity:.13 }
+  .barre { fill:var(--second); opacity:.55 }
+  .repere { stroke:var(--faible); stroke-width:1; stroke-dasharray:4 4; opacity:.6 }
+  .liste { list-style:none; margin:0; padding:0; font-size:13px }
+  .liste li { position:relative; display:flex; justify-content:space-between; gap:10px; padding:6px 9px; border-radius:7px; overflow:hidden }
+  .liste li + li { margin-top:3px }
+  .liste .fond { position:absolute; inset:0 auto 0 0; background:var(--accent); opacity:.12; border-radius:7px }
+  .liste span, .liste b { position:relative; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .liste b { font-variant-numeric:tabular-nums; flex:none }
+  .vide { color:var(--faible); font-size:13px; margin:0 }
+  .table { overflow-x:auto }
+  table { width:100%; border-collapse:collapse; font-size:13px }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--bord); white-space:nowrap }
+  th { color:var(--faible); font-weight:600; font-size:12px; cursor:pointer; user-select:none }
+  th[data-tri]::after { content:" ↕"; opacity:.35 }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums }
+  tr:hover td { background:var(--surface2) }
+  .puce { display:inline-block; padding:1px 7px; border-radius:99px; font-size:11px; background:var(--surface2); color:var(--faible) }
+  .puce.on { color:var(--vert) }
+  input[type=search] { width:100%; max-width:320px; padding:9px 12px; border-radius:9px; border:1px solid var(--bord);
+                       background:#0f0d14; color:var(--texte); font:inherit; font-size:13px; margin-bottom:12px }
+  form { display:flex; gap:10px; flex-wrap:wrap; align-items:center }
+  form input { flex:1; min-width:220px; padding:11px 13px; border-radius:10px; border:1px solid var(--bord);
+               background:#0f0d14; color:var(--texte); font-size:14px; font-family:inherit }
+  .btn { padding:11px 20px; border:0; border-radius:10px; background:var(--accent); color:#1a0f0c;
+         font-weight:700; font-size:14px; cursor:pointer; font-family:inherit }
+  .lien { background:none; border:0; color:var(--faible); padding:6px 0; text-decoration:underline; font:inherit; font-size:12.5px; cursor:pointer }
+  .erreur { color:var(--accent); font-size:13px; margin:12px 0 0 }
+  .note { font-size:12px; color:var(--faible); margin:10px 0 0 }
+  [hidden] { display:none !important }
+</style>
+</head><body><main>
+  <header>
+    <div>
+      <h1>Torii — tableau de bord</h1>
+      <p class="sous" id="sous">Site, téléchargements, comptes et service.</p>
+    </div>
+    <div class="periode" id="periode" hidden>
+      <button data-j="7">7 j</button><button data-j="30">30 j</button><button data-j="90">90 j</button><button data-j="365">1 an</button>
+    </div>
+  </header>
+
+  <section id="porte" class="carte" hidden>
+    <h2>Jeton d'administration</h2>
+    <p>Il reste dans ce navigateur et ne part que dans l'en-tête <code>Authorization</code>.</p>
+    <form id="form">
+      <input id="jeton" type="password" placeholder="ADMIN_TOKEN" autocomplete="off">
+      <button class="btn" type="submit">Ouvrir</button>
+    </form>
+    <p class="erreur" id="erreur" hidden></p>
+  </section>
+
+  <div id="tableau" hidden>
+    <nav role="tablist">
+      <button role="tab" data-onglet="ensemble">Vue d'ensemble</button>
+      <button role="tab" data-onglet="site">Site</button>
+      <button role="tab" data-onglet="telechargements">Téléchargements</button>
+      <button role="tab" data-onglet="comptes">Comptes</button>
+      <button role="tab" data-onglet="service">Service</button>
+    </nav>
+
+    <section data-panneau="ensemble">
+      <div class="chiffres" id="t-ensemble"></div>
+      <div class="carte">
+        <h2>Visites du site</h2>
+        <p>Pages vues et visiteurs distincts par jour.</p>
+        <div class="legende"><span><i style="background:var(--second);opacity:.55"></i>pages vues</span><span><i style="background:var(--accent)"></i>visiteurs</span></div>
+        <div id="g-ensemble-visites"></div>
+      </div>
+      <div class="carte">
+        <h2>Derniers comptes créés</h2>
+        <div class="table" id="t-derniers"></div>
+      </div>
+    </section>
+
+    <section data-panneau="site">
+      <div class="chiffres" id="t-site"></div>
+      <div class="carte">
+        <h2>Pages vues et visiteurs</h2>
+        <p>Un visiteur = une même connexion et un même navigateur sur une journée. Sans cookie, on ne reconnaît personne d'un jour à l'autre.</p>
+        <div class="legende"><span><i style="background:var(--second);opacity:.55"></i>pages vues</span><span><i style="background:var(--accent)"></i>visiteurs</span></div>
+        <div id="g-site"></div>
+      </div>
+      <div class="grille">
+        <div class="carte"><h2>Pages</h2><p>Pages vues.</p><div id="l-pages"></div></div>
+        <div class="carte"><h2>Provenance</h2><p>Site d'où arrivent les visiteurs.</p><div id="l-sources"></div></div>
+        <div class="carte"><h2>Pays</h2><p>Visiteurs par jour, cumulés.</p><div id="l-pays"></div></div>
+        <div class="carte"><h2>Appareil</h2><p>Visiteurs par jour, cumulés.</p><div id="l-appareils"></div></div>
+      </div>
+    </section>
+
+    <section data-panneau="telechargements">
+      <div class="chiffres" id="t-dl"></div>
+      <div class="carte">
+        <h2>Par jour</h2>
+        <p>Clics sur « Télécharger » du site, et installeurs servis par GitHub (relevé quotidien, par différence).</p>
+        <div class="legende"><span><i style="background:var(--accent)"></i>clics sur le site</span><span><i style="background:var(--second)"></i>installeurs GitHub</span></div>
+        <div id="g-dl"></div>
+      </div>
+      <div class="carte">
+        <h2>Par version</h2>
+        <p>Cumuls GitHub depuis la publication de chaque version.</p>
+        <div class="table" id="t-versions"></div>
+        <p class="note">L'installeur <b>.exe</b> sert à la fois aux nouvelles installations et aux mises à jour automatiques : GitHub ne permet pas de les séparer. Les <b>vérifications</b> comptent les lectures de <code>latest.json</code> par l'application pendant que la version était la dernière — un bon indicateur du nombre de lancements.</p>
+      </div>
+    </section>
+
+    <section data-panneau="comptes">
+      <div class="chiffres" id="t-comptes"></div>
+      <div class="carte">
+        <h2>Tous les comptes</h2>
+        <input type="search" id="filtre" placeholder="Filtrer par nom ou adresse…">
+        <div class="table" id="t-tous"></div>
+      </div>
+    </section>
+
+    <section data-panneau="service">
+      <div class="chiffres" id="t-service"></div>
+      <div class="carte"><h2>Comptes créés</h2><p>Le cumul, relevé chaque jour.</p><div id="g-comptes"></div></div>
+      <div class="carte"><h2>Pic de présence simultanée</h2><p id="p-pic">Le maximum atteint chaque jour.</p><div id="g-pic"></div></div>
+      <div class="carte"><h2>Comptes actifs sur 7 jours</h2><p>Combien s'en servent encore.</p><div id="g-actifs"></div></div>
+    </section>
+
+    <button class="lien" id="oublier">Oublier le jeton sur cet appareil</button>
+  </div>
+
+<script>
+const CLE = "torii-admin";
+const CLE_ONGLET = "torii-admin-onglet";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nb = (n) => Number(n || 0).toLocaleString("fr-FR");
+const somme = (t, k) => t.reduce((s, x) => s + Number(x[k] || 0), 0);
+
+let jeton = null;
+let fenetre = 30;
+let donnees = null;
+
+/** Date relative lisible : « il y a 3 h », « il y a 12 j ». */
+function depuis(ts) {
+  if (!ts) return "—";
+  const s = Date.now() / 1000 - ts;
+  if (s < 3600) return "il y a " + Math.max(1, Math.round(s / 60)) + " min";
+  if (s < 86400) return "il y a " + Math.round(s / 3600) + " h";
+  return "il y a " + Math.round(s / 86400) + " j";
+}
+const date = (ts) => ts ? new Date(ts * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+/** Complète les jours sans donnée : une courbe qui saute les jours vides ment sur la pente. */
+function jourParJour(lignes, cles, n) {
+  const index = new Map(lignes.map((l) => [l.jour, l]));
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const j = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const l = index.get(j) || {};
+    const o = { j };
+    for (const k of cles) o[k] = Number(l[k] || 0);
+    out.push(o);
+  }
+  return out;
+}
+
+/**
+ * Graphique : barres (série 1, facultative) + une ou deux courbes. Pas de bibliothèque —
+ * la page est servie par le Worker, et un tableau de bord qui dépend d'un CDN tombe avec lui.
+ */
+function graphe(hote, pts, { barres, lignes = [], plafond = 0 }) {
+  if (!pts.length) { hote.innerHTML = "<p class='vide'>Pas encore de données.</p>"; return; }
+  const L = 720, H = 190, m = 28;
+  const valeurs = pts.flatMap((p) => [barres ? p[barres] : 0, ...lignes.map((k) => p[k])]);
+  const sommet = Math.max(0, ...valeurs);
+  // L'échelle suit les données ; le repère du plafond n'entre qu'au quart (cf. historique).
+  const proche = plafond && sommet >= plafond / 4;
+  const haut = Math.max(1, sommet, proche ? plafond * 1.05 : 0);
+  const n = pts.length;
+  const pas = (L - m * 2) / n;
+  const x = (i) => m + pas * i + pas / 2;
+  const y = (v) => H - m - (v / haut) * (H - m * 2);
+  let svg = "";
+  if (barres) {
+    const lb = Math.max(1, pas * 0.7);
+    pts.forEach((p, i) => {
+      if (!p[barres]) return;
+      svg += `<rect class="barre" x="${(x(i) - lb / 2).toFixed(1)}" y="${y(p[barres]).toFixed(1)}" width="${lb.toFixed(1)}" height="${(H - m - y(p[barres])).toFixed(1)}" rx="2"><title>${p.j} : ${p[barres]}</title></rect>`;
+    });
+  }
+  lignes.forEach((k, idx) => {
+    const d = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p[k]).toFixed(1)}`).join(" ");
+    if (idx === 0 && !barres) svg += `<path class="aire" d="${d} L${x(n - 1).toFixed(1)} ${H - m} L${x(0).toFixed(1)} ${H - m} Z"/>`;
+    svg += `<path class="${idx === 0 ? "trace" : "trace2"}" d="${d}"/>`;
+    if (n <= 45) pts.forEach((p, i) => { svg += `<circle cx="${x(i).toFixed(1)}" cy="${y(p[k]).toFixed(1)}" r="2.2" fill="var(--${idx === 0 ? "accent" : "second"})"><title>${p.j} : ${p[k]}</title></circle>`; });
+  });
+  if (proche) svg += `<path class="repere" d="M${m} ${y(plafond).toFixed(1)} H${L - m}"/><text x="${L - m}" y="${(y(plafond) - 5).toFixed(1)}" text-anchor="end">plafond estimé ${plafond}</text>`;
+  hote.innerHTML = `<svg viewBox="0 0 ${L} ${H}" role="img">${svg}
+    <path class="axe" d="M${m} ${H - m} H${L - m}"/>
+    <text x="${m}" y="${H - m + 15}">${pts[0].j}</text>
+    <text x="${L - m}" y="${H - m + 15}" text-anchor="end">${pts[n - 1].j}</text>
+    <text x="${m}" y="${m - 8}">${Math.round(haut)}</text></svg>`;
+}
+
+function tuile(valeur, libelle, detail) {
+  return `<div class="tuile"><b>${valeur}</b><span>${libelle}</span>${detail ? `<small>${detail}</small>` : ""}</div>`;
+}
+
+function liste(hote, lignes) {
+  if (!lignes.length) { hote.innerHTML = "<p class='vide'>Rien sur la période.</p>"; return; }
+  const max = Math.max(...lignes.map((l) => l.n));
+  hote.innerHTML = `<ul class="liste">${lignes.map((l) =>
+    `<li><i class="fond" style="width:${(100 * l.n / max).toFixed(1)}%"></i><span>${esc(l.nom)}</span><b>${nb(l.n)}</b></li>`).join("")}</ul>`;
+}
+
+/** Tableau triable par clic sur l'en-tête. */
+function tableau(hote, colonnes, lignes, triInitial) {
+  let tri = triInitial;
+  function dessiner() {
+    const [cle, sens] = tri;
+    const rangees = [...lignes].sort((a, b) => {
+      const va = a[cle] ?? -Infinity, vb = b[cle] ?? -Infinity;
+      return (va > vb ? 1 : va < vb ? -1 : 0) * sens;
+    });
+    hote.innerHTML = `<table><thead><tr>${colonnes.map((c) =>
+      `<th data-tri="${c.cle}" class="${c.n ? "n" : ""}">${c.titre}</th>`).join("")}</tr></thead><tbody>${rangees.map((l) =>
+      `<tr>${colonnes.map((c) => `<td class="${c.n ? "n" : ""}">${c.rendu ? c.rendu(l) : esc(l[c.cle])}</td>`).join("")}</tr>`).join("")
+      || `<tr><td colspan="${colonnes.length}" class="vide">Aucun compte.</td></tr>`}</tbody></table>`;
+    hote.querySelectorAll("th").forEach((th) => th.addEventListener("click", () => {
+      const k = th.dataset.tri;
+      tri = [k, tri[0] === k ? -tri[1] : -1];
+      dessiner();
+    }));
+  }
+  dessiner();
+}
+
+const COLONNES_COMPTES = [
+  { cle: "nom", titre: "Nom" },
+  { cle: "email", titre: "Adresse" },
+  { cle: "cree", titre: "Créé le", rendu: (l) => date(l.cree) },
+  { cle: "vu", titre: "Vu", rendu: (l) => depuis(l.vu) },
+  { cle: "jeux", titre: "Jeux synchro", n: true, rendu: (l) => l.jeux ? nb(l.jeux) : "—" },
+  { cle: "appareils", titre: "Appareils", n: true },
+  { cle: "amis", titre: "Amis", n: true },
+  { cle: "steam", titre: "Steam", rendu: (l) => l.steam ? "<span class='puce on'>lié</span>" : "<span class='puce'>non</span>" },
+];
+
+function afficher(d) {
+  donnees = d;
+  const a = d.audience;
+  const n = d.maintenant;
+  const f = d.fenetre;
+  const visites = jourParJour(a.parJour, ["vues", "visiteurs", "clics"], f);
+  const vues = somme(visites, "vues"), visiteurs = somme(visites, "visiteurs"), clics = somme(visites, "clics");
+  const versions = a.versions || [];
+  const derniere = versions[0];
+  const semaine = Date.now() / 1000 - 7 * 86400;
+  const nouveaux = d.comptes.filter((c) => c.cree >= Date.now() / 1000 - f * 86400).length;
+
+  // Installeurs par jour : différence entre deux relevés consécutifs.
+  const parJourGh = [];
+  for (let i = 1; i < a.releves.length; i++) {
+    parJourGh.push({ jour: a.releves[i].jour, installeurs: a.releves[i].installeurs - a.releves[i - 1].installeurs });
+  }
+  const gh = jourParJour(parJourGh, ["installeurs"], f);
+  const dl = visites.map((v, i) => ({ j: v.j, clics: v.clics, installeurs: gh[i].installeurs }));
+
+  const periode = `sur ${f} jours`;
+  $("t-ensemble").innerHTML =
+    tuile(nb(visiteurs), "visiteurs du site", periode) +
+    tuile(nb(clics), "clics « Télécharger »", periode) +
+    tuile(nb(n.comptes), "comptes Torii", `+${nouveaux} ${periode}`) +
+    tuile(nb(n.actifs_7j), "actifs sur 7 jours", `${n.en_ligne} en ligne à l'instant`);
+  graphe($("g-ensemble-visites"), visites, { barres: "vues", lignes: ["visiteurs"] });
+  tableau($("t-derniers"), COLONNES_COMPTES.slice(0, 4), d.comptes.slice(0, 5), ["cree", -1]);
+
+  $("t-site").innerHTML =
+    tuile(nb(vues), "pages vues", periode) +
+    tuile(nb(visiteurs), "visiteurs", periode) +
+    tuile(visiteurs ? (vues / visiteurs).toFixed(1).replace(".", ",") : "—", "pages par visiteur") +
+    tuile(visiteurs ? Math.round(100 * clics / visiteurs) + " %" : "—", "clics / visiteurs", "taux de téléchargement");
+  graphe($("g-site"), visites, { barres: "vues", lignes: ["visiteurs"] });
+  liste($("l-pages"), a.pages);
+  liste($("l-sources"), a.sources);
+  liste($("l-pays"), a.pays);
+  liste($("l-appareils"), a.appareils);
+
+  const totalExe = versions.reduce((s, v) => s + v.exe + v.msi, 0);
+  $("t-dl").innerHTML =
+    tuile(nb(clics), "clics sur le site", periode) +
+    tuile(a.versions ? nb(totalExe) : "?", "installeurs servis", "toutes versions, depuis le début") +
+    tuile(derniere ? nb(derniere.exe + derniere.msi) : "?", "installeurs " + (derniere ? esc(derniere.version) : ""), derniere ? "publiée le " + date(Date.parse(derniere.date) / 1000) : "") +
+    tuile(derniere ? nb(derniere.controles) : "?", "vérifications de MAJ", derniere ? "depuis la " + esc(derniere.version) : "");
+  graphe($("g-dl"), dl, { lignes: ["clics", "installeurs"] });
+  if (!a.versions) {
+    $("t-versions").innerHTML = "<p class='vide'>GitHub n'a pas répondu (quota d'API ?). Réessaie dans un quart d'heure, ou pose le secret GITHUB_TOKEN.</p>";
+  } else {
+    tableau($("t-versions"), [
+      { cle: "version", titre: "Version" },
+      { cle: "date", titre: "Publiée le", rendu: (l) => date(Date.parse(l.date) / 1000) },
+      { cle: "exe", titre: ".exe", n: true },
+      { cle: "msi", titre: ".msi", n: true },
+      { cle: "controles", titre: "Vérifications", n: true },
+    ], versions, ["date", -1]);
+  }
+
+  const actifsSemaine = d.comptes.filter((c) => c.vu >= semaine).length;
+  $("t-comptes").innerHTML =
+    tuile(nb(d.comptes.length), "comptes") +
+    tuile(nb(nouveaux), "nouveaux", periode) +
+    tuile(nb(actifsSemaine), "vus cette semaine") +
+    tuile(nb(d.comptes.filter((c) => c.jeux).length), "bibliothèques synchronisées");
+  const dessinerComptes = () => {
+    const q = $("filtre").value.trim().toLowerCase();
+    const lignes = q ? d.comptes.filter((c) => (c.nom + " " + c.email).toLowerCase().includes(q)) : d.comptes;
+    tableau($("t-tous"), COLONNES_COMPTES, lignes, ["cree", -1]);
+  };
+  $("filtre").oninput = dessinerComptes;
+  dessinerComptes();
+
+  const jours = d.jours.slice(-f);
+  $("t-service").innerHTML =
+    tuile(nb(n.comptes), "comptes") +
+    tuile(nb(n.actifs_7j), "actifs sur 7 jours") +
+    tuile(nb(n.en_ligne), "en ligne à l'instant") +
+    tuile(nb(n.biblios), "bibliothèques synchronisées");
+  const record = Math.max(0, ...d.jours.map((j) => j.pic_en_ligne));
+  $("p-pic").textContent = "Le maximum atteint chaque jour — c'est lui qui se compare au plafond, pas le nombre de comptes. Record : "
+    + record + " sur un plafond estimé à " + d.plafond + ".";
+  graphe($("g-comptes"), jours.map((j) => ({ j: j.jour, v: j.comptes })), { lignes: ["v"] });
+  graphe($("g-pic"), jours.map((j) => ({ j: j.jour, v: j.pic_en_ligne })), { lignes: ["v"], plafond: d.plafond });
+  graphe($("g-actifs"), jours.map((j) => ({ j: j.jour, v: j.actifs_7j })), { lignes: ["v"] });
+
+  $("sous").textContent = "Mis à jour à " + new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  document.querySelectorAll("#periode button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.j) === f)));
+  $("porte").hidden = true;
+  $("periode").hidden = false;
+  $("tableau").hidden = false;
+}
+
+function ouvrirOnglet(nom) {
+  document.querySelectorAll("nav button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.onglet === nom)));
+  document.querySelectorAll("[data-panneau]").forEach((p) => { p.hidden = p.dataset.panneau !== nom; });
+  try { localStorage.setItem(CLE_ONGLET, nom); } catch {}
+}
+
+async function charger() {
+  const r = await fetch("/v1/admin/stats?jours=" + fenetre, { headers: { authorization: "Bearer " + jeton } });
+  if (!r.ok) throw new Error(r.status === 404 ? "Jeton refusé." : "Le serveur a répondu " + r.status + ".");
+  return await r.json();
+}
+
+async function essayer(candidat, memoriser) {
+  jeton = candidat;
+  try {
+    afficher(await charger());
+    if (memoriser) { try { localStorage.setItem(CLE, candidat); } catch {} }
+    return true;
+  } catch (e) {
+    $("erreur").textContent = e.message;
+    $("erreur").hidden = false;
+    $("porte").hidden = false;
+    $("tableau").hidden = true;
+    $("periode").hidden = true;
+    return false;
+  }
+}
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  $("erreur").hidden = true;
+  essayer($("jeton").value.trim(), true);
+});
+$("oublier").addEventListener("click", () => {
+  try { localStorage.removeItem(CLE); } catch {}
+  location.reload();
+});
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => ouvrirOnglet(b.dataset.onglet)));
+document.querySelectorAll("#periode button").forEach((b) => b.addEventListener("click", () => {
+  fenetre = Number(b.dataset.j);
+  essayer(jeton, false);
+}));
+
+let onglet = "ensemble";
+try { onglet = localStorage.getItem(CLE_ONGLET) || onglet; } catch {}
+ouvrirOnglet(onglet);
+
+let garde = null;
+try { garde = localStorage.getItem(CLE); } catch {}
+if (garde) essayer(garde, false); else $("porte").hidden = false;
+</script>
+</main></body></html>

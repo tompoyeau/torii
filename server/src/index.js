@@ -30,6 +30,7 @@ import {
 } from "./social.js";
 import { forgetAll, forgetLibrary, libraryIndex, readLibrary, uploadLibrary } from "./library.js";
 import { pageAdmin, releverStats, statsAdmin } from "./admin.js";
+import { enregistrerVisite, purgerVisites, releverGithub } from "./audience.js";
 
 /**
  * Plafond absolu du corps d'une requête, toutes routes confondues — la plus généreuse est
@@ -146,6 +147,9 @@ export default {
      */
     if (key === "GET /admin") return pageAdmin();
     if (key === "GET /v1/admin/stats") return await run(statsAdmin, request, env);
+    // Balise du site vitrine (cf. audience.js). Publique par nature ; la limite par IP
+    // ci-dessus suffit à empêcher qu'on la martèle.
+    if (key === "POST /v1/hit") return await run(enregistrerVisite, request, env);
 
     const open = PUBLIC[key];
     if (open) {
@@ -205,7 +209,11 @@ export default {
     // s'exécute pas sur le passage horaire : il supprime, et rien ne se gagne à le faire
     // douze fois par jour (cf. `RELEVE_CRON` pour le sens du test).
     ctx.waitUntil(releverStats(env));
-    if (event.cron !== RELEVE_CRON) ctx.waitUntil(menage(env));
+    ctx.waitUntil(releverGithub(env).catch((e) => console.error("relevé GitHub —", e)));
+    if (event.cron !== RELEVE_CRON) {
+      ctx.waitUntil(menage(env));
+      ctx.waitUntil(purgerVisites(env));
+    }
   },
 };
 
