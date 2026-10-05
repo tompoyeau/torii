@@ -92,14 +92,22 @@ const { src: heroSrc, onError: onHeroError } = useImageCascade(() => [game.value
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
   color: #ffd9c9; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
 }
+/* L'onde est un disque qui grandit et s'efface (transform + opacity) : animer un box-shadow
+   forçait le navigateur à repeindre à chaque image, ce qui faisait ramer Firefox au défilement. */
 .pulse {
-  width: 7px; height: 7px; border-radius: 50%; background: #6ee7a8; animation: pulse 2.2s infinite;
+  position: relative; width: 7px; height: 7px; border-radius: 50%; background: #6ee7a8;
+}
+.pulse::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: rgba(110, 231, 168, 0.6); animation: pulse 2.2s infinite;
 }
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(110, 231, 168, 0.6); }
-  70% { box-shadow: 0 0 0 9px rgba(110, 231, 168, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(110, 231, 168, 0); }
+  0% { transform: scale(1); opacity: 1; }
+  70%, 100% { transform: scale(3.6); opacity: 0; } /* 7 px + 9 px d'onde de chaque côté */
 }
+/* Les règles globales « réduire les animations » visent `*`, pas les pseudo-éléments. */
+@media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; opacity: 0; } }
+:root[data-reduce-motion] .pulse::after { animation: none; opacity: 0; }
 .hero-title { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 10px; color: #fff; text-wrap: balance; }
 .hero-meta {
   font-family: var(--mono); font-size: 12.5px; color: rgba(255, 255, 255, 0.82);

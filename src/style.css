@@ -230,6 +230,18 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 3px 10px -3px rgba(31, 168, 98, 0.7);
 }
 
+/* Firefox recalcule chaque flou d'arrière-plan (backdrop-filter) à chaque image : avec la barre du
+   haut collante et les boutons translucides, le défilement tombait à 76 images lentes sur 180
+   (mesuré sur la démo web, 6 sans aucun flou). On les retire donc pour lui seul, d'où le
+   `!important` qui passe devant les styles « scoped ». L'app de bureau (WebView2, Chromium) et
+   Chrome gardent leurs flous. Les fonds déjà sombres restent lisibles ; le bouton fantôme,
+   posé sur les visuels, prend un peu plus d'opacité pour compenser. */
+@supports (-moz-appearance: none) {
+  *, *::before, *::after { backdrop-filter: none !important; }
+  .btn-ghost { background: rgba(255, 255, 255, 0.2); }
+  .btn-ghost:hover { background: rgba(255, 255, 255, 0.28); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
