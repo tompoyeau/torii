@@ -3,6 +3,7 @@ import "./style.css";
 import App from "./App.vue";
 import { logFrontError } from "./lib/tauri";
 import { localeTransmise } from "./composables/usePreferences";
+import { demarrerStats } from "./lib/stats";
 
 /**
  * Tout ce qui casse dans l'interface part dans le journal de l'application.
@@ -40,4 +41,7 @@ app.config.errorHandler = (err, _instance, info) => {
  * absorbe les erreurs), mais le `finally` le garantit même si ça changeait un jour.
  * Pas d'`await` au niveau du module : la cible de compilation ne l'accepte pas.
  */
-void localeTransmise.finally(() => app.mount("#app"));
+void localeTransmise.finally(() => {
+  app.mount("#app");
+  demarrerStats(); // démo web seulement, voir lib/stats.ts
+});

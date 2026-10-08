@@ -31,6 +31,7 @@ import {
 import { forgetAll, forgetLibrary, libraryIndex, readLibrary, uploadLibrary } from "./library.js";
 import { pageAdmin, releverStats, statsAdmin } from "./admin.js";
 import { enregistrerVisite, purgerVisites, releverGithub } from "./audience.js";
+import { relayerVersUmami } from "./umami.js";
 
 /**
  * Plafond absolu du corps d'une requête, toutes routes confondues — la plus généreuse est
@@ -208,11 +209,16 @@ export default {
     // présence, qu'une mesure unique à 4 h du matin manquerait. Le ménage, lui, ne
     // s'exécute pas sur le passage horaire : il supprime, et rien ne se gagne à le faire
     // douze fois par jour (cf. `RELEVE_CRON` pour le sens du test).
-    ctx.waitUntil(releverStats(env));
-    ctx.waitUntil(releverGithub(env).catch((e) => console.error("relevé GitHub —", e)));
+    const releves = Promise.all([
+      releverStats(env),
+      releverGithub(env).catch((e) => console.error("relevé GitHub —", e)),
+    ]);
+    ctx.waitUntil(releves);
     if (event.cron !== RELEVE_CRON) {
       ctx.waitUntil(menage(env));
       ctx.waitUntil(purgerVisites(env));
+      // Une fois par nuit, et seulement relevés écrits : il compare les deux derniers.
+      ctx.waitUntil(releves.then(() => relayerVersUmami(env)).catch((e) => console.error("relais Umami —", e)));
     }
   },
 };
