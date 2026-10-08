@@ -117,10 +117,11 @@ npx wrangler d1 execute torii --remote --file=migrations/0001_libraries.sql
 npx wrangler d1 execute torii --remote --file=migrations/0002_sessions.sql
 npx wrangler d1 execute torii --remote --file=migrations/0003_stats.sql
 npx wrangler d1 execute torii --remote --file=migrations/0004_audience.sql
+npx wrangler d1 execute torii --remote --file=migrations/0005_drop_hits.sql
 ```
 
 `0004` crée le relevé des téléchargements GitHub (`github_releve`) et la table `hits` de
-l'ancien compteur du site, qui ne sert plus (l'audience du site passe par Umami depuis le
+l'ancien compteur du site, que `0005` supprime (l'audience du site passe par Umami depuis le
 8 octobre 2026). Les relevés `stats` et `github_releve` sont relayés chaque nuit vers Umami
 (`src/umami.js`), fiche « Torii · comptes et téléchargements » sur stats.topo-host.com. Le secret facultatif `GITHUB_TOKEN` (jeton GitHub sans aucun
 droit, lecture des dépôts publics) évite le quota de 60 requêtes/heure de l'API GitHub, que

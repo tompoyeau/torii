@@ -143,21 +143,9 @@ CREATE TABLE IF NOT EXISTS stats (
   releve_at    INTEGER NOT NULL
 );
 
--- Audience du site vitrine et relevé des téléchargements GitHub (cf. migration 0004 et
--- src/audience.js). Sans cookie : `visiteur` est une empreinte qui change chaque jour.
-CREATE TABLE IF NOT EXISTS hits (
-  at       INTEGER NOT NULL,
-  jour     TEXT    NOT NULL,
-  type     TEXT    NOT NULL CHECK (type IN ('vue', 'telechargement')),
-  page     TEXT    NOT NULL,
-  langue   TEXT,
-  source   TEXT,
-  pays     TEXT,
-  mobile   INTEGER NOT NULL DEFAULT 0,
-  visiteur TEXT    NOT NULL
-);
-CREATE INDEX IF NOT EXISTS hits_jour ON hits(jour, type);
-
+-- Relevé des téléchargements GitHub (cf. migration 0004 et src/releves.js), relayé vers
+-- Umami chaque nuit. L'audience du site, elle, va directement à Umami (table `hits`
+-- supprimée par la migration 0005).
 CREATE TABLE IF NOT EXISTS github_releve (
   jour        TEXT PRIMARY KEY,
   installeurs INTEGER NOT NULL,
