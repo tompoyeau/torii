@@ -81,8 +81,5 @@ simple = { limit = 20, period = 60 }
 [triggers]
 crons = ["17 4 * * *", "7 * * * *"]
 
-# Les secrets (PEPPER, EMAIL_FROM, RESEND_API_KEY, DEV_CODES, ADMIN_TOKEN) ne sont PAS
+# Les secrets (PEPPER, EMAIL_FROM, RESEND_API_KEY, DEV_CODES, GITHUB_TOKEN) ne sont PAS
 # ici : `wrangler secret put`.
-#
-# ADMIN_TOKEN ouvre le panneau de suivi (`/admin`). Absent, la route se comporte comme
-# une URL inconnue — fermée par défaut, jamais ouverte par défaut.

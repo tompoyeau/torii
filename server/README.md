@@ -119,8 +119,10 @@ npx wrangler d1 execute torii --remote --file=migrations/0003_stats.sql
 npx wrangler d1 execute torii --remote --file=migrations/0004_audience.sql
 ```
 
-`0004` crée les tables de l'audience du site (`hits`) et du relevé des téléchargements
-GitHub (`github_releve`). Le secret facultatif `GITHUB_TOKEN` (jeton GitHub sans aucun
+`0004` crée le relevé des téléchargements GitHub (`github_releve`) et la table `hits` de
+l'ancien compteur du site, qui ne sert plus (l'audience du site passe par Umami depuis le
+8 octobre 2026). Les relevés `stats` et `github_releve` sont relayés chaque nuit vers Umami
+(`src/umami.js`), fiche « Torii · comptes et téléchargements » sur stats.topo-host.com. Le secret facultatif `GITHUB_TOKEN` (jeton GitHub sans aucun
 droit, lecture des dépôts publics) évite le quota de 60 requêtes/heure de l'API GitHub, que
 les IP de sortie des Workers partagent avec d'autres clients :
 `npx wrangler secret put GITHUB_TOKEN`.
@@ -235,9 +237,6 @@ Les routes privées attendent `Authorization: Bearer <jeton>`.
 | `GET /v1/library/{compte}/{appareil}` | La bibliothèque elle-même. Gère `If-None-Match` → `304`. |
 | `DELETE /v1/library/{appareil}` | Oublie un appareil (objet R2 compris). |
 | `DELETE /v1/library` | Cesser de synchroniser : tout part. |
-| `POST /v1/hit` | Balise d'audience du site vitrine (`site/mesure.js`). Publique, sans cookie, répond toujours `204`. |
-| `GET /admin` | Tableau de bord (page sans données). |
-| `GET /v1/admin/stats?jours=30` | Ses données, derrière `ADMIN_TOKEN` : service, audience, téléchargements, liste des comptes. |
 
 ### Pourquoi `PUT /v1/presence` renvoie les amis
 

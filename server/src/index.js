@@ -29,8 +29,7 @@ import {
   rotateCode, suggestions,
 } from "./social.js";
 import { forgetAll, forgetLibrary, libraryIndex, readLibrary, uploadLibrary } from "./library.js";
-import { pageAdmin, releverStats, statsAdmin } from "./admin.js";
-import { enregistrerVisite, purgerVisites, releverGithub } from "./audience.js";
+import { releverGithub, releverStats } from "./releves.js";
 import { relayerVersUmami } from "./umami.js";
 
 /**
@@ -138,20 +137,6 @@ export default {
 
     const key = `${request.method} ${path}`;
 
-    /**
-     * Le panneau de suivi. Il ne passe ni par `PUBLIC` ni par `PRIVATE` parce qu'il ne
-     * s'authentifie pas de la même façon : pas une session de joueur, mais un secret de
-     * serveur (`ADMIN_TOKEN`).
-     *
-     * La page est servie sans jeton — elle ne contient aucune donnée, seulement le code
-     * qui va les demander. Les chiffres, eux, sont derrière le secret.
-     */
-    if (key === "GET /admin") return pageAdmin();
-    if (key === "GET /v1/admin/stats") return await run(statsAdmin, request, env);
-    // Balise du site vitrine (cf. audience.js). Publique par nature ; la limite par IP
-    // ci-dessus suffit à empêcher qu'on la martèle.
-    if (key === "POST /v1/hit") return await run(enregistrerVisite, request, env);
-
     const open = PUBLIC[key];
     if (open) {
       /**
@@ -216,7 +201,6 @@ export default {
     ctx.waitUntil(releves);
     if (event.cron !== RELEVE_CRON) {
       ctx.waitUntil(menage(env));
-      ctx.waitUntil(purgerVisites(env));
       // Une fois par nuit, et seulement relevés écrits : il compare les deux derniers.
       ctx.waitUntil(releves.then(() => relayerVersUmami(env)).catch((e) => console.error("relais Umami —", e)));
     }
