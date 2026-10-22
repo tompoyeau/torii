@@ -23,7 +23,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
 const PROXY: &str = "https://torii-igdb-proxy.toriiapp.workers.dev/itad";
@@ -107,9 +107,26 @@ pub struct StorePrice {
     /// `false` si l'offre est en rupture de stock (Instant Gaming). Les offres ITAD
     /// sont toujours considérées disponibles (elles proviennent de deals en cours).
     pub available: bool,
+    /// Plateformes d'activation de l'offre selon ITAD (`Steam`, `GOG`, `Drm Free`…).
+    pub drm: Vec<String>,
+    /// Fin annoncée de l'offre (ISO 8601).
+    pub expiry: Option<String>,
+    /// Code promo à saisir chez le vendeur pour obtenir ce prix.
+    pub voucher: Option<String>,
 }
 
-/// Fiche produit : comparatif de prix + métadonnée descriptive (IGDB).
+/// Une note critique ou communautaire (ITAD `games/info/v2` → `reviews`).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreReview {
+    /// `Steam`, `Metascore` ou `OpenCritic`.
+    pub source: String,
+    pub score: u32,
+    pub count: u64,
+    pub url: Option<String>,
+}
+
+/// Fiche produit : comparatif de prix + métadonnée descriptive (IGDB, Steam).
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StoreGame {
@@ -117,6 +134,23 @@ pub struct StoreGame {
     pub title: String,
     pub cover_url: Option<String>,
     pub hero_url: Option<String>,
+    /// Appid Steam, si le jeu y est vendu.
+    pub app_id: Option<u64>,
+    /// Date de sortie (`AAAA-MM-JJ`) selon ITAD.
+    pub release_date: Option<String>,
+    pub developers: Vec<String>,
+    pub publishers: Vec<String>,
+    pub reviews: Vec<StoreReview>,
+    /// Joueurs Steam sur 24 h et record historique (ITAD `players`).
+    pub players_day: Option<u64>,
+    pub players_peak: Option<u64>,
+    /// Personnes qui suivent ce jeu sur le comparateur.
+    pub waitlisted: Option<u64>,
+    /// Plus bas des 3 derniers mois et de l'année (même devise que `cheapest_ever`).
+    pub low_3m: Option<f64>,
+    pub low_1y: Option<f64>,
+    /// Ce que Steam sait du jeu (captures, langues, configuration…), s'il y est vendu.
+    pub steam: Option<super::fiche::FicheSteam>,
     /// Prix le plus bas jamais atteint, si connu.
     pub cheapest_ever: Option<f64>,
     /// Devise de `cheapest_ever` (les offres portent chacune la leur).
@@ -132,23 +166,70 @@ pub struct StoreGame {
 
 // --- Accès HTTP au proxy ITAD -------------------------------------------------
 
+/// 🔑 **PAUSE APRÈS UN REFUS DU COMPARATEUR.** La clé ITAD est UNE pour tous les
+/// utilisateurs de Torii (relayée par le proxy) : quand ITAD répond 429, chaque appel de
+/// plus prolonge la saturation pour tout le monde. Mesuré le 22 octobre 2026 : deux
+/// saturations de plusieurs minutes en une soirée d'essais de la nouvelle Boutique, et
+/// pendant ce temps l'application continuait d'appeler (rayons, fiches, wishlist).
+/// Après un 429, plus aucun appel au comparateur pendant `Retry-After` (60 s par défaut,
+/// borné entre 10 s et 5 min) : les fonctions répondent « rien » sans réseau, comme pour
+/// une panne, et l'interface affiche « réessaie dans une minute ».
+static PAUSE_JUSQUA: AtomicU64 = AtomicU64::new(0);
+const PAUSE_DEFAUT: u64 = 60;
+
+fn secondes() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Le comparateur est-il en pause (refus récent) ?
+pub(super) fn en_pause() -> bool {
+    secondes() < PAUSE_JUSQUA.load(Ordering::Relaxed)
+}
+
+/// Retient un refus « trop de requêtes » : plus d'appel avant la fin de la pause.
+fn noter_refus(e: &ureq::Error) {
+    if let ureq::Error::Status(429, reponse) = e {
+        let duree = reponse
+            .header("retry-after")
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(PAUSE_DEFAUT)
+            .clamp(10, 300);
+        PAUSE_JUSQUA.store(secondes() + duree, Ordering::Relaxed);
+        eprintln!("[boutique] comparateur saturé (429) : pause de {duree} s");
+    }
+}
+
 pub(super) fn get_json(path: &str) -> Option<Value> {
-    ureq::get(&format!("{PROXY}/{path}"))
-        .timeout(Duration::from_secs(15))
-        .call()
-        .ok()?
-        .into_json()
-        .ok()
+    if en_pause() {
+        return None;
+    }
+    match ureq::get(&format!("{PROXY}/{path}")).timeout(Duration::from_secs(15)).call() {
+        Ok(r) => r.into_json().ok(),
+        Err(e) => {
+            noter_refus(&e);
+            None
+        }
+    }
 }
 
 pub(super) fn post_json(path: &str, body: &Value) -> Option<Value> {
-    ureq::post(&format!("{PROXY}/{path}"))
+    if en_pause() {
+        return None;
+    }
+    match ureq::post(&format!("{PROXY}/{path}"))
         .timeout(Duration::from_secs(15))
         .set("Content-Type", "application/json")
         .send_string(&body.to_string())
-        .ok()?
-        .into_json()
-        .ok()
+    {
+        Ok(r) => r.into_json().ok(),
+        Err(e) => {
+            noter_refus(&e);
+            None
+        }
+    }
 }
 
 /// Lit un nombre qu'il soit encodé en JSON number ou en chaîne.
@@ -440,94 +521,20 @@ pub fn search(query: &str, excluded: &HashSet<String>) -> Vec<StoreItem> {
         .collect()
 }
 
-/// Fiche produit : comparatif multi-boutiques (ITAD) + plus bas historique + IGDB + IG.
+/// Fiche produit : comparatif multi-boutiques (ITAD) + plus bas historique + IGDB + IG
+/// + fiche Steam (captures, langues, configuration, fonctionnalités…).
+///
+/// 🔑 Une fois le titre et l'appid connus (`games/info/v2`), tout le reste part EN
+/// PARALLÈLE : prix, Instant Gaming, IGDB, description traduite, fiche Steam. En série,
+/// la fiche additionnait les allers-retours ; elle n'attend plus que le plus lent.
 pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
-    // 1. Infos jeu (titre, appid Steam, jaquette).
+    // 1. Infos jeu (titre, appid Steam, jaquette, notes, joueurs, sortie, studios).
     let info = get_json(&format!("games/info/v2?id={}", urlencode(game_id)))?;
     let title = info["title"].as_str()?.to_string();
-    let steam_app_id = info["appid"].as_u64().map(|a| a.to_string());
+    let app_id = info["appid"].as_u64();
+    let steam_app_id = app_id.map(|a| a.to_string());
     let boxart = info["assets"]["boxart"].as_str().map(String::from);
 
-    // 2. Prix par boutique (comparatif) + plus bas historique, en un seul appel.
-    let prices_root = post_json(
-        &chemin_prix(),
-        &json!([game_id]),
-    );
-    let entry = prices_root
-        .as_ref()
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .cloned();
-    let mut prices: Vec<StorePrice> = entry
-        .as_ref()
-        .and_then(|e| e["deals"].as_array())
-        .map(|deals| {
-            deals
-                .iter()
-                .filter_map(|d| {
-                    let price = num(&d["price"]["amount"])?;
-                    Some(StorePrice {
-                        store_name: d["shop"]["name"].as_str().unwrap_or_default().to_string(),
-                        price,
-                        retail_price: num(&d["regular"]["amount"]).unwrap_or(price),
-                        currency: devise(&d["price"]),
-                        savings: num(&d["cut"]).unwrap_or(0.0).round() as u32,
-                        buy_url: d["url"].as_str().unwrap_or_default().to_string(),
-                        available: true, // offres ITAD = deals en cours
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    // 3. Instant Gaming (prix EUR natif, absent d'ITAD) — best-effort scrape.
-    //
-    // ⚠️ ZONE EURO SEULEMENT. Ce revendeur n'affiche que des euros, sans équivalent
-    // local. Hors zone euro, sa ligne se retrouverait au milieu de prix en livres ou en
-    // dollars sans qu'on puisse la comparer à rien — alors que comparer est exactement
-    // ce qu'on vient faire ici. L'interface explique l'absence (`prix.revendeurIndisponible`)
-    // plutôt que de laisser croire à une panne.
-    if crate::locale::zone_euro() {
-        if let Some(ig) = super::instant_gaming::price(&title) {
-            prices.push(StorePrice {
-                store_name: "Instant Gaming".into(),
-                price: ig.price,
-                retail_price: if ig.savings > 0 {
-                    (ig.price / (1.0 - ig.savings as f64 / 100.0) * 100.0).round() / 100.0
-                } else {
-                    ig.price
-                },
-                // Instant Gaming ne vend qu'en euros — et n'est proposé qu'en zone euro.
-                currency: "EUR".into(),
-                savings: ig.savings,
-                buy_url: ig.url,
-                available: ig.available,
-            });
-        }
-    }
-    prices.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(std::cmp::Ordering::Equal));
-
-    // 4. Plus bas historique (all-time), fourni dans la réponse prices (`historyLow.all`).
-    let cheapest_ever = entry
-        .as_ref()
-        .and_then(|e| num(&e["historyLow"]["all"]["amount"]));
-    let currency = entry
-        .as_ref()
-        .map(|e| devise(&e["historyLow"]["all"]))
-        .unwrap_or_default();
-
-    let mut out = StoreGame {
-        game_id: game_id.to_string(),
-        title: title.clone(),
-        cover_url: boxart,
-        hero_url: None,
-        cheapest_ever,
-        currency,
-        prices,
-        ..Default::default()
-    };
-
-    // 5. Enrichissement descriptif via IGDB (cache disque partagé).
     let dto = match &steam_app_id {
         Some(appid) => GameDto {
             id: format!("steam:{appid}"),
@@ -542,7 +549,128 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
             ..Default::default()
         },
     };
-    if let Some((_, meta)) = super::igdb::fill_metadata(&[dto], config_dir, |_| {}).into_iter().next() {
+
+    // 2. Tout le reste, en parallèle.
+    let (entry, ig, igdb, description_traduite, steam) = std::thread::scope(|s| {
+        // Prix par boutique (comparatif) + plus bas historiques, en un seul appel.
+        let prix = s.spawn(|| {
+            post_json(&chemin_prix(), &json!([game_id]))
+                .and_then(|v| v.as_array().and_then(|a| a.first()).cloned())
+        });
+        // Instant Gaming (prix EUR natif, absent d'ITAD) — best-effort scrape.
+        //
+        // ⚠️ ZONE EURO SEULEMENT. Ce revendeur n'affiche que des euros, sans équivalent
+        // local. Hors zone euro, sa ligne se retrouverait au milieu de prix en livres ou en
+        // dollars sans qu'on puisse la comparer à rien — alors que comparer est exactement
+        // ce qu'on vient faire ici. L'interface explique l'absence (`prix.revendeurIndisponible`)
+        // plutôt que de laisser croire à une panne.
+        let ig = s.spawn(|| {
+            crate::locale::zone_euro()
+                .then(|| super::instant_gaming::price(&title))
+                .flatten()
+        });
+        // Enrichissement descriptif via IGDB (cache disque partagé).
+        let igdb = s.spawn(|| {
+            super::igdb::fill_metadata(std::slice::from_ref(&dto), config_dir, |_| {})
+                .into_iter()
+                .next()
+                .map(|(_, meta)| meta)
+        });
+        // Description dans la langue de l'interface quand le jeu est identifié sur Steam.
+        //
+        // 🔑 IGDB ne localise rien : sa description est en anglais, toujours. Pour un jeu
+        // portant un appid, `enrich_one` sait aller chercher la version française — et il
+        // **partage le cache disque de la bibliothèque**, donc un jeu déjà possédé ne coûte
+        // aucune requête, et consulter une fiche de la vitrine réchauffe le cache pour le
+        // jour où on l'achètera.
+        //
+        // Le **genre** n'est volontairement PAS remplacé : celui d'IGDB est déjà traduit
+        // (`igdb::genre_fr`) et c'est lui qui sert de clé au filtre par catégorie de la
+        // bibliothèque. Prendre celui de Steam ici ferait dire deux choses différentes au
+        // même jeu selon l'écran.
+        let traduite = s.spawn(|| {
+            let appid = steam_app_id.as_ref()?;
+            let meta = super::enrich_one(
+                &GameDto {
+                    id: format!("steam:{appid}"),
+                    platform: "steam".into(),
+                    launch_target: appid.clone(),
+                    title: title.clone(),
+                    ..Default::default()
+                },
+                config_dir,
+            );
+            meta.localized.then_some(meta.description).flatten()
+        });
+        // Fiche Steam : captures, aperçu vidéo, langues, configuration… (sans clé).
+        let steam = s.spawn(|| app_id.and_then(|a| super::fiche::fiche(a, config_dir)));
+        (
+            prix.join().ok().flatten(),
+            ig.join().ok().flatten(),
+            igdb.join().ok().flatten(),
+            traduite.join().ok().flatten(),
+            steam.join().ok().flatten(),
+        )
+    });
+
+    let mut prices: Vec<StorePrice> = entry
+        .as_ref()
+        .and_then(|e| e["deals"].as_array())
+        .map(|deals| deals.iter().filter_map(offre_fiche).collect())
+        .unwrap_or_default();
+
+    if let Some(ig) = ig {
+        prices.push(StorePrice {
+            store_name: "Instant Gaming".into(),
+            price: ig.price,
+            retail_price: if ig.savings > 0 {
+                (ig.price / (1.0 - ig.savings as f64 / 100.0) * 100.0).round() / 100.0
+            } else {
+                ig.price
+            },
+            // Instant Gaming ne vend qu'en euros — et n'est proposé qu'en zone euro.
+            currency: "EUR".into(),
+            savings: ig.savings,
+            buy_url: ig.url,
+            available: ig.available,
+            drm: Vec::new(),
+            expiry: None,
+            voucher: None,
+        });
+    }
+    prices.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(std::cmp::Ordering::Equal));
+
+    // 3. Plus bas historiques (tous temps, 1 an, 3 mois), fournis par la réponse prices.
+    let bas = |periode: &str| entry.as_ref().and_then(|e| num(&e["historyLow"][periode]["amount"]));
+    let currency = entry
+        .as_ref()
+        .map(|e| devise(&e["historyLow"]["all"]))
+        .unwrap_or_default();
+
+    let mut out = StoreGame {
+        game_id: game_id.to_string(),
+        title: title.clone(),
+        cover_url: boxart,
+        hero_url: None,
+        app_id,
+        release_date: info["releaseDate"].as_str().map(String::from),
+        developers: noms(&info["developers"]),
+        publishers: noms(&info["publishers"]),
+        reviews: notes(&info["reviews"]),
+        players_day: info["players"]["day"].as_u64().filter(|n| *n > 0),
+        players_peak: info["players"]["peak"].as_u64().filter(|n| *n > 0),
+        waitlisted: info["stats"]["waitlisted"].as_u64().filter(|n| *n > 0),
+        cheapest_ever: bas("all"),
+        low_1y: bas("y1"),
+        low_3m: bas("m3"),
+        currency,
+        prices,
+        steam,
+        ..Default::default()
+    };
+
+    // 4. Descriptif IGDB, puis description traduite si Steam l'a.
+    if let Some(meta) = igdb {
         out.description = meta.description;
         out.hero_url = meta.hero_url;
         out.genre = meta.genre;
@@ -553,36 +681,11 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
             out.cover_url = meta.cover_url;
         }
     }
-
-    // 6. Description en FRANÇAIS quand le jeu est identifié sur Steam.
-    //
-    // 🔑 IGDB, qui vient de fournir la fiche, ne localise rien : sa description est en
-    // anglais, toujours. Pour un jeu portant un appid, `enrich_one` sait aller chercher la
-    // version française — et il **partage le cache disque de la bibliothèque**, donc un jeu
-    // déjà possédé ne coûte aucune requête, et consulter une fiche de la vitrine réchauffe
-    // le cache pour le jour où on l'achètera.
-    //
-    // Le **genre** n'est volontairement PAS remplacé : celui d'IGDB est déjà traduit
-    // (`igdb::genre_fr`) et c'est lui qui sert de clé au filtre par catégorie de la
-    // bibliothèque. Prendre celui de Steam ici ferait dire deux choses différentes au même
-    // jeu selon l'écran.
-    if let Some(appid) = &steam_app_id {
-        let meta = super::enrich_one(
-            &GameDto {
-                id: format!("steam:{appid}"),
-                platform: "steam".into(),
-                launch_target: appid.clone(),
-                title: title.clone(),
-                ..Default::default()
-            },
-            config_dir,
-        );
-        if meta.localized && meta.description.is_some() {
-            out.description = meta.description;
-        }
+    if description_traduite.is_some() {
+        out.description = description_traduite;
     }
 
-    // 7. Repli visuel via le CDN Steam si appid connu.
+    // 5. Repli visuel via le CDN Steam si appid connu.
     if let Some(appid) = &steam_app_id {
         let cdn = "https://cdn.cloudflare.steamstatic.com/steam/apps";
         if out.hero_url.is_none() {
@@ -594,6 +697,53 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
     }
 
     Some(out)
+}
+
+/// Une ligne du comparatif de la fiche, depuis une offre `games/prices/v3`.
+fn offre_fiche(d: &Value) -> Option<StorePrice> {
+    let price = num(&d["price"]["amount"])?;
+    Some(StorePrice {
+        store_name: d["shop"]["name"].as_str().unwrap_or_default().to_string(),
+        price,
+        retail_price: num(&d["regular"]["amount"]).unwrap_or(price),
+        currency: devise(&d["price"]),
+        savings: num(&d["cut"]).unwrap_or(0.0).round() as u32,
+        buy_url: d["url"].as_str().unwrap_or_default().to_string(),
+        available: true, // offres ITAD = deals en cours
+        drm: noms(&d["drm"]),
+        expiry: fin_offre(d),
+        voucher: d["voucher"].as_str().filter(|v| !v.is_empty()).map(String::from),
+    })
+}
+
+/// Les `name` d'une liste d'objets ITAD (`developers`, `publishers`, `drm`).
+fn noms(liste: &Value) -> Vec<String> {
+    liste
+        .as_array()
+        .map(|l| l.iter().filter_map(|x| x["name"].as_str().map(String::from)).collect())
+        .unwrap_or_default()
+}
+
+/// Notes retenues pour la fiche : Steam, Metacritic (critiques) et OpenCritic. La note
+/// des joueurs de Metacritic est écartée : elle double celle de Steam, en moins fiable.
+fn notes(reviews: &Value) -> Vec<StoreReview> {
+    reviews
+        .as_array()
+        .map(|l| {
+            l.iter()
+                .filter_map(|r| {
+                    let source = r["source"].as_str()?;
+                    matches!(source, "Steam" | "Metascore" | "OpenCritic").then(|| StoreReview {
+                        source: source.to_string(),
+                        score: num(&r["score"]).unwrap_or(0.0).round() as u32,
+                        count: r["count"].as_u64().unwrap_or(0),
+                        url: r["url"].as_str().filter(|u| u.starts_with("https://")).map(String::from),
+                    })
+                })
+                .filter(|r| r.score > 0)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 // --- Wishlist Steam enrichie de prix (ITAD) -----------------------------------
@@ -936,6 +1086,21 @@ mod tests {
 
         let sans_gog: HashSet<String> = ["GOG".to_string()].into_iter().collect();
         assert_eq!(lire_cadeaux(&list, &sans_gog).len(), 1);
+    }
+
+    /// Un 429 met le comparateur en pause : plus aucun appel ne part avant la fin.
+    /// (Une autre erreur, elle, n'en déclenche pas : une panne réseau n'est pas un refus.)
+    #[test]
+    fn un_refus_met_le_comparateur_en_pause() {
+        PAUSE_JUSQUA.store(0, Ordering::Relaxed);
+        noter_refus(&ureq::Error::Status(500, ureq::Response::new(500, "Erreur", "").unwrap()));
+        assert!(!en_pause());
+        noter_refus(&ureq::Error::Status(429, ureq::Response::new(429, "Too Many Requests", "").unwrap()));
+        assert!(en_pause());
+        let reste = PAUSE_JUSQUA.load(Ordering::Relaxed) - secondes();
+        assert!((59..=60).contains(&reste), "pause par défaut de 60 s, reste {reste}");
+        assert_eq!(get_json("deals/v2"), None, "aucun appel pendant la pause");
+        PAUSE_JUSQUA.store(0, Ordering::Relaxed);
     }
 
     #[test]

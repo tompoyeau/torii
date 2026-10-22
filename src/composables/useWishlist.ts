@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { getSettings, wishlistAll } from "../lib/tauri";
+import { getSettings, hasTauriRuntime, wishlistAll } from "../lib/tauri";
 import type { WishlistItem } from "../types";
 
 // État partagé (singleton).
@@ -7,6 +7,8 @@ const items = ref<WishlistItem[]>([]);
 const loading = ref(false);
 const loaded = ref(false);
 const steamConnected = ref(false);
+/** Le dernier rafraîchissement a échoué (comparateur ou Steam injoignable). */
+const indisponible = ref(false);
 
 let reqToken = 0;
 
@@ -17,12 +19,17 @@ async function refresh() {
   const [list, settings] = await Promise.all([wishlistAll(), getSettings()]);
   if (token !== reqToken) return; // un rafraîchissement plus récent a pris le relais
   if (settings) steamConnected.value = settings.steamConnected;
+  indisponible.value = false;
   if (list) {
     items.value = list;
-  } else {
+  } else if (!hasTauriRuntime()) {
     // Hors Tauri (preview) : données fictives pour la maquette.
     items.value = MOCK;
     steamConnected.value = true;
+  } else {
+    // ⚠️ Dans l'application, une panne garde la liste déjà affichée et le dit : elle
+    // affichait la wishlist de démonstration (Elden Ring, Baldur's Gate 3…) à la place.
+    indisponible.value = true;
   }
   loaded.value = true;
   loading.value = false;
@@ -70,7 +77,7 @@ function addLocal(item: { gameId: string; title: string; coverUrl?: string | nul
 
 export function useWishlist() {
   const onSaleCount = computed(() => items.value.filter((i) => i.savings > 0).length);
-  return { items, loading, loaded, steamConnected, onSaleCount, refresh, invalidate, removeLocal, addLocal };
+  return { items, loading, loaded, steamConnected, indisponible, onSaleCount, refresh, invalidate, removeLocal, addLocal };
 }
 
 // --- Données fictives (preview web hors Tauri) ---

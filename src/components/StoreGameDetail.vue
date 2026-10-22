@@ -1,18 +1,35 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { usePossession } from "../composables/usePossession";
+import { usePreferences } from "../composables/usePreferences";
 import { useStore } from "../composables/useStore";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
+import { useUi } from "../composables/useUi";
+import { activation, dateLongue, descripteur, libelleAvis, libelleFin, pageSteam, tonAvis } from "../lib/boutique";
 import { openExternal } from "../lib/tauri";
 import { formatPrix } from "../lib/format";
 import { t } from "../i18n";
 import { deviseAttendue, instantGamingPertinent } from "../i18n/regions";
-import type { StorePrice } from "../types";
+import type { StorePrice, StoreReview } from "../types";
+import StorePossede from "./StorePossede.vue";
+import StoreSheetBas from "./StoreSheetBas.vue";
+import StoreSheetFacts from "./StoreSheetFacts.vue";
+import StoreSheetMedia from "./StoreSheetMedia.vue";
+import StoreSheetVerdict from "./StoreSheetVerdict.vue";
 
-const { product, productLoading, selectedGameId, closeProduct, isStoreExcluded, toggleStoreExcluded } =
+const { product, productLoading, productIndisponible, selectedGameId, closeProduct, retryProduct, isStoreExcluded, toggleStoreExcluded } =
   useStore();
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
+const { possession, idBibliotheque } = usePossession();
+const { openGame } = useUi();
+const { prefs } = usePreferences();
+const reduit = computed(
+  () =>
+    prefs.reduceMotion ||
+    (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches),
+);
 
 const open = computed(() => selectedGameId.value != null);
 useScrollLock(open);
@@ -63,39 +80,65 @@ function onKey(e: KeyboardEvent) {
 onMounted(() => document.addEventListener("keydown", onKey));
 onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 
+/**
+ * Captures : celles de Steam (toutes, en deux tailles) quand le jeu y est, sinon celles
+ * d'IGDB (une seule taille, cinq au plus).
+ */
+const captures = computed(() => {
+  const steam = product.value?.steam?.captures ?? [];
+  if (steam.length) return steam;
+  return (product.value?.screenshots ?? []).map((s) => ({ mini: s, grande: s }));
+});
+
 /** Visionneuse plein écran des captures (index dans `shots`, sinon fermée). */
 const zoom = ref<number | null>(null);
-const shots = computed(() => product.value?.screenshots ?? []);
+const shots = computed(() => captures.value.map((c) => c.grande));
 function stepZoom(delta: number) {
   const n = shots.value.length;
   if (zoom.value == null || n === 0) return;
   zoom.value = (zoom.value + delta + n) % n;
 }
 
-/* ── Défilement horizontal de la bande de captures ───────────────────────── */
-const shotsRow = ref<HTMLElement | null>(null);
-const shotsAtStart = ref(true);
-const shotsAtEnd = ref(true);
-
-/** Met à jour la visibilité des flèches selon la position de défilement. */
-function updateShotsScroll() {
-  const el = shotsRow.value;
-  if (!el) return;
-  shotsAtStart.value = el.scrollLeft <= 2;
-  shotsAtEnd.value = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
-}
-/** Défile d'environ un écran de captures (sens −1 = gauche, +1 = droite). */
-function scrollShots(dir: number) {
-  const el = shotsRow.value;
-  if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: "smooth" });
-}
-// Recalcule (et remet à gauche) quand le jeu ou les captures changent.
-watch([selectedGameId, shots], () => {
-  nextTick(() => {
-    if (shotsRow.value) shotsRow.value.scrollLeft = 0;
-    updateShotsScroll();
-  });
+// Une autre fiche s'ouvre (un DLC, un jeu similaire) : on repart du haut, description repliée.
+const descriptionOuverte = ref(false);
+watch(selectedGameId, () => {
+  descriptionOuverte.value = false;
+  zoom.value = null;
+  if (panneau.value) panneau.value.scrollTop = 0;
 });
+
+/** Le jeu est déjà dans la bibliothèque : on le dit, et on y mène. */
+const possede = computed(() => (product.value ? possession(product.value.title, product.value.appId) : null));
+function voirBibliotheque() {
+  const p = product.value;
+  const id = p ? idBibliotheque(p.title, p.appId) : null;
+  if (!id) return;
+  closeProduct();
+  openGame(id);
+}
+
+function ouvrirSteam() {
+  if (product.value?.appId) void openExternal(pageSteam(product.value.appId));
+}
+
+/** Notes critiques à côté de celle de Steam (qui vient, elle, de la fiche Steam). */
+const note = (source: string): StoreReview | null => product.value?.reviews?.find((r) => r.source === source) ?? null;
+const tonNote = (score: number) => (score >= 75 ? "pos" : score >= 50 ? "mixte" : "neg");
+
+/** Ligne sous le titre : studio, sortie, genres. */
+const faits = computed(() => {
+  const p = product.value;
+  if (!p) return [];
+  const annee = p.releaseDate ? p.releaseDate.slice(0, 4) : p.year ? String(p.year) : "";
+  const genres = p.steam?.tags.length ? p.steam.tags.slice(0, 3) : p.genre ? [p.genre] : [];
+  return [p.developers?.[0] ?? p.developer ?? "", annee, ...genres].filter(Boolean);
+});
+
+/** Ce qu'il faut savoir d'une offre : activation, fin, code promo. */
+const detailOffre = (p: StorePrice) =>
+  [activation(p.storeName, p.drm), libelleFin(p.expiry), p.voucher ? t("boutique.produit.code", { code: p.voucher }) : ""]
+    .filter(Boolean)
+    .join(" · ");
 </script>
 
 <template>
@@ -110,11 +153,35 @@ watch([selectedGameId, shots], () => {
         </button>
         <div class="sd-header">
           <span class="sd-tag">{{ t("boutique.titre") }}</span>
-          <h1 class="sd-title">{{ product?.title ?? t("boutique.produit.chargement") }}</h1>
-          <div v-if="product" class="sd-facts">
-            <span v-if="product.genre">{{ product.genre }}</span>
-            <span v-if="product.developer">· {{ product.developer }}</span>
-            <span v-if="product.year">· {{ product.year }}</span>
+          <h1 class="sd-title">{{ product?.title ?? (productIndisponible ? t("boutique.produit.fiche") : t("boutique.produit.chargement")) }}</h1>
+          <div v-if="faits.length" class="sd-facts">{{ faits.join(" · ") }}</div>
+          <div v-if="product" class="sd-badges">
+            <button
+              v-if="product.steam?.reviewScore"
+              class="badge-note"
+              :title="t('boutique.produit.voirSur', { source: 'Steam' })"
+              @click="ouvrirSteam"
+            >
+              <span class="avis" :class="tonAvis(product.steam.reviewScore)">Steam · {{ libelleAvis(product.steam.reviewScore) }}<template v-if="product.steam.reviewPercent != null"> · {{ product.steam.reviewPercent }} %</template></span>
+            </button>
+            <template v-for="src in ['Metascore', 'OpenCritic']" :key="src">
+              <button
+                v-if="note(src)"
+                class="badge-note"
+                :title="t('boutique.produit.voirSur', { source: src === 'Metascore' ? 'Metacritic' : src })"
+                :disabled="!note(src)!.url"
+                @click="note(src)!.url && openExternal(note(src)!.url!)"
+              >
+                <b class="score" :class="tonNote(note(src)!.score)">{{ note(src)!.score }}</b>{{ src === "Metascore" ? "Metacritic" : src }}
+              </button>
+            </template>
+            <span v-if="product.steam?.classification" class="badge-note fixe">
+              <b>{{ product.steam.classification.systeme }} {{ product.steam.classification.note }}</b>
+            </span>
+            <template v-if="possede">
+              <StorePossede :etat="possede" />
+              <button class="badge-note lien" @click="voirBibliotheque">{{ t("boutique.produit.voirBibliotheque") }} →</button>
+            </template>
           </div>
         </div>
       </div>
@@ -124,40 +191,73 @@ watch([selectedGameId, shots], () => {
           <div v-if="productLoading && !product" class="sd-loading">
             <span class="spin" /> {{ t("boutique.produit.chargementFiche") }}
           </div>
+          <div v-else-if="productIndisponible" class="sd-indisponible">
+            <p>{{ t("boutique.indisponible") }}</p>
+            <p class="dim">{{ t("boutique.indisponibleAide") }}</p>
+            <button class="chip" @click="retryProduct">{{ t("boutique.accueil.reessayer") }}</button>
+          </div>
           <template v-else-if="product">
+            <StoreSheetMedia
+              class="sd-sec"
+              :apercu="product.steam?.apercu"
+              :captures="captures"
+              @agrandir="zoom = $event"
+              @bande-annonce="ouvrirSteam"
+            />
+
             <section class="sd-sec">
               <h4>{{ t("fiche.apropos") }}</h4>
               <p v-if="product.description" class="desc">{{ product.description }}</p>
               <p v-else class="desc dim">{{ t("fiche.aucuneDescription") }}</p>
-            </section>
-            <section v-if="shots.length" class="sd-sec">
-              <h4>{{ t("fiche.captures") }}</h4>
-              <div class="shots-wrap">
-                <button
-                  v-if="!shotsAtStart"
-                  class="shots-nav prev"
-                  type="button"
-                  :aria-label="t('fiche.capturesPrecedentes')"
-                  @click="scrollShots(-1)"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
+              <template v-if="product.steam?.description.length">
+                <button class="lien-texte" :aria-expanded="descriptionOuverte" @click="descriptionOuverte = !descriptionOuverte">
+                  {{ descriptionOuverte ? t("boutique.produit.masquerDescription") : t("boutique.produit.descriptionComplete") }}
+                  {{ descriptionOuverte ? "▴" : "▾" }}
                 </button>
-                <div ref="shotsRow" class="shots no-scrollbar" @scroll="updateShotsScroll">
-                  <button v-for="(s, i) in shots" :key="i" class="shot" @click="zoom = i">
-                    <img :src="s" alt="" loading="lazy" @error="hideBroken" />
-                  </button>
+                <!-- Blocs déjà nettoyés côté Rust (`metadata/fiche.rs`) : du texte et des
+                     adresses d'images Steam, jamais de HTML. -->
+                <div v-if="descriptionOuverte" class="blocs">
+                  <template v-for="(b, i) in product.steam.description" :key="i">
+                    <h3 v-if="b.genre === 'h'">{{ b.texte }}</h3>
+                    <p v-else-if="b.genre === 'li'" class="puce">{{ b.texte }}</p>
+                    <p v-else-if="b.genre === 'p'">{{ b.texte }}</p>
+                    <img v-else-if="b.genre === 'img' && b.url" :src="b.url" alt="" loading="lazy" @error="hideBroken" />
+                    <template v-else-if="b.genre === 'video' && b.url">
+                      <img v-if="reduit && b.affiche" :src="b.affiche" alt="" loading="lazy" @error="hideBroken" />
+                      <video v-else-if="!reduit" :src="b.url" :poster="b.affiche ?? undefined" muted loop autoplay playsinline preload="none" />
+                    </template>
+                  </template>
                 </div>
-                <button
-                  v-if="!shotsAtEnd"
-                  class="shots-nav next"
-                  type="button"
-                  :aria-label="t('fiche.capturesSuivantes')"
-                  @click="scrollShots(1)"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
-                </button>
-              </div>
+              </template>
             </section>
+
+            <StoreSheetFacts
+              class="sd-sec"
+              :steam="product.steam"
+              :joueurs-jour="product.playersDay"
+              :joueurs-record="product.playersPeak"
+              :suivis="product.waitlisted"
+            />
+
+            <StoreSheetBas :key="`dlc-${product.gameId}`" class="sd-sec" :jeu="product" partie="dlc" />
+
+            <section v-if="product.steam?.configuration" class="sd-sec">
+              <h4>{{ t("boutique.produit.configuration") }}</h4>
+              <div class="config">
+                <div v-for="col in (['minimale', 'recommandee'] as const)" :key="col" class="config-col">
+                  <template v-if="product.steam.configuration[col].length">
+                    <span class="config-titre">{{ t(`boutique.produit.${col}`) }}</span>
+                    <div v-for="l in product.steam.configuration[col]" :key="l.libelle" class="config-ligne">
+                      <span class="config-libelle">{{ l.libelle }}</span>
+                      <span>{{ l.valeur }}</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <p v-for="n in product.steam.configuration.notes" :key="n" class="config-note">{{ n }}</p>
+            </section>
+
+            <StoreSheetBas :key="`sim-${product.gameId}`" class="sd-sec" :jeu="product" partie="similaires" />
           </template>
         </div>
 
@@ -182,15 +282,24 @@ watch([selectedGameId, shots], () => {
               <svg viewBox="0 0 24 24" :fill="isWishlisted(product.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
               {{ isWishlisted(product.gameId) ? t("boutique.produit.dansWishlist") : t("boutique.ajouterWishlist") }}
             </button>
-            <div v-if="product?.cheapestEver != null" class="ever">
-              {{ t("boutique.produit.plusBasHistorique") }} <b>{{ formatPrix(product.cheapestEver, deviseFiche) }}</b>
-            </div>
           </div>
+
+          <StoreSheetVerdict
+            v-if="best && product"
+            :prix="best.price"
+            :devise="best.currency || deviseFiche"
+            :bas3m="product.low3m"
+            :bas1a="product.low1y"
+            :bas-tout="product.cheapestEver"
+          />
 
           <div v-if="product && product.prices.length > 1" class="compare">
             <div class="compare-label">{{ t("boutique.produit.comparer", { n: visiblePrices.length }) }}</div>
             <div v-for="(p, i) in visiblePrices" :key="p.storeName + p.buyUrl + i" class="row" :class="{ oos: p.available === false }">
-              <span class="row-store">{{ p.storeName }}</span>
+              <span class="row-store">
+                {{ p.storeName }}
+                <span v-if="detailOffre(p)" class="row-detail">{{ detailOffre(p) }}</span>
+              </span>
               <span v-if="p.available === false" class="row-oos">{{ t("boutique.produit.rupture") }}</span>
               <span v-else-if="p.savings > 0" class="row-save">-{{ p.savings }}%</span>
               <span class="row-price">{{ price(p.price, p) }}</span>
@@ -216,6 +325,30 @@ watch([selectedGameId, shots], () => {
                 </div>
               </div>
             </template>
+          </div>
+
+          <div v-if="product && (product.developers?.length || product.publishers?.length || product.releaseDate || product.steam)" class="infos">
+            <span class="compare-label">{{ t("boutique.produit.informations") }}</span>
+            <div v-if="product.developers?.length" class="info">
+              <span class="info-libelle">{{ t("boutique.produit.developpeur", { n: product.developers.length }) }}</span>
+              <span>{{ product.developers.join(", ") }}</span>
+            </div>
+            <div v-if="product.publishers?.length" class="info">
+              <span class="info-libelle">{{ t("boutique.produit.editeur", { n: product.publishers.length }) }}</span>
+              <span>{{ product.publishers.join(", ") }}</span>
+            </div>
+            <div v-if="product.releaseDate" class="info">
+              <span class="info-libelle">{{ t("boutique.produit.sortie") }}</span>
+              <span>{{ dateLongue(product.releaseDate) }}</span>
+            </div>
+            <div v-if="product.steam?.classification" class="info">
+              <span class="info-libelle">{{ product.steam.classification.systeme }} {{ product.steam.classification.note }}</span>
+              <span>{{ product.steam.classification.descripteurs.map(descripteur).join(", ") }}</span>
+            </div>
+            <div class="liens">
+              <button v-if="product.steam?.site" class="lien-texte" @click="openExternal(product.steam.site!)">{{ t("boutique.produit.siteOfficiel") }} ↗</button>
+              <button v-if="product.appId" class="lien-texte" @click="ouvrirSteam">{{ t("boutique.produit.pageSteam") }} ↗</button>
+            </div>
           </div>
 
           <p class="disclaimer">{{ t("boutique.produit.avertissement", { devise: deviseFiche }) }}</p>
@@ -268,25 +401,45 @@ watch([selectedGameId, shots], () => {
 .sd-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; padding: 34px 56px 70px; align-items: start; }
 .sd-main { min-width: 0; }
 .sd-loading { display: flex; align-items: center; gap: 10px; color: var(--text-faint); padding: 30px 0; }
+.sd-indisponible { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 30px 0; color: var(--text-dim); }
+.sd-indisponible p { margin: 0; }
+.sd-indisponible .dim { color: var(--text-faint); font-size: 13px; }
 .sd-sec { margin-bottom: 34px; }
 .sd-sec h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); font-weight: 700; margin: 0 0 16px; }
 .desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 90ch; }
 .desc.dim { color: var(--text-faint); font-style: italic; }
-.shots-wrap { position: relative; }
-.shots { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
-.shots-nav {
-  position: absolute; top: calc(50% - 4px); transform: translateY(-50%); z-index: 6;
-  width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
-  background: rgba(14, 10, 20, 0.62); border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #fff; backdrop-filter: blur(8px); box-shadow: var(--shadow-card); cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+/* Notes, classification et possession, sous le titre (sur la bannière : toujours clair sur sombre). */
+.sd-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.badge-note {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 9px; font-size: 12.5px;
+  background: rgba(12, 8, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.16); color: #fff; cursor: pointer;
 }
-.shots-nav:hover { background: rgba(28, 20, 38, 0.9); border-color: rgba(255, 255, 255, 0.4); }
-.shots-nav.prev { left: 8px; }
-.shots-nav.next { right: 8px; }
-.shots-nav svg { width: 21px; height: 21px; }
-.shot { flex: none; width: 300px; aspect-ratio: 16 / 9; border-radius: 13px; overflow: hidden; border: 1px solid var(--border); padding: 0; cursor: zoom-in; background: none; }
-.shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.badge-note:hover:not(:disabled):not(.fixe) { border-color: rgba(255, 255, 255, 0.35); }
+.badge-note.fixe, .badge-note:disabled { cursor: default; }
+.badge-note .avis { color: #fff; }
+.badge-note.lien { color: #ffd9c9; font-weight: 600; }
+.score { font-family: var(--mono); }
+.score.pos { color: #6ee7a8; }
+.score.mixte { color: #f0b73f; }
+.score.neg { color: #ff8a80; }
+
+.lien-texte { background: none; border: none; padding: 0; margin-top: 10px; color: var(--accent); font-size: 13px; font-weight: 600; }
+.lien-texte:hover { text-decoration: underline; }
+/* Description complète : des blocs de texte et des images, jamais de HTML. */
+.blocs { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; max-width: 90ch; }
+.blocs h3 { margin: 10px 0 0; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; color: var(--text); }
+.blocs p { margin: 0; font-size: 15px; line-height: 1.7; color: var(--text-dim); white-space: pre-line; }
+.blocs p.puce { padding-left: 18px; position: relative; }
+.blocs p.puce::before { content: "•"; position: absolute; left: 4px; color: var(--accent); }
+.blocs img, .blocs video { max-width: 100%; border-radius: 10px; display: block; }
+
+.config { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.config-col { display: flex; flex-direction: column; gap: 9px; padding: 16px 18px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+.config-col:empty { display: none; }
+.config-titre { font-weight: 800; font-size: 14px; color: var(--text); }
+.config-ligne { display: flex; gap: 12px; font-size: 13px; color: var(--text-dim); }
+.config-libelle { flex: 0 0 120px; color: var(--text-faint); }
+.config-note { margin: 10px 0 0; font-size: 12px; color: var(--text-faint); line-height: 1.5; }
 
 .sd-prices { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px; }
 .best { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px; }
@@ -306,13 +459,18 @@ watch([selectedGameId, shots], () => {
 .wish:hover { color: var(--text); border-color: var(--border-strong); }
 .wish.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
 .wish svg { width: 16px; height: 16px; }
-.ever { margin-top: 14px; font-size: 12.5px; color: var(--text-faint); text-align: center; }
-.ever b { color: var(--text-dim); font-family: var(--mono); }
 
 .compare { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px; }
 .compare-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); font-weight: 700; padding: 4px 0 10px; }
 .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
-.row-store { font-size: 13.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-store { font-size: 13.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; flex-direction: column; gap: 2px; }
+.row-detail { font-size: 11.5px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; }
+.infos { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; font-size: 13px; color: var(--text-dim); }
+.infos .compare-label { padding: 4px 0 2px; }
+.info { display: flex; gap: 10px; }
+.info-libelle { flex: 0 0 96px; color: var(--text-faint); }
+.liens { display: flex; gap: 14px; flex-wrap: wrap; }
+.liens .lien-texte { margin-top: 2px; }
 .row-save { font-family: var(--mono); font-size: 10.5px; color: #1fa862; }
 .row.oos { opacity: 0.5; }
 .row.oos .row-price { text-decoration: line-through; }

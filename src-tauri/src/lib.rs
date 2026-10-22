@@ -953,6 +953,24 @@ async fn store_shelf(
         .map_err(|e| e.to_string())
 }
 
+/// Boutique — bas de la fiche produit : contenus additionnels (`dlc`, appids Steam) et
+/// jeux similaires (`tags`, les tags Steam principaux du jeu), prix compris.
+#[tauri::command]
+async fn store_game_extras(
+    app: tauri::AppHandle,
+    app_id: u64,
+    dlc: Vec<u64>,
+    tags: Vec<u64>,
+) -> Result<metadata::vitrine::StoreExtras, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let excluded = excluded_stores(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        metadata::vitrine::extras(app_id, &dlc, &tags, &dir, &excluded)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Boutique — recherche de jeux par titre (renvoie le prix le plus bas de chacun,
 /// hors revendeurs masqués).
 #[tauri::command]
@@ -2105,6 +2123,7 @@ pub fn run() {
             store_deals,
             store_home,
             store_shelf,
+            store_game_extras,
             store_search,
             store_suggest,
             store_game,

@@ -74,3 +74,79 @@ export function libelleFin(expiry: string | null | undefined): string {
 export function pageSteam(appId: number): string {
   return `https://store.steampowered.com/app/${appId}`;
 }
+
+// --- Fiche produit ---
+
+/** Un nombre à la manière de la langue (« 91 417 » / « 91,417 »). */
+export function nombre(n: number): string {
+  return new Intl.NumberFormat(etiquetteIntl.value).format(n);
+}
+
+/** Une date `AAAA-MM-JJ` en toutes lettres (« 10 décembre 2020 »). */
+export function dateLongue(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat(etiquetteIntl.value, { day: "numeric", month: "long", year: "numeric" }).format(d);
+}
+
+/**
+ * Nom d'une langue dans la langue de l'interface, d'après son étiquette BCP 47 :
+ * `Intl` le connaît déjà (« français », « portugais (Brésil) »), on n'a rien à traduire.
+ */
+export function nomLangue(code: string): string {
+  try {
+    const nom = new Intl.DisplayNames([etiquetteIntl.value], { type: "language" }).of(code) ?? code;
+    return nom.charAt(0).toLocaleUpperCase(etiquetteIntl.value) + nom.slice(1);
+  } catch {
+    return code;
+  }
+}
+
+/** Libellés Steam des descripteurs PEGI → clés de traduction. Les autres restent tels quels. */
+const DESCRIPTEURS: Record<string, string> = {
+  violence: "violence",
+  "bad language": "langage",
+  fear: "peur",
+  sex: "sexe",
+  drugs: "drogue",
+  discrimination: "discrimination",
+  gambling: "jeux",
+  "in-game purchases": "achats",
+  "in-game purchases (includes random items)": "achatsAleatoires",
+};
+export function descripteur(brut: string): string {
+  const cle = DESCRIPTEURS[brut.trim().toLowerCase()];
+  return cle ? t(`boutique.produit.pegi.${cle}` as Cle) : brut;
+}
+
+/**
+ * Ce qu'il faut savoir pour activer une offre : « Sans DRM », « Activation : GOG »… Rien
+ * quand la boutique vend sur sa propre plateforme (Steam chez Steam, Epic chez Epic) : ça
+ * va sans dire.
+ */
+export function activation(boutique: string, drm: string[] | undefined): string {
+  if (!drm?.length) return "";
+  if (drm.some((d) => d.toLowerCase() === "drm free")) return t("boutique.produit.sansDrm");
+  const chez = boutique.toLowerCase();
+  const autres = drm.filter((d) => !chez.includes(d.toLowerCase().split(" ")[0]));
+  return autres.length ? t("boutique.produit.activation", { drm: autres.join(", ") }) : "";
+}
+
+export type Verdict = "record" | "proche" | "troisMois" | "annee" | "cher";
+
+/**
+ * « Bon moment pour acheter ? » : le prix actuel comparé aux plus bas du comparateur.
+ *
+ * 🔑 Les seuils se lisent comme un acheteur les lirait : au plus bas (à un centime près),
+ * à 10 % du record, au plus bas des 3 derniers mois, à 10 % du plus bas de l'année, sinon
+ * « déjà vu moins cher ». Les plus bas tiennent compte de toutes les boutiques suivies
+ * par le comparateur, revendeurs compris.
+ */
+export function verdict(prix: number, bas3m?: number | null, bas1a?: number | null, basTout?: number | null): Verdict | null {
+  if (basTout == null) return null;
+  if (prix <= basTout + 0.01) return "record";
+  if (prix <= basTout * 1.1) return "proche";
+  if (bas3m != null && prix <= bas3m + 0.01) return "troisMois";
+  if (bas1a != null && prix <= bas1a * 1.1) return "annee";
+  return "cher";
+}

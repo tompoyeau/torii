@@ -256,14 +256,84 @@ export interface StorePrice {
   buyUrl: string;
   /** false = en rupture de stock (Instant Gaming). Absent/undefined = disponible. */
   available?: boolean;
+  /** Plateformes d'activation selon le comparateur (`Steam`, `GOG`, `Drm Free`…). */
+  drm?: string[];
+  /** Fin annoncée de l'offre (ISO 8601). */
+  expiry?: string | null;
+  /** Code promo à saisir chez le vendeur. */
+  voucher?: string | null;
 }
 
-/** Fiche produit boutique : comparatif de prix + métadonnée descriptive (IGDB). */
+/** Une note critique ou communautaire (Steam, Metascore, OpenCritic). */
+export interface StoreReview {
+  source: string;
+  score: number;
+  count: number;
+  url?: string | null;
+}
+
+/** Bloc sûr de la description complète Steam (jamais de HTML). */
+export interface StoreBloc {
+  /** `p`, `h`, `li`, `img` ou `video`. */
+  genre: string;
+  texte: string;
+  url?: string | null;
+  affiche?: string | null;
+}
+
+/** Ce que Steam ajoute à la fiche produit (`metadata/fiche.rs`). */
+export interface StoreSteamSheet {
+  reviewScore: number;
+  reviewPercent?: number | null;
+  reviewCount: number;
+  tags: string[];
+  tagIds: number[];
+  captures: { mini: string; grande: string }[];
+  /** Aperçu vidéo de quelques secondes, muet. */
+  apercu?: { nom: string; affiche?: string | null; mp4?: string | null; webm?: string | null } | null;
+  /** Langues prises en charge ; `code` = étiquette BCP 47. */
+  langues: { code: string; voix: boolean; sousTitres: boolean }[];
+  classification?: { systeme: string; note: string; descripteurs: string[] } | null;
+  /** Fonctionnalités Steam, libellés déjà traduits par Steam. */
+  categories: { id: number; libelle: string }[];
+  succes?: number | null;
+  configuration?: {
+    minimale: { libelle: string; valeur: string }[];
+    recommandee: { libelle: string; valeur: string }[];
+    notes: string[];
+  } | null;
+  dlc: number[];
+  site?: string | null;
+  description: StoreBloc[];
+}
+
+/** Bas de la fiche produit, chargé à la demande (`store_game_extras`). */
+export interface StoreExtras {
+  dlc: StoreShelfItem[];
+  similar: StoreShelfItem[];
+  similarTags: string[];
+}
+
+/** Fiche produit boutique : comparatif de prix + métadonnée descriptive (IGDB, Steam). */
 export interface StoreGame {
   gameId: string;
   title: string;
   coverUrl?: string | null;
   heroUrl?: string | null;
+  appId?: number | null;
+  /** Date de sortie `AAAA-MM-JJ`. */
+  releaseDate?: string | null;
+  developers?: string[];
+  publishers?: string[];
+  reviews?: StoreReview[];
+  playersDay?: number | null;
+  playersPeak?: number | null;
+  /** Personnes qui suivent ce jeu sur le comparateur. */
+  waitlisted?: number | null;
+  /** Plus bas des 3 derniers mois et de l'année (même devise que `cheapestEver`). */
+  low3m?: number | null;
+  low1y?: number | null;
+  steam?: StoreSteamSheet | null;
   /** Prix le plus bas jamais atteint, si connu. */
   cheapestEver?: number | null;
   /** Devise de `cheapestEver` (chaque offre porte la sienne). */

@@ -9,7 +9,7 @@ import { t } from "../i18n";
 import { gradientFor } from "../lib/covers";
 import type { WishlistItem } from "../types";
 
-const { items, loading, loaded, steamConnected, onSaleCount, refresh } = useWishlist();
+const { items, loading, loaded, steamConnected, indisponible, onSaleCount, refresh } = useWishlist();
 const { openProduct } = useStore();
 const { openSettings } = useUi();
 
@@ -93,6 +93,12 @@ function atLow(it: WishlistItem): boolean {
       <span class="spin big" />
       <p>{{ t("boutique.wishlist.recuperation") }}</p>
       <p class="dim">{{ t("boutique.wishlist.premiereFois") }}</p>
+    </div>
+
+    <!-- Panne : rien à montrer, et on dit pourquoi (pas « wishlist vide ») -->
+    <div v-else-if="loaded && indisponible && !items.length" class="empty">
+      <p>{{ t("boutique.wishlist.indisponible") }}</p>
+      <p class="dim">{{ t("boutique.indisponibleAide") }}</p>
     </div>
 
     <!-- Vide -->

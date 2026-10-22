@@ -20,8 +20,8 @@ import StoreShelfCard from "./StoreShelfCard.vue";
 import StoreWishlistDeals from "./StoreWishlistDeals.vue";
 
 const {
-  items, loading, sort, query, activeQuery, suggestions, randomLoading, randomMode, hasMore, loadingMore,
-  setSort, runSearch, openProduct, pickRandom, fetchSuggestions, clearSuggestions, ensureDeals, loadMore,
+  items, loading, sort, query, activeQuery, suggestions, randomLoading, randomMode, hasMore, loadingMore, indisponible,
+  setSort, runSearch, openProduct, pickRandom, fetchSuggestions, clearSuggestions, ensureDeals, loadMore, retryGrid,
 } = useStore();
 const { home, homeEtat, chargerAccueil, chargerRayon, rayon } = useStoreHome();
 const { possession } = usePossession();
@@ -295,6 +295,11 @@ function onCoverError(url: string | null) {
         <div v-if="loading && !items.length" class="empty">
           <span class="spin" />
           <p>{{ t("boutique.chargement") }}</p>
+        </div>
+        <div v-else-if="indisponible && !items.length" class="empty">
+          <p>{{ t("boutique.indisponible") }}</p>
+          <p class="dim">{{ t("boutique.indisponibleAide") }}</p>
+          <button class="chip" @click="retryGrid">{{ t("boutique.accueil.reessayer") }}</button>
         </div>
         <div v-else-if="!items.length" class="empty">
           <p>{{ t("boutique.aucun") }}</p>

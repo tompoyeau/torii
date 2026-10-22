@@ -1,9 +1,10 @@
-import { t } from "../i18n";
-import { instantGamingPertinent } from "../i18n/regions";
+import { langueCourante, t } from "../i18n";
+import { instantGamingPertinent, regionCourante } from "../i18n/regions";
 import { ref } from "vue";
 import {
   clearExcludedStores as clearExcludedStoresBackend,
   getExcludedStores,
+  hasTauriRuntime,
   setStoreExcluded,
   storeDeals,
   storeGame,
@@ -32,6 +33,20 @@ const activeQuery = ref("");
 const selectedGameId = ref<string | null>(null);
 const product = ref<StoreGame | null>(null);
 const productLoading = ref(false);
+/** La fiche n'a pas pu être chargée (comparateur injoignable ou saturé). */
+const productIndisponible = ref(false);
+/** La grille (vitrine ou recherche) n'a pas pu être chargée. */
+const indisponible = ref(false);
+
+/**
+ * Démo web (hors Tauri) : les commandes n'existent pas, on montre des données fictives.
+ *
+ * 🔑 DANS L'APPLICATION, UNE PANNE N'EST JAMAIS REMPLACÉE PAR LA DÉMO. Le pont renvoie
+ * `null` aussi bien hors Tauri que sur une commande en échec : un `?? mock` sans ce test
+ * affichait, le comparateur saturé, la fiche de Baldur's Gate 3 (premier jeu de la démo)
+ * à la place de n'importe quel jeu cliqué.
+ */
+const demo = () => !hasTauriRuntime();
 
 /** Suggestions d'autocomplétion de la barre de recherche. */
 const suggestions = ref<StoreSuggestion[]>([]);
@@ -129,8 +144,10 @@ async function loadHome() {
   randomMode.value = false;
   page.value = 0;
   const token = ++reqToken;
-  const res = (await storeDeals(0, sort.value)) ?? mockDeals(sort.value);
+  const recu = await storeDeals(0, sort.value);
   if (token !== reqToken) return; // une requête plus récente a pris le relais
+  indisponible.value = !recu && !demo();
+  const res = recu ?? (demo() ? mockDeals(sort.value) : items.value);
   items.value = res;
   hasMore.value = res.length >= TAILLE_PAGE - 8; // les DLC écartés côté Rust raccourcissent la page
   loading.value = false;
@@ -164,9 +181,10 @@ async function runSearch() {
   randomMode.value = false;
   hasMore.value = false;
   const token = ++reqToken;
-  const res = (await storeSearch(q)) ?? mockSearch(q);
+  const recu = await storeSearch(q);
   if (token !== reqToken) return;
-  items.value = res;
+  indisponible.value = !recu && !demo();
+  items.value = recu ?? (demo() ? mockSearch(q) : []);
   loading.value = false;
 }
 
@@ -178,7 +196,7 @@ async function fetchSuggestions(q: string) {
     return;
   }
   const token = ++suggestToken;
-  const res = (await storeSuggest(query)) ?? mockSuggest(query);
+  const res = (await storeSuggest(query)) ?? (demo() ? mockSuggest(query) : []);
   if (token !== suggestToken) return; // une frappe plus récente a pris le relais
   suggestions.value = res;
 }
@@ -197,17 +215,51 @@ function setSort(s: StoreSort) {
   if (!activeQuery.value) void loadHome();
 }
 
+/**
+ * Fiches déjà ouvertes dans la session, 15 minutes : rouvrir une fiche (retour depuis un
+ * jeu similaire, deuxième coup d'œil) ne refait ni les appels au comparateur, dont le
+ * quota est partagé, ni ceux à Steam. Indexées par région et langue.
+ */
+const fichesVues = new Map<string, { fiche: StoreGame; at: number }>();
+const DUREE_FICHE = 15 * 60_000;
+const cleFiche = (gameId: string) => `${regionCourante.value}|${langueCourante.value}|${gameId}`;
+
 /** Ouvre la fiche produit d'un jeu (comparatif de prix + méta). */
 async function openProduct(gameId: string) {
   clearSuggestions();
   selectedGameId.value = gameId;
+  const vue = fichesVues.get(cleFiche(gameId));
+  if (vue && Date.now() - vue.at < DUREE_FICHE) {
+    product.value = vue.fiche;
+    productLoading.value = false;
+    return;
+  }
   product.value = null;
   productLoading.value = true;
-  const res = (await storeGame(gameId)) ?? mockGame(gameId);
+  productIndisponible.value = false;
+  const reel = await storeGame(gameId);
+  if (reel) fichesVues.set(cleFiche(gameId), { fiche: reel, at: Date.now() });
   // Ne pas écraser si l'utilisateur a déjà changé de fiche / fermé.
   if (selectedGameId.value === gameId) {
-    product.value = res;
+    product.value = reel ?? (demo() ? mockGame(gameId) : null);
+    productIndisponible.value = !product.value;
     productLoading.value = false;
+  }
+}
+
+/** Redemande la fiche ouverte (après « indisponible pour l'instant »). */
+function retryProduct() {
+  const id = selectedGameId.value;
+  if (id && id !== "__loading__") void openProduct(id);
+}
+
+/** Rejoue ce que montre la grille : la recherche en cours, sinon la vitrine. */
+function retryGrid() {
+  if (activeQuery.value) {
+    query.value = activeQuery.value;
+    void runSearch();
+  } else {
+    void loadHome();
   }
 }
 
@@ -240,7 +292,7 @@ async function pickRandom() {
     const sorts: StoreSort[] = ["featured", "savings", "price", "recent", "rating"];
     const s = sorts[Math.floor(Math.random() * sorts.length)];
     const page = Math.floor(Math.random() * 15);
-    const res = (await storeDeals(page, s)) ?? mockDeals(s);
+    const res = (await storeDeals(page, s)) ?? (demo() ? mockDeals(s) : []);
     if (token !== reqToken) return; // une requête plus récente a pris le relais
     const pool = res.length ? res : items.value;
     items.value = shuffle(pool);
@@ -272,7 +324,9 @@ async function openForTitle(title: string): Promise<boolean> {
   selectedGameId.value = "__loading__";
   product.value = null;
   productLoading.value = true;
-  const res = (await storeSuggest(title)) ?? mockSuggest(title);
+  // Comparateur injoignable : pas de correspondance, on bascule sur la recherche, qui
+  // affichera l'indisponibilité à sa place.
+  const res = (await storeSuggest(title)) ?? (demo() ? mockSuggest(title) : []);
   const first = res[0];
   if (!first) {
     selectedGameId.value = null;
@@ -306,6 +360,10 @@ export function useStore() {
     selectedGameId,
     product,
     productLoading,
+    productIndisponible,
+    indisponible,
+    retryProduct,
+    retryGrid,
     suggestions,
     randomLoading,
     randomMode,
@@ -369,10 +427,13 @@ function mockGame(gameId: string): StoreGame {
     coverUrl: it.coverUrl,
     heroUrl: it.coverUrl, // (mock : réutilise la jaquette)
     cheapestEver: r2(it.price * 0.8),
+    low1y: r2(it.price * 0.85),
+    low3m: r2(it.price * 0.95),
+    developers: [t("demo.studioFictif")],
     // Même règle que Rust (`locale::zone_euro`) : pas d'Instant Gaming hors zone euro,
     // sinon la démo montrerait une offre que l'application réelle ne propose jamais.
     prices: [
-      { storeName: "Instant Gaming", price: r2(it.price - 2), retailPrice: it.normalPrice, savings: it.savings + 5, buyUrl: "https://www.instant-gaming.com/" },
+      { storeName: "Instant Gaming", price: r2(it.price - 2), retailPrice: it.normalPrice, savings: it.savings + 5, buyUrl: "https://www.instant-gaming.com/", drm: ["Steam"] },
       { storeName: it.storeName, price: it.price, retailPrice: it.normalPrice, savings: it.savings, buyUrl: it.buyUrl },
       { storeName: "Steam", price: r2(it.price + 3), retailPrice: it.normalPrice, savings: Math.max(0, it.savings - 8), buyUrl: "https://store.steampowered.com/" },
       { storeName: "Epic Games Store", price: r2(it.price + 5), retailPrice: it.normalPrice, savings: Math.max(0, it.savings - 12), buyUrl: "https://store.epicgames.com/" },

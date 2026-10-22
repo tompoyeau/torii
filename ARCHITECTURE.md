@@ -1443,11 +1443,25 @@ par la grille de résultats, comme avant.
   « réduire les animations ».
 - **Jeux offerts** : `deals/v2?sort=price`, seulement `type: "game"` à 0 € (la tête de
   liste contient aussi DLC, démos et bandes-son à 0 €).
-- 🔑 **appid → id ITAD : un appel groupé `POST lookup/id/shop/61/v1`**, avec repli sur
-  `games/lookup/v1` jeu par jeu si le proxy le refuse (403 tant qu'il n'est pas déployé
-  avec la nouvelle liste blanche). Cache `itad_ids_cache_v1.json` (trouvé : 90 j,
+- 🔑 **appid → id ITAD : un appel groupé `POST lookup/id/shop/61/v1`** (proxy déployé
+  avec cet endpoint le 23/10/2026, version `a010c8d1`), avec repli sur `games/lookup/v1`
+  jeu par jeu si l'appel groupé échoue. Cache `itad_ids_cache_v1.json` (trouvé : 90 j,
   absent : 1 j, panne : rien), écritures sous verrou (plusieurs rayons en parallèle).
-  Mesuré : accueil 1,7 s à froid (repli un par un), 0,5 s ensuite.
+  Mesuré avant le déploiement : accueil 1,7 s à froid (repli un par un), 0,5 s ensuite.
+- ⚠️ **LE QUOTA DU COMPARATEUR EST PARTAGÉ PAR TOUS LES UTILISATEURS** (une seule clé, dans
+  le proxy). Le 22/10/2026, deux saturations de plusieurs minutes (ITAD répond 429, corps
+  vide, sans `Retry-After` — à ne pas confondre avec le 429 du proxy, qui a un texte et
+  `Retry-After: 60`) pendant une soirée d'essais de la Boutique, quand chaque jeu jamais
+  vu se résolvait en un appel séparé. Deux protections depuis :
+  - `store::get_json` / `post_json` **se mettent en pause** après un 429 (`Retry-After`,
+    60 s par défaut) : plus aucun appel au comparateur pendant ce temps ;
+  - l'appel groupé ci-dessus (une douzaine d'appels → un seul par rayon).
+- 🔑 **DANS L'APPLICATION, UNE PANNE N'EST JAMAIS REMPLACÉE PAR LA DÉMO.** Le pont
+  `lib/tauri.ts` renvoie `null` hors Tauri ET sur une commande en échec ; les `?? mock`
+  de `useStore` et `useWishlist` affichaient donc, comparateur saturé, la fiche de
+  Baldur's Gate 3 (premier jeu de la démo) pour n'importe quel jeu cliqué, ou la
+  wishlist fictive. Les données de démo ne servent plus que si `!hasTauriRuntime()` ;
+  sinon « Le comparateur de prix ne répond pas pour l'instant » + « Réessayer ».
 - **Coût réseau** : à l'ouverture, 2 appels Steam + 2 vitrines ITAD (cache proxy 10 min) +
   la résolution d'ids (souvent nulle) + 1 prix groupé. Onglets, genres et free-to-play ne
   sont demandés qu'au clic ou à l'arrivée à l'écran (`useQuandVisible`). Le front garde
@@ -1467,6 +1481,62 @@ par la grille de résultats, comme avant.
   Dans l'application, une panne s'affiche (« Réessayer ») : jamais de données de démo.
 - Exemple : `cargo run --example vitrine [FR|US|JP] [fr|en]` (dossier temporaire, les
   caches de l'application installée ne sont pas touchés).
+
+## Boutique — fiche produit étoffée (`metadata/fiche.rs`)
+
+La fiche d'un jeu de la Boutique montre, en plus du comparatif : notes Steam, Metacritic
+et OpenCritic, classification d'âge, badge « Dans ta bibliothèque » (et bouton vers la
+carte du jeu), aperçu vidéo et toutes les captures Steam, description complète, « En
+bref » (modes, manette, ta langue, joueurs, accessibilité, nombre de personnes qui le
+suivent), contenus additionnels, configuration requise, jeux similaires, et dans la
+colonne des prix un encadré « Bon moment pour acheter ? » (plus bas 3 mois / 1 an /
+record), l'activation de chaque offre (« Sans DRM », « Activation : GOG »), sa date de
+fin et son code promo.
+
+- **Déjà reçu, rien de plus à demander** : `games/info/v2` donnait déjà notes, joueurs,
+  sortie, studios, nombre de suiveurs ; `games/prices/v3` donne `historyLow.{all,y1,m3}`
+  et, par offre, `drm`, `expiry`, `voucher`. La fiche ne les affichait pas.
+- **+ 2 appels Steam sans clé**, en parallèle (`fiche::fiche`) : `GetItems` (captures,
+  microtrailer, langues avec voix/sous-titres, tags, avis) et `appdetails` (configuration,
+  catégories traduites par Steam, succès, classification, DLC, site, description).
+- `store::game` lance désormais tout **en parallèle** une fois `games/info/v2` reçu
+  (prix, Instant Gaming, IGDB, description traduite, fiche Steam) : 2,3 s pour Cyberpunk
+  2077 avec tout ça, au lieu d'additionner les allers-retours.
+- 🔑 **AUCUN HTML NE PASSE À L'INTERFACE.** La description et la configuration de Steam
+  sont du HTML : `fiche::blocs` et `fiche::configuration` les convertissent en blocs
+  typés (paragraphe, intertitre, puce, image, vidéo) et en lignes « libellé : valeur ».
+  Seules les images et vidéos des hôtes `*.steamstatic.com` sont gardées. Jamais de
+  `v-html` sur du contenu tiers : la WebView a accès aux commandes Tauri.
+- ⚠️ **Beaucoup de descriptions ne contiennent que des images et des vidéos en boucle**
+  (celle de Cyberpunk 2077 n'a pas un mot de texte) : sans le bloc `video`, il n'en
+  restait qu'une image.
+- ⚠️ **Plus de vraies bandes-annonces en mp4** : Steam ne sert plus que du DASH/HLS, qui
+  demanderait une bibliothèque de lecture (dépendance refusée). On montre le
+  « microtrailer » (quelques secondes, muet, mp4/webm) et un bouton vers la page Steam.
+- **CSP** : `media-src 'self' https://video.akamai.steamstatic.com
+  https://shared.akamai.steamstatic.com`, dans `csp` ET `devCsp` (sans elle, `default-src
+  'self'` bloque toute vidéo). Rappel : seul `npm run tauri build` exerce la CSP de
+  production (voir plus haut).
+- **Langues** : `GetItems` renvoie l'énumération `ELanguage` de Steam (0 anglais, 1
+  allemand, 2 français…), convertie en BCP 47 (`code_langue`, ordre vérifié contre la
+  liste lisible d'`appdetails`) ; l'interface en tire le nom avec `Intl.DisplayNames`.
+- **Captures** : Steam sert chaque capture en `.600x338.jpg` et `.1920x1080.jpg` en
+  suffixant le nom de fichier ; l'original pèse 1 à 2 Mo.
+- **Classification** : celle de la région (PEGI en Europe, USK en Allemagne, ESRB en
+  Amérique du Nord…), avec repli sur PEGI puis ESRB. Descripteurs PEGI traduits côté
+  interface (`lib/boutique.ts::descripteur`), les autres affichés tels quels.
+- **Bas de fiche** (DLC + similaires) : commande `store_game_extras`, demandée quand la
+  fiche défile jusque-là, **un seul** appel au comparateur pour les deux. Similaires =
+  `Query` sur les deux tags principaux (tags génériques écartés : solo, multijoueur,
+  bande-son…), complétés par la paire suivante s'ils sont moins de 6.
+- **Mémoire** : fiches gardées 15 min (`useStore.fichesVues`), bas de fiche pour la
+  session (`useFicheExtras`), indexés par région + langue.
+- **Verdict** (`lib/boutique.ts::verdict`) : au plus bas (au centime près), à 10 % du
+  record, au plus bas des 3 mois, à 10 % du plus bas de l'année, sinon « déjà vu moins
+  cher ». Les plus bas du comparateur incluent les revendeurs, même masqués.
+- **Pas encore** (demande de déployer le proxy) : historique des prix sur 12 mois
+  (`games/history/v2`) et « Inclus dans un abonnement » (`games/subs/v1`).
+- Exemple : `cargo run --example fiche [id ITAD] [région] [langue]`.
 
 ## Prochaines étapes
 

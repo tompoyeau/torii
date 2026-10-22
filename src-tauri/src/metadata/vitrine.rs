@@ -112,6 +112,16 @@ pub struct ShelfItem {
     pub expiry: Option<String>,
 }
 
+/// Le bas de la fiche produit : contenus additionnels et jeux similaires.
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreExtras {
+    pub dlc: Vec<ShelfItem>,
+    pub similar: Vec<ShelfItem>,
+    /// Les tags qui ont servi à trouver les jeux similaires, dans la langue de l'interface.
+    pub similar_tags: Vec<String>,
+}
+
 /// Ce que l'accueil affiche d'emblée. Les autres rayons (onglets, genres, free-to-play)
 /// sont demandés quand l'utilisateur y arrive (`shelf`).
 #[derive(Serialize, Clone, Debug, Default)]
@@ -192,6 +202,53 @@ pub fn shelf(rayon: Rayon, dir: &Path, excluded: &HashSet<String>) -> Vec<ShelfI
     let mut jeux = lire_rayon(rayon, &items, &noms_tags(dir));
     completer(&mut jeux, dir, excluded);
     jeux
+}
+
+/// Contenus additionnels et jeux similaires d'une fiche produit, prix compris (un seul
+/// appel au comparateur pour les deux). Demandé quand l'utilisateur fait défiler la
+/// fiche jusqu'à eux.
+pub fn extras(app_id: u64, dlc: &[u64], tags: &[u64], dir: &Path, excluded: &HashSet<String>) -> StoreExtras {
+    let noms = noms_tags(dir);
+    let (dlc_bruts, similaires) = std::thread::scope(|s| {
+        let d = s.spawn(|| if dlc.is_empty() { Some(Vec::new()) } else { details(dlc) });
+        let sim = s.spawn(|| similaires(app_id, dlc, tags));
+        (d.join().ok().flatten().unwrap_or_default(), sim.join().unwrap_or_default())
+    });
+    let dlc_jeux: Vec<ShelfItem> = dlc_bruts.iter().filter_map(|i| lire(i, &noms, true)).collect();
+    let nb = dlc_jeux.len();
+    let mut tous = dlc_jeux;
+    tous.extend(similaires.iter().filter_map(|i| lire_jeu(i, &noms)).take(PAR_RAYON));
+    completer(&mut tous, dir, excluded);
+    let similar = tous.split_off(nb);
+    StoreExtras {
+        dlc: tous,
+        similar,
+        similar_tags: tags.iter().take(2).filter_map(|t| noms.get(t).cloned()).collect(),
+    }
+}
+
+/// Jeux qui partagent les deux tags principaux du jeu (le plus vendus d'abord). S'ils
+/// sont trop peu — « Cyberpunk » et « Monde ouvert » ensemble, c'est une poignée —, on
+/// complète avec les tags suivants.
+fn similaires(app_id: u64, dlc: &[u64], tags: &[u64]) -> Vec<Value> {
+    let mut vus: HashSet<u64> = dlc.iter().copied().chain([app_id]).collect();
+    let mut out = Vec::new();
+    for paire in tags.windows(2).take(2) {
+        let filtres = json!({
+            "released_only": true,
+            "price_filters": { "exclude_free_items": true },
+            "tagids_must_match": [{ "tagids": [paire[0]] }, { "tagids": [paire[1]] }],
+        });
+        for item in requete(10, 16, filtres, donnees_completes()).unwrap_or_default() {
+            if item["appid"].as_u64().is_some_and(|a| vus.insert(a)) {
+                out.push(item);
+            }
+        }
+        if out.len() >= 6 {
+            break;
+        }
+    }
+    out
 }
 
 // --- Steam ---------------------------------------------------------------------
@@ -332,10 +389,15 @@ fn lire_rayon(rayon: Rayon, items: &[Value], noms: &HashMap<u64, String>) -> Vec
 /// Un item de l'API de la boutique. `None` pour ce qui n'est pas un jeu à montrer :
 /// réponse en échec, autre chose qu'un jeu (`type` 0), contenu adulte.
 fn lire_jeu(item: &Value, noms: &HashMap<u64, String>) -> Option<ShelfItem> {
+    lire(item, noms, false)
+}
+
+/// Comme `lire_jeu`, en acceptant aussi les contenus additionnels (`type` 4) si `dlc`.
+fn lire(item: &Value, noms: &HashMap<u64, String>, dlc: bool) -> Option<ShelfItem> {
     if item["success"].as_u64().is_some_and(|s| s != 1) || item["visible"].as_bool() == Some(false) {
         return None;
     }
-    if item["type"].as_u64().is_some_and(|t| t != 0) {
+    if item["type"].as_u64().is_some_and(|t| t != 0 && !(dlc && t == 4)) {
         return None;
     }
     let descripteurs = item["content_descriptorids"].as_array();
@@ -410,7 +472,7 @@ fn fichier_tags(dir: &Path) -> PathBuf {
 
 /// Nom des tags Steam dans la langue de l'interface. Un cache périmé sert encore si
 /// Steam ne répond pas : des tags d'il y a deux mois valent mieux que pas de tags.
-fn noms_tags(dir: &Path) -> HashMap<u64, String> {
+pub(super) fn noms_tags(dir: &Path) -> HashMap<u64, String> {
     let langue = locale::steam_langue();
     let mut cache: HashMap<String, NomsTags> = std::fs::read_to_string(fichier_tags(dir))
         .ok()
@@ -792,6 +854,17 @@ mod tests {
         let jeu = |app_id, price: Option<f64>, savings| ShelfItem { app_id, price, savings, ..Default::default() };
         let gardes = garder_vraies_promos(vec![jeu(1, Some(17.99), 70), jeu(2, Some(38.49), 4), jeu(3, None, 0)]);
         assert_eq!(gardes.iter().map(|j| j.app_id).collect::<Vec<_>>(), vec![1]);
+    }
+
+    #[test]
+    fn un_dlc_n_est_accepte_que_si_on_le_demande() {
+        let mut extension = cyberpunk();
+        extension["type"] = json!(4);
+        assert!(lire_jeu(&extension, &noms()).is_none());
+        assert_eq!(lire(&extension, &noms(), true).unwrap().app_id, 1091500);
+        // Une bande-son (autre type) reste refusée, même parmi les contenus additionnels.
+        extension["type"] = json!(6);
+        assert!(lire(&extension, &noms(), true).is_none());
     }
 
     #[test]

@@ -1,3 +1,4 @@
+pub mod fiche;
 pub mod gog_store;
 pub mod igdb;
 pub mod instant_gaming;

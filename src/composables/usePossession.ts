@@ -32,29 +32,48 @@ export function normaliserTitre(titre: string): string {
 export function usePossession() {
   const { games } = useLibrary();
 
+  /** Ce qu'on retient d'un jeu possédé : son état et sa carte dans la bibliothèque. */
+  interface Trouve {
+    etat: Exclude<Possession, null>;
+    id: string;
+  }
+
   const index = computed(() => {
-    const parAppid = new Map<number, Possession>();
-    const parTitre = new Map<string, Possession>();
+    const parAppid = new Map<number, Trouve>();
+    const parTitre = new Map<string, Trouve>();
+    // Un jeu possédé l'emporte sur le même jeu prêté par la famille.
+    const garder = <K>(carte: Map<K, Trouve>, cle: K, t: Trouve) => {
+      if (carte.get(cle)?.etat !== "possede") carte.set(cle, t);
+    };
     for (const g of games.value) {
-      const etat: Possession = g.familyShared ? "famille" : "possede";
+      const t: Trouve = { etat: g.familyShared ? "famille" : "possede", id: g.id };
       const ids = [g.id, ...(g.sources ?? []).map((s) => s.id ?? "")];
       for (const id of ids) {
         if (!id.startsWith("steam:")) continue;
         const appid = Number(id.slice("steam:".length));
-        if (Number.isFinite(appid) && parAppid.get(appid) !== "possede") parAppid.set(appid, etat);
+        if (Number.isFinite(appid)) garder(parAppid, appid, t);
       }
       const cle = normaliserTitre(g.title);
-      if (cle && parTitre.get(cle) !== "possede") parTitre.set(cle, etat);
+      if (cle) garder(parTitre, cle, t);
     }
     return { parAppid, parTitre };
   });
 
-  /** Possession d'un jeu de la Boutique, par appid si on l'a, sinon par titre. */
-  function possession(titre: string, appId?: number | null): Possession {
+  function trouver(titre: string, appId?: number | null): Trouve | null {
     const { parAppid, parTitre } = index.value;
     if (appId && parAppid.has(appId)) return parAppid.get(appId) ?? null;
     return parTitre.get(normaliserTitre(titre)) ?? null;
   }
 
-  return { possession };
+  /** Possession d'un jeu de la Boutique, par appid si on l'a, sinon par titre. */
+  function possession(titre: string, appId?: number | null): Possession {
+    return trouver(titre, appId)?.etat ?? null;
+  }
+
+  /** L'identifiant de la carte du jeu dans la bibliothèque, s'il y est. */
+  function idBibliotheque(titre: string, appId?: number | null): string | null {
+    return trouver(titre, appId)?.id ?? null;
+  }
+
+  return { possession, idBibliotheque };
 }

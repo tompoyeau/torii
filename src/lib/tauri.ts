@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreHome, StoreItem, StoreShelfItem, StoreShelfKind, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreShelfItem, StoreShelfKind, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 import { avatarFictif } from "./covers";
 import { t } from "../i18n";
 
@@ -674,6 +674,11 @@ export async function storeHome(): Promise<StoreHome | null> {
 /** Boutique — un rayon chargé à la demande (`tag` : tag Steam, pour `genre`). `null` hors Tauri. */
 export async function storeShelf(kind: StoreShelfKind, tag?: number): Promise<StoreShelfItem[] | null> {
   return await call<StoreShelfItem[] | null>("store_shelf", { kind, tag: tag ?? null }, null);
+}
+
+/** Boutique — bas de la fiche produit : contenus additionnels et jeux similaires. `null` hors Tauri. */
+export async function storeGameExtras(appId: number, dlc: number[], tags: number[]): Promise<StoreExtras | null> {
+  return await call<StoreExtras | null>("store_game_extras", { appId, dlc, tags }, null);
 }
 
 /** Boutique — recherche de jeux par titre. Renvoie `null` hors Tauri. */
