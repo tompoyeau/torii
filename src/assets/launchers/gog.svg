@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 210">
+  <defs>
+    <linearGradient id="gog-anneau" x1="0.12" y1="0.1" x2="0.88" y2="0.92">
+      <stop offset="0" stop-color="#cc22dc"/>
+      <stop offset="0.5" stop-color="#8e16c8"/>
+      <stop offset="1" stop-color="#5410aa"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gog-anneau)" fill-rule="evenodd"
+        d="M105 3a102 102 0 1 0 0 204a102 102 0 1 0 0-204ZM105 42a63 63 0 1 1 0 126a63 63 0 1 1 0-126Z"/>
+</svg>
