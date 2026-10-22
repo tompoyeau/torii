@@ -5,6 +5,11 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.21.3
+- **Your installed Epic games are back with Epic's new launcher.** Epic is previewing a new version of its launcher, which replaces the old one when you install it. Torii couldn't find the games it manages: they showed as not installed, or vanished if your Epic account wasn't connected. Torii now reads both versions of the launcher, and “Play”, “Install” and “Uninstall” work with the new one just as with the old one.
+- **What the new launcher doesn't record, Torii finds.** Each game's size is measured on disk. Its name comes from your Epic account: without a connected account, a game installed with the new launcher shows its folder name.
+- **A new logo for GOG**: a ring with a magenta-to-purple gradient.
+
 ## 0.21.2
 - **Recent Steam games get their cover and banner back.** Steam now stores images for new games at an address Torii couldn't guess: Aniimo, for example, showed a plain gradient. Torii now asks Steam for the right address. And if an image fails to load, IGDB's takes over before the gradient.
 - **Game pages now refresh.** A description fetched once was kept forever: a game opened on its release day kept an empty page, and text translated since stayed in English. Pages are now fetched again after a month, the next day when they're empty, and a game that couldn't be found is searched for again after a week.

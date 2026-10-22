@@ -5,6 +5,11 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.21.3
+- **Tes jeux Epic installés reviennent avec le nouveau launcher d'Epic.** Epic propose en avant-première une nouvelle version de son launcher, qui remplace l'ancienne quand on l'installe. Torii ne trouvait plus les jeux qu'elle gère : ils passaient pour non installés, ou disparaissaient si ton compte Epic n'était pas connecté. Torii lit maintenant les deux versions du launcher, et « Jouer », « Installer » et « Désinstaller » marchent avec la nouvelle comme avec l'ancienne.
+- **Ce que le nouveau launcher ne note pas, Torii le retrouve.** La taille de chaque jeu est mesurée sur le disque. Son nom vient de ton compte Epic : sans compte connecté, un jeu installé avec le nouveau launcher porte le nom de son dossier.
+- **Nouveau logo pour GOG** : un anneau en dégradé, du magenta au violet.
+
 ## 0.21.2
 - **Les jeux Steam récents retrouvent leur jaquette et leur bannière.** Steam range désormais les images des nouveaux jeux à une adresse que Torii ne savait pas deviner : Aniimo, par exemple, s'affichait sur un simple dégradé. Torii demande maintenant la bonne adresse à Steam. Et si une image ne se charge pas, celle d'IGDB prend le relais avant le dégradé.
 - **Les fiches de jeux se mettent à jour.** Une description récupérée une fois l'était pour toujours : un jeu ouvert le jour de sa sortie gardait une fiche vide, et un texte traduit depuis restait en anglais. Les fiches sont maintenant redemandées au bout d'un mois, dès le lendemain quand elles sont vides, et un jeu introuvable est recherché de nouveau après une semaine.
