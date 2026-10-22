@@ -924,6 +924,35 @@ async fn store_deals(
         .map_err(|e| e.to_string())
 }
 
+/// Boutique — accueil : vedette et meilleures ventes (choisies par Steam, pour le pays
+/// de la région), promos du moment et jeux offerts (ITAD). Tous les prix sont la
+/// meilleure offre toutes boutiques, hors revendeurs masqués.
+#[tauri::command]
+async fn store_home(app: tauri::AppHandle) -> Result<metadata::vitrine::StoreHome, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let excluded = excluded_stores(&app);
+    tauri::async_runtime::spawn_blocking(move || metadata::vitrine::home(&dir, &excluded))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Boutique — un rayon chargé à la demande : `topSellers`, `newReleases`, `upcoming`,
+/// `genre` (avec `tag`, un tag Steam) ou `freeToPlay`.
+#[tauri::command]
+async fn store_shelf(
+    app: tauri::AppHandle,
+    kind: String,
+    tag: Option<u32>,
+) -> Result<Vec<metadata::vitrine::ShelfItem>, String> {
+    let rayon = metadata::vitrine::Rayon::depuis(&kind, tag)
+        .ok_or_else(|| format!("rayon inconnu : {kind}"))?;
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let excluded = excluded_stores(&app);
+    tauri::async_runtime::spawn_blocking(move || metadata::vitrine::shelf(rayon, &dir, &excluded))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Boutique — recherche de jeux par titre (renvoie le prix le plus bas de chacun,
 /// hors revendeurs masqués).
 #[tauri::command]
@@ -2074,6 +2103,8 @@ pub fn run() {
             disconnect_battlenet,
             enrich_igdb,
             store_deals,
+            store_home,
+            store_shelf,
             store_search,
             store_suggest,
             store_game,

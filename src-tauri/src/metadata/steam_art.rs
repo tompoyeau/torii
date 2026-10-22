@@ -155,20 +155,22 @@ fn demander(appids: &[u64]) -> Option<HashMap<u64, Art>> {
 fn lire_item(item: &Value) -> Option<(u64, Art)> {
     let id = item["appid"].as_u64().or_else(|| item["id"].as_u64())?;
     let assets = &item["assets"];
-    let format = assets["asset_url_format"].as_str();
-    let adresse = |cles: &[&str]| -> Option<String> {
-        let format = format?;
-        let fichier = cles.iter().find_map(|c| assets[*c].as_str())?;
-        Some(format!("{HOTE}{}", format.replace("${FILENAME}", fichier)))
-    };
     Some((
         id,
         Art {
-            cover: adresse(&["library_capsule_2x", "library_capsule"]),
-            hero: adresse(&["library_hero", "library_hero_2x"]),
+            cover: adresse_asset(assets, &["library_capsule_2x", "library_capsule"]),
+            hero: adresse_asset(assets, &["library_hero", "library_hero_2x"]),
             at: 0,
         },
     ))
+}
+
+/// Adresse complète du premier visuel présent parmi `cles`, dans l'objet `assets` d'un
+/// item de l'API de la boutique (`GetItems`, `Query`, `GetWeeklyTopSellers`).
+pub(crate) fn adresse_asset(assets: &Value, cles: &[&str]) -> Option<String> {
+    let format = assets["asset_url_format"].as_str()?;
+    let fichier = cles.iter().find_map(|c| assets[*c].as_str())?;
+    Some(format!("{HOTE}{}", format.replace("${FILENAME}", fichier)))
 }
 
 #[cfg(test)]

@@ -230,6 +230,60 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 3px 10px -3px rgba(31, 168, 98, 0.7);
 }
 
+/* --- Boutique : pièces communes aux rayons -----------------------------------
+   Vedette, carrousels, classements, jeux offerts et grille montrent les mêmes
+   éléments (prix, remise, possession, avis) : ils vivent ici une seule fois. */
+.remise {
+  font-family: var(--mono); font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 8px;
+  color: #fff; background: linear-gradient(135deg, #3ad07f, #1fa862); white-space: nowrap;
+}
+.prix { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.prix .now { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prix .now.hot { color: var(--accent); }
+.prix .was { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); text-decoration: line-through; white-space: nowrap; }
+.prix .shop { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gratuit {
+  font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+  color: #1fa862; background: rgba(58, 208, 127, 0.16); white-space: nowrap;
+}
+.record { font-size: 11.5px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+/* Possession : le jeu est déjà dans la bibliothèque (ou prêté par la famille Steam). */
+.possede {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+  padding: 3px 8px; border-radius: 7px; color: #fff; background: rgba(14, 10, 20, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.18); white-space: nowrap;
+}
+.possede svg { width: 12px; height: 12px; }
+/* Pastille d'avis Steam : vert, ambre, rouge — et des libellés, pas la couleur seule. */
+.avis { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.avis::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex: none; }
+.avis.pos::before { background: var(--manual); }
+.avis.mixte::before { background: var(--detected); }
+.avis.neg::before { background: var(--riot); }
+/* Cœur « wishlist » posé sur une jaquette, visible au survol (ou s'il est actif). */
+.wish-dot {
+  position: absolute; top: 8px; left: 8px; z-index: 3; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: rgba(14, 10, 20, 0.6); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff;
+  opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+:is(.cover-card, .carte-paysage):is(:hover, :focus-visible) .wish-dot { opacity: 1; }
+.wish-dot:hover { background: rgba(28, 20, 38, 0.9); }
+.wish-dot.on { opacity: 1; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.wish-dot svg { width: 16px; height: 16px; }
+/* En-tête de rayon : titre, sous-titre, actions à droite. */
+.rayon-tete { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.rayon-tete h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.rayon-tete .sous { margin: 3px 0 0; font-size: 13px; color: var(--text-faint); }
+.rayon-tete .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.fleche {
+  width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-dim);
+}
+.fleche:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.fleche:disabled { opacity: 0.4; cursor: default; }
+.fleche svg { width: 15px; height: 15px; }
+
 /* Firefox recalcule chaque flou d'arrière-plan (backdrop-filter) à chaque image : avec la barre du
    haut collante et les boutons translucides, le défilement tombait à 76 images lentes sur 180
    (mesuré sur la démo web, 6 sans aucun flou). On les retire donc pour lui seul, d'où le

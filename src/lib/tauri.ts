@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreItem, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreGame, StoreHome, StoreItem, StoreShelfItem, StoreShelfKind, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 import { avatarFictif } from "./covers";
 import { t } from "../i18n";
 
@@ -661,6 +661,19 @@ export async function storeDeals(
   sort: string,
 ): Promise<StoreItem[] | null> {
   return await call<StoreItem[] | null>("store_deals", { page, sort }, null);
+}
+
+/**
+ * Boutique — accueil : vedette et meilleures ventes (Steam, pays de la région), promos
+ * du moment et jeux offerts (comparateur). Renvoie `null` hors Tauri.
+ */
+export async function storeHome(): Promise<StoreHome | null> {
+  return await call<StoreHome | null>("store_home", undefined, null);
+}
+
+/** Boutique — un rayon chargé à la demande (`tag` : tag Steam, pour `genre`). `null` hors Tauri. */
+export async function storeShelf(kind: StoreShelfKind, tag?: number): Promise<StoreShelfItem[] | null> {
+  return await call<StoreShelfItem[] | null>("store_shelf", { kind, tag: tag ?? null }, null);
 }
 
 /** Boutique — recherche de jeux par titre. Renvoie `null` hors Tauri. */

@@ -1,17 +1,36 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useStore, type StoreSort } from "../composables/useStore";
+import { useStoreHome } from "../composables/useStoreHome";
+import { usePossession } from "../composables/usePossession";
+import { useQuandVisible } from "../composables/useQuandVisible";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
-import { t } from "../i18n";
+import { t, type Cle } from "../i18n";
 import type { StoreItem, StoreSuggestion } from "../types";
+import StoreDealCard from "./StoreDealCard.vue";
+import StoreGenres from "./StoreGenres.vue";
+import StoreGiveaways from "./StoreGiveaways.vue";
+import StoreHero from "./StoreHero.vue";
+import StorePossede from "./StorePossede.vue";
+import StoreRanking from "./StoreRanking.vue";
+import StoreRow from "./StoreRow.vue";
+import StoreShelfCard from "./StoreShelfCard.vue";
+import StoreWishlistDeals from "./StoreWishlistDeals.vue";
 
 const {
-  items, loading, sort, query, activeQuery, suggestions, randomLoading, randomMode,
-  setSort, runSearch, openProduct, pickRandom, fetchSuggestions, clearSuggestions,
+  items, loading, sort, query, activeQuery, suggestions, randomLoading, randomMode, hasMore, loadingMore,
+  setSort, runSearch, openProduct, pickRandom, fetchSuggestions, clearSuggestions, ensureDeals, loadMore,
 } = useStore();
+const { home, homeEtat, chargerAccueil, chargerRayon, rayon } = useStoreHome();
+const { possession } = usePossession();
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
+
+onMounted(() => {
+  void chargerAccueil();
+  ensureDeals();
+});
 
 const SORTS = computed<{ key: StoreSort; label: string }[]>(() => [
   { key: "featured", label: t("boutique.tris.featured") },
@@ -20,6 +39,36 @@ const SORTS = computed<{ key: StoreSort; label: string }[]>(() => [
   { key: "recent", label: t("boutique.tris.recent") },
   { key: "rating", label: t("boutique.tris.rating") },
 ]);
+
+// --- Accueil ---
+
+/** Raccourcis vers les rayons, en tête de page (ancres). */
+const NAV: { cle: string; cible: string }[] = [
+  { cle: "promos", cible: "rayon-promos" },
+  { cle: "ventes", cible: "rayon-classements" },
+  { cle: "nouveautes", cible: "rayon-classements" },
+  { cle: "aVenir", cible: "rayon-classements" },
+  { cle: "offerts", cible: "rayon-offerts" },
+  { cle: "genres", cible: "rayon-genres" },
+  { cle: "gratuits", cible: "rayon-gratuits" },
+  { cle: "toutes", cible: "rayon-toutes" },
+];
+function allerA(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/** La vedette ne met jamais en avant un jeu qu'on a déjà. */
+const vedette = computed(() =>
+  (home.value?.featured ?? []).filter((j) => !possession(j.title, j.appId)).slice(0, 6),
+);
+/** Promos du moment : les vraies remises (les jeux offerts ont leur propre colonne). */
+const promos = computed(() =>
+  (home.value?.deals ?? []).filter((d) => d.price > 0 && d.savings >= 10).slice(0, 12),
+);
+
+const gratuitsEl = ref<HTMLElement | null>(null);
+useQuandVisible(gratuitsEl, () => void chargerRayon("freeToPlay"));
+const gratuits = computed(() => rayon("freeToPlay"));
 
 // --- Autocomplétion ---
 const suggestOpen = ref(false);
@@ -86,6 +135,8 @@ onBeforeUnmount(() => {
   clearTimeout(debounce);
 });
 
+// --- Grille (toutes les offres, résultats de recherche) ---
+
 /** Un montant dans la devise de l'offre qui le porte. */
 const price = (montant: number, it: StoreItem) => formatPrix(montant, it.currency);
 
@@ -104,7 +155,7 @@ function onCoverError(url: string | null) {
   <div class="store">
     <div class="store-head">
       <div class="store-title">
-        <h2>{{ t("boutique.titre") }}</h2>
+        <h1>{{ t("boutique.titre") }}</h1>
         <p class="sub">{{ t("boutique.sousTitre") }}</p>
       </div>
       <div class="store-search-wrap">
@@ -114,6 +165,7 @@ function onCoverError(url: string | null) {
             v-model="query"
             type="text"
             :placeholder="t('boutique.rechercher')"
+            :aria-label="t('boutique.rechercher')"
             autocomplete="off"
             role="combobox"
             aria-autocomplete="list"
@@ -149,89 +201,162 @@ function onCoverError(url: string | null) {
       </div>
     </div>
 
-    <div class="bar">
-      <span class="ctx">
-        {{ activeQuery ? t("boutique.resultatsPour", { requete: activeQuery }) : randomMode ? t("boutique.hasard") : t("boutique.duMoment") }}
-        <span class="n">· {{ items.length }}</span>
-      </span>
-      <span class="spacer" />
-      <button
-        class="chip random"
-        :disabled="randomLoading"
-        :title="t('boutique.auHasardAide')"
-        @click="pickRandom"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none" /></svg>
-        {{ randomLoading ? t("boutique.pioche") : t("boutique.auHasard") }}
-      </button>
+    <div class="accueil">
       <template v-if="!activeQuery">
-        <button
-          v-for="s in SORTS"
-          :key="s.key"
-          class="chip"
-          :class="{ active: sort === s.key && !randomMode }"
-          @click="setSort(s.key)"
+        <nav class="raccourcis" :aria-label="t('boutique.accueil.rayons')">
+          <button v-for="n in NAV" :key="n.cle" class="chip" @click="allerA(n.cible)">
+            {{ t(`boutique.accueil.nav.${n.cle}` as Cle) }}
+          </button>
+        </nav>
+
+        <StoreWishlistDeals />
+
+        <StoreHero v-if="vedette.length" :jeux="vedette" />
+        <div v-else-if="homeEtat === 'chargement' || homeEtat === 'vide'" class="vedette-fantome" aria-hidden="true">
+          <span class="spin" />
+        </div>
+        <div v-else-if="homeEtat === 'echec'" class="panne">
+          <p>{{ t("boutique.accueil.echec") }}</p>
+          <button class="chip" @click="chargerAccueil(true)">{{ t("boutique.accueil.reessayer") }}</button>
+        </div>
+
+        <StoreRow
+          v-if="promos.length"
+          id="rayon-promos"
+          :titre="t('boutique.accueil.promos.titre')"
+          :sous-titre="t('boutique.accueil.promos.sousTitre')"
+          format="paysage"
+          :nombre="promos.length"
         >
-          {{ s.label }}
-        </button>
-      </template>
-    </div>
+          <template #actions>
+            <button class="lien" @click="allerA('rayon-toutes')">{{ t("boutique.accueil.toutVoir") }}</button>
+          </template>
+          <StoreDealCard v-for="d in promos" :key="d.gameId" :offre="d" />
+        </StoreRow>
 
-    <div v-if="loading && !items.length" class="empty">
-      <span class="spin" />
-      <p>{{ t("boutique.chargement") }}</p>
-    </div>
-    <div v-else-if="!items.length" class="empty">
-      <p>{{ t("boutique.aucun") }}</p>
-      <p v-if="activeQuery" class="dim">{{ t("boutique.autreTitre") }}</p>
-    </div>
+        <div id="rayon-classements" class="duo">
+          <StoreRanking :ventes="home?.topSellers ?? []" :etat-ventes="homeEtat" />
+          <StoreGiveaways id="rayon-offerts" :offres="home?.giveaways ?? []" :chargement="homeEtat !== 'pret'" />
+        </div>
 
-    <div v-else class="grid" :class="{ dim: loading }">
-      <button
-        v-for="it in items"
-        :key="it.gameId"
-        class="card cover-card"
-        @click="openProduct(it.gameId)"
-      >
-        <div class="cover" :style="{ background: gradientFor(it.gameId) }">
-          <img
-            v-if="coverSrc(it)"
-            :key="coverSrc(it)!"
-            class="cover-img"
-            :src="coverSrc(it)!"
-            alt=""
-            loading="lazy"
-            @error="onCoverError(coverSrc(it))"
-          />
-          <span v-if="it.savings > 0" class="badge">-{{ it.savings }}%</span>
-          <span
-            class="wish-dot"
-            :class="{ on: isWishlisted(it.gameId) }"
-            role="button"
-            :title="isWishlisted(it.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
-            @click.stop="toggleWishlist({ gameId: it.gameId, title: it.title, coverUrl: it.coverUrl })"
+        <StoreGenres id="rayon-genres" />
+
+        <div id="rayon-gratuits" ref="gratuitsEl">
+          <StoreRow
+            :titre="t('boutique.accueil.gratuits.titre')"
+            :sous-titre="t('boutique.accueil.gratuits.sousTitre')"
+            format="paysage"
+            :nombre="gratuits.items.length"
           >
-            <svg viewBox="0 0 24 24" :fill="isWishlisted(it.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
-          </span>
-          <span class="cover-scrim" />
-          <span class="cover-title">{{ it.title }}</span>
-        </div>
-        <div class="meta">
-          <div class="price">
-            <span class="now" :class="{ hot: it.savings > 0 }">{{ price(it.price, it) }}</span>
-            <span v-if="it.savings > 0" class="was">{{ price(it.normalPrice, it) }}</span>
+            <StoreShelfCard v-for="j in gratuits.items" :key="j.appId" :jeu="j" format="paysage" />
+            <template v-if="!gratuits.items.length && gratuits.etat !== 'echec'">
+              <div v-for="n in 4" :key="n" class="fantome-paysage" aria-hidden="true" />
+            </template>
+          </StoreRow>
+          <div v-if="gratuits.etat === 'echec' && !gratuits.items.length" class="panne petite">
+            {{ t("boutique.accueil.echec") }}
+            <button class="chip" @click="chargerRayon('freeToPlay', undefined, true)">{{ t("boutique.accueil.reessayer") }}</button>
           </div>
-          <span v-if="it.storeName" class="store-name">{{ it.storeName }}</span>
         </div>
-      </button>
+      </template>
+
+      <section id="rayon-toutes" class="toutes">
+        <div v-if="!activeQuery" class="rayon-tete">
+          <div><h2>{{ t("boutique.accueil.toutes.titre") }}</h2></div>
+        </div>
+        <div class="bar">
+          <span v-if="activeQuery || randomMode" class="ctx">
+            {{ activeQuery ? t("boutique.resultatsPour", { requete: activeQuery }) : t("boutique.hasard") }}
+            <span class="n">· {{ items.length }}</span>
+          </span>
+          <span class="spacer" />
+          <button
+            class="chip random"
+            :disabled="randomLoading"
+            :title="t('boutique.auHasardAide')"
+            @click="pickRandom"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none" /></svg>
+            {{ randomLoading ? t("boutique.pioche") : t("boutique.auHasard") }}
+          </button>
+          <template v-if="!activeQuery">
+            <button
+              v-for="s in SORTS"
+              :key="s.key"
+              class="chip"
+              :class="{ active: sort === s.key && !randomMode }"
+              @click="setSort(s.key)"
+            >
+              {{ s.label }}
+            </button>
+          </template>
+        </div>
+
+        <div v-if="loading && !items.length" class="empty">
+          <span class="spin" />
+          <p>{{ t("boutique.chargement") }}</p>
+        </div>
+        <div v-else-if="!items.length" class="empty">
+          <p>{{ t("boutique.aucun") }}</p>
+          <p v-if="activeQuery" class="dim">{{ t("boutique.autreTitre") }}</p>
+        </div>
+
+        <div v-else class="grid" :class="{ dim: loading }">
+          <button
+            v-for="it in items"
+            :key="it.gameId"
+            class="card cover-card"
+            @click="openProduct(it.gameId)"
+          >
+            <div class="cover" :style="{ background: gradientFor(it.gameId) }">
+              <img
+                v-if="coverSrc(it)"
+                :key="coverSrc(it)!"
+                class="cover-img"
+                :src="coverSrc(it)!"
+                alt=""
+                loading="lazy"
+                @error="onCoverError(coverSrc(it))"
+              />
+              <span v-if="it.savings > 0" class="badge">-{{ it.savings }}%</span>
+              <span v-if="possession(it.title)" class="coin"><StorePossede :etat="possession(it.title)!" /></span>
+              <span
+                v-else
+                class="wish-dot"
+                :class="{ on: isWishlisted(it.gameId) }"
+                role="button"
+                :aria-label="isWishlisted(it.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
+                :title="isWishlisted(it.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
+                @click.stop="toggleWishlist({ gameId: it.gameId, title: it.title, coverUrl: it.coverUrl })"
+              >
+                <svg viewBox="0 0 24 24" :fill="isWishlisted(it.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
+              </span>
+              <span class="cover-scrim" />
+              <span class="cover-title">{{ it.title }}</span>
+            </div>
+            <div class="meta">
+              <div class="prix">
+                <span class="now" :class="{ hot: it.savings > 0 }">{{ price(it.price, it) }}</span>
+                <span v-if="it.savings > 0" class="was">{{ price(it.normalPrice, it) }}</span>
+              </div>
+              <span v-if="it.storeName" class="store-name">{{ it.storeName }}</span>
+            </div>
+          </button>
+        </div>
+
+        <button v-if="hasMore && !randomMode && !activeQuery && items.length" class="plus" :disabled="loadingMore" @click="loadMore">
+          <span v-if="loadingMore" class="spin petit" />
+          {{ t("boutique.accueil.toutes.chargerPlus") }}
+        </button>
+      </section>
     </div>
   </div>
 </template>
 
 <style scoped>
 .store { min-width: 0; }
-.store-head { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-.store-title h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
+.store-head { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
+.store-title h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
 .store-title .sub { margin: 4px 0 0; font-size: 13.5px; color: var(--text-faint); }
 .store-search-wrap { position: relative; margin-left: auto; flex: 1; min-width: 320px; max-width: 520px; }
 .store-search {
@@ -270,6 +395,23 @@ function onCoverError(url: string | null) {
 .suggest-go { width: 16px; height: 16px; color: var(--text-faint); flex: none; opacity: 0; }
 .suggest-item.active .suggest-go { opacity: 1; }
 
+/* Accueil : une colonne de rayons. `scroll-margin` : une ancre ne se cache pas sous la barre du haut. */
+.accueil { display: flex; flex-direction: column; gap: 40px; }
+.accueil > * { scroll-margin-top: 90px; }
+.raccourcis { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: -16px; }
+.lien { background: none; border: none; padding: 0 6px; color: var(--accent); font-size: 13px; font-weight: 600; }
+.lien:hover { text-decoration: underline; }
+.duo { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 28px; align-items: start; }
+#rayon-offerts { scroll-margin-top: 90px; }
+.vedette-fantome {
+  height: 400px; border-radius: 22px; border: 1px solid var(--border); background: var(--surface);
+  display: grid; place-items: center;
+}
+.fantome-paysage { aspect-ratio: 460 / 215; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.panne { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 0; color: var(--text-faint); }
+.panne p { margin: 0; }
+.panne.petite { flex-direction: row; padding: 0; font-size: 13px; }
+
 .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
 .bar .ctx { font-size: 14px; font-weight: 600; color: var(--text); }
 .bar .ctx .n { font-family: var(--mono); color: var(--text-faint); font-weight: 400; }
@@ -283,35 +425,34 @@ function onCoverError(url: string | null) {
 .chip.random svg { width: 15px; height: 15px; }
 .chip.random:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: var(--accent); color: var(--accent); }
 .chip.random:disabled { opacity: 0.6; cursor: default; }
+.toutes .rayon-tete { margin-bottom: 8px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 22px 20px; transition: opacity 0.15s; }
 .grid.dim { opacity: 0.5; }
-/* Fond de carte partagé : `.cover-card` dans style.css. */
-.wish-dot {
-  position: absolute; top: 8px; left: 8px; z-index: 3; width: 30px; height: 30px; border-radius: 50%;
-  display: grid; place-items: center; cursor: pointer;
-  background: rgba(14, 10, 20, 0.6); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff;
-  opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
-}
-.card:hover .wish-dot { opacity: 1; }
-.wish-dot:hover { background: rgba(28, 20, 38, 0.9); }
-.wish-dot.on { opacity: 1; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
-.wish-dot svg { width: 16px; height: 16px; }
+/* Fond de carte partagé : `.cover-card` dans style.css ; cœur `.wish-dot` aussi. */
+.coin { position: absolute; top: 9px; left: 9px; z-index: 3; }
 .meta { display: flex; align-items: baseline; gap: 8px; padding: 0 2px; }
-.price { display: flex; align-items: baseline; gap: 7px; }
-.price .now { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-.price .now.hot { color: var(--accent); }
-.price .was { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); text-decoration: line-through; }
+.meta .prix .now { font-size: 16px; }
 .store-name { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+.plus {
+  display: flex; align-items: center; gap: 8px; margin: 26px auto 0; padding: 10px 22px; border-radius: 11px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; font-size: 13.5px;
+}
+.plus:hover:not(:disabled) { border-color: var(--border-strong); }
+.plus:disabled { opacity: 0.7; cursor: default; }
 
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 0; text-align: center; color: var(--text-faint); font-size: 14px; }
 .empty p { margin: 3px 0; }
 .empty .dim { font-size: 12.5px; opacity: 0.8; }
 .spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--border-strong); border-top-color: var(--accent); animation: spin 0.7s linear infinite; margin-bottom: 14px; }
+.spin.petit { width: 14px; height: 14px; border-width: 2px; margin: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+@media (max-width: 980px) {
+  .duo { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 620px) {
   .store-head { flex-direction: column; align-items: stretch; }
-  .store-search { margin-left: 0; max-width: none; }
+  .store-search-wrap { margin-left: 0; max-width: none; min-width: 0; }
 }
 </style>

@@ -4,6 +4,7 @@ pub mod instant_gaming;
 pub mod steam_art;
 pub mod steam_store;
 pub mod store;
+pub mod vitrine;
 
 use crate::models::{GameDto, GameMeta};
 use std::collections::HashMap;

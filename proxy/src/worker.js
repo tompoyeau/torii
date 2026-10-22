@@ -83,6 +83,10 @@ const ITAD_ALLOWED = new Set([
   "games/overview/v2",
   "games/prices/v3",
   "games/lookup/v1",
+  // Boutique (`metadata/vitrine.rs`) : appids Steam → ids ITAD en un seul appel.
+  // Le client retombe sur `games/lookup/v1` jeu par jeu tant que ce proxy-ci n'est
+  // pas déployé (il répond alors 403).
+  "lookup/id/shop/61/v1",
 ]);
 
 /**

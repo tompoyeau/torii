@@ -1406,6 +1406,68 @@ testeurs ». Le calcul était posé, il n'avait simplement jamais été suivi d'
 Au-delà de quelques centaines de joueurs, il restera le push (WebSocket + Durable Objects)
 ou le plan payant (5 $/mois, 50 M d'écritures D1/mois).
 
+## Boutique — accueil façon Steam (`metadata/vitrine.rs`)
+
+L'accueil de la Boutique n'est plus une grille de promos : vedette en carrousel, promos du
+moment, classements à onglets (meilleures ventes, nouveautés populaires, jeux les plus
+attendus), jeux offerts, rayons par genre, free-to-play, puis la grille « Toutes les
+offres » d'avant (tris, « Au hasard », « Charger plus »). La recherche remplace le tout
+par la grille de résultats, comme avant.
+
+- 🔑 **Steam choisit les jeux, ITAD donne le prix.** Le comparateur ne sait pas ce qui se
+  vend ni ce qui sort ; Steam ne connaît que son propre prix. Chaque rayon Steam passe
+  donc par `ids_itad` (appid → id ITAD) puis un `games/prices/v3` groupé, et la meilleure
+  offre est choisie par `store::cheapest` — revendeurs masqués exclus, comme partout.
+- **Endpoints Steam sans clé** : `IStoreQueryService/Query` (filtres et tri, visuels,
+  tags, avis, description dans la langue), `IStoreBrowseService/GetItems`,
+  `tagdata/populartags/<langue>` (noms des tags, `steam_tags_cache_v1.json`, 30 j).
+  `country_code` = la région : ici, contrairement à `steam_store.rs`, on VEUT ce que
+  Steam vend dans le pays.
+- ⚠️ **`GetWeeklyTopSellers` est MONDIAL** (mêmes listes FR/US/JP malgré `country_code`)
+  et figé pour la semaine. Les meilleures ventes viennent de `Query` `sort: 10`, qui, lui,
+  dépend du pays (mesuré).
+- ⚠️ **`sort` n'est pas documenté** : 10 = ventes du moment (pays), 13 = popularité
+  (meilleur classement des jeux à venir). `release_date_filter` est **ignoré** sans un
+  `release_date_type` inconnu : les nouveautés = top 150 des ventes filtré sur une sortie
+  de moins de 75 jours, puis `GetItems` pour ces seuls jeux.
+- **Contenu adulte** : descripteurs 3 et 4 exclus (`content_descriptors_excluded` ET
+  relecture côté Rust). Tags masqués sur les cartes : nudité, sexe, gore, violence,
+  free-to-play (la carte dit déjà « Gratuit »). `type != 0` (matériel, Steam Deck) écarté.
+- ⚠️ **ITAD marque « H » (plus bas historique) un jeu à plein tarif** qui n'a jamais été
+  moins cher (Call of Duty à 69,99 €, -0 %). `record` exige donc une remise. Le drapeau
+  `S` (plus bas d'UNE boutique) n'est jamais affiché comme record.
+- **Vedette** : populaires, promo Steam ≥ 20 %, avis ≥ 75 %, bannière présente — ET
+  meilleure offre toutes boutiques encore ≥ 20 % (`garder_vraies_promos` : Disney
+  Dreamlight Valley ressortait à -4 % chez un autre vendeur). L'interface retire les jeux
+  déjà possédés. Défilement 8 s, en pause au survol, au focus, fenêtre cachée ou
+  « réduire les animations ».
+- **Jeux offerts** : `deals/v2?sort=price`, seulement `type: "game"` à 0 € (la tête de
+  liste contient aussi DLC, démos et bandes-son à 0 €).
+- 🔑 **appid → id ITAD : un appel groupé `POST lookup/id/shop/61/v1`**, avec repli sur
+  `games/lookup/v1` jeu par jeu si le proxy le refuse (403 tant qu'il n'est pas déployé
+  avec la nouvelle liste blanche). Cache `itad_ids_cache_v1.json` (trouvé : 90 j,
+  absent : 1 j, panne : rien), écritures sous verrou (plusieurs rayons en parallèle).
+  Mesuré : accueil 1,7 s à froid (repli un par un), 0,5 s ensuite.
+- **Coût réseau** : à l'ouverture, 2 appels Steam + 2 vitrines ITAD (cache proxy 10 min) +
+  la résolution d'ids (souvent nulle) + 1 prix groupé. Onglets, genres et free-to-play ne
+  sont demandés qu'au clic ou à l'arrivée à l'écran (`useQuandVisible`). Le front garde
+  tout 30 min, indexé par région + langue (`useStoreHome`) ; masquer un revendeur
+  recharge l'accueil et périme les rayons.
+- ⚠️ **`useStore()` ne charge plus la vitrine à l'instanciation** : `App.vue` l'instancie
+  au démarrage, ce qui coûtait un appel au comparateur à chaque lancement de Torii.
+  `StoreView` appelle `ensureDeals()` à l'ouverture.
+- **Personnel, calculé sur le PC** : badge « Dans ta bibliothèque » / « Partage familial »
+  (`usePossession` : appid pour les rayons Steam, titre normalisé pour les offres ITAD),
+  ordre des genres selon la bibliothèque (genres IGDB FR **et** EN), « Ta wishlist en
+  promo » (mêmes données que la page Wishlist, chargées une fois par session). Pas de
+  rayon de recommandations (refusé par l'utilisateur).
+- Une carte sans id ITAD ouvre la page Steam (`pageSteam`) au lieu de la fiche produit.
+- **Démo web** : `data/storeMock.ts` = relevé réel du 22/10/2026 (titres, visuels à
+  empreinte, avis, prix) ; seules les dates de fin des jeux offerts sont recalculées.
+  Dans l'application, une panne s'affiche (« Réessayer ») : jamais de données de démo.
+- Exemple : `cargo run --example vitrine [FR|US|JP] [fr|en]` (dossier temporaire, les
+  caches de l'application installée ne sont pas touchés).
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.

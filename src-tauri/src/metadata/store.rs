@@ -8,10 +8,15 @@
 //! **lien d'achat direct** par boutique, match par **appid Steam** exact, plus bas
 //! historiques, et pas de blocage IP sauvage.
 //!
-//! Trois usages, tous à la demande :
-//! - `deals(page, sort)` : la vitrine (`GET /deals/v2`).
+//! Usages, tous à la demande :
+//! - `deals(page, sort)` : la vitrine (`GET /deals/v2`), grille « Toutes les offres » et
+//!   carrousel « Promos du moment ».
+//! - `giveaways()` : les jeux offerts (même endpoint, trié par prix).
 //! - `search(query)` : recherche (`GET /games/search/v1` + `POST /games/prices/v3`).
 //! - `game(id)` : fiche produit (`info` + `prices` + `overview`) + IGDB + Instant Gaming.
+//!
+//! Les rayons de l'accueil (vedette, meilleures ventes, genres…) sont dans `vitrine.rs` :
+//! Steam y choisit les jeux, ce module-ci leur donne leur prix.
 
 use crate::models::GameDto;
 use serde::Serialize;
@@ -31,7 +36,7 @@ const PROXY: &str = "https://torii-igdb-proxy.toriiapp.workers.dev/itad";
 ///
 /// 🔑 C'est le pays qui détermine la **devise** renvoyée par l'API — l'interface ne la
 /// suppose plus, elle lit celle qui accompagne chaque prix (voir `lib/format.ts`).
-fn chemin_prix() -> String {
+pub(super) fn chemin_prix() -> String {
     format!("games/prices/v3?country={}", crate::locale::region())
 }
 const PAGE_SIZE: u32 = 48;
@@ -63,6 +68,14 @@ pub struct StoreItem {
     pub store_name: String,
     /// Lien d'achat direct.
     pub buy_url: String,
+    /// Bannière paysage (ITAD `banner600`, 600×344) : carrousels de l'accueil.
+    pub banner_url: Option<String>,
+    /// L'offre touche le plus bas historique du jeu (drapeau ITAD `H`, ou `N` pour un
+    /// nouveau record). Le drapeau `S` (plus bas de CETTE boutique) n'est pas retenu :
+    /// annoncer un record qui n'en est un que chez un vendeur serait trompeur.
+    pub record: bool,
+    /// Fin annoncée de l'offre (ISO 8601), si le vendeur la donne.
+    pub expiry: Option<String>,
 }
 
 /// Suggestion d'autocomplétion (recherche instantanée, sans prix → rapide).
@@ -119,7 +132,7 @@ pub struct StoreGame {
 
 // --- Accès HTTP au proxy ITAD -------------------------------------------------
 
-fn get_json(path: &str) -> Option<Value> {
+pub(super) fn get_json(path: &str) -> Option<Value> {
     ureq::get(&format!("{PROXY}/{path}"))
         .timeout(Duration::from_secs(15))
         .call()
@@ -128,7 +141,7 @@ fn get_json(path: &str) -> Option<Value> {
         .ok()
 }
 
-fn post_json(path: &str, body: &Value) -> Option<Value> {
+pub(super) fn post_json(path: &str, body: &Value) -> Option<Value> {
     ureq::post(&format!("{PROXY}/{path}"))
         .timeout(Duration::from_secs(15))
         .set("Content-Type", "application/json")
@@ -139,7 +152,7 @@ fn post_json(path: &str, body: &Value) -> Option<Value> {
 }
 
 /// Lit un nombre qu'il soit encodé en JSON number ou en chaîne.
-fn num(v: &Value) -> Option<f64> {
+pub(super) fn num(v: &Value) -> Option<f64> {
     v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
 }
 
@@ -158,7 +171,7 @@ fn allowed(deal: &Value, excluded: &HashSet<String>) -> bool {
 }
 
 /// Meilleure offre (prix mini) d'une entrée `games/prices/v3`, hors revendeurs masqués.
-fn cheapest<'a>(entry: &'a Value, excluded: &HashSet<String>) -> Option<&'a Value> {
+pub(super) fn cheapest<'a>(entry: &'a Value, excluded: &HashSet<String>) -> Option<&'a Value> {
     entry["deals"]
         .as_array()?
         .iter()
@@ -172,8 +185,23 @@ fn cheapest<'a>(entry: &'a Value, excluded: &HashSet<String>) -> Option<&'a Valu
 }
 
 /// La devise d'un montant ITAD (`{ amount, amountInt, currency }`), vide si absente.
-fn devise(montant: &Value) -> String {
+pub(super) fn devise(montant: &Value) -> String {
     montant["currency"].as_str().unwrap_or_default().to_string()
+}
+
+/// Drapeau d'une offre ITAD : `H` = au plus bas historique, `N` = nouveau plus bas.
+///
+/// ⚠️ Seulement s'il y a une remise. Un jeu qui vient de sortir est « au plus bas
+/// historique » à plein tarif — il n'a jamais coûté moins cher — et ITAD le marque `H` :
+/// mesuré sur Call of Duty à 69,99 €, -0 %. Afficher « plus bas historique » sur un prix
+/// de lancement serait vrai et parfaitement trompeur.
+pub(super) fn est_record(deal: &Value) -> bool {
+    matches!(deal["flag"].as_str(), Some("H" | "N")) && num(&deal["cut"]).unwrap_or(0.0) > 0.0
+}
+
+/// Fin annoncée d'une offre ITAD, si le vendeur la donne.
+pub(super) fn fin_offre(deal: &Value) -> Option<String> {
+    deal["expiry"].as_str().filter(|s| !s.is_empty()).map(String::from)
 }
 
 /// Applique une offre à un item de grille (vitrine / recherche).
@@ -187,6 +215,8 @@ fn apply_deal(item: &mut StoreItem, deal: &Value) -> bool {
     item.savings = num(&deal["cut"]).unwrap_or(0.0).round() as u32;
     item.store_name = shop_of(deal).to_string();
     item.buy_url = deal["url"].as_str().unwrap_or_default().to_string();
+    item.record = est_record(deal);
+    item.expiry = fin_offre(deal);
     true
 }
 
@@ -217,6 +247,9 @@ fn item_from_deal(it: &Value) -> Option<StoreItem> {
         savings: num(&deal["cut"]).unwrap_or(0.0).round() as u32,
         store_name: deal["shop"]["name"].as_str().unwrap_or_default().to_string(),
         buy_url: deal["url"].as_str().unwrap_or_default().to_string(),
+        banner_url: it["assets"]["banner600"].as_str().map(String::from),
+        record: est_record(deal),
+        expiry: fin_offre(deal),
     })
 }
 
@@ -247,6 +280,32 @@ pub fn deals(page: u32, sort: &str, excluded: &HashSet<String>) -> Vec<StoreItem
         .collect();
     reprice_excluded(&mut items, excluded);
     items
+}
+
+/// Jeux offerts en ce moment : la vitrine triée par prix croissant commence par les
+/// offres à 0 €. On ne garde que les **jeux** (`type: "game"`) : la même tête de liste
+/// contient des DLC, des bandes-son et des démos à 0 € (`type` `dlc` ou nul), qui ne
+/// sont pas des cadeaux au sens où l'entend un joueur. Un vendeur masqué n'est pas
+/// re-tarifé ici : un jeu offert ailleurs que chez lui serait de toute façon dans la
+/// liste sous l'autre vendeur.
+pub fn giveaways(excluded: &HashSet<String>) -> Vec<StoreItem> {
+    let path = format!(
+        "deals/v2?country={}&offset=0&limit=60&sort=price",
+        crate::locale::region()
+    );
+    let list = get_json(&path)
+        .and_then(|root| root.get("list").and_then(Value::as_array).cloned())
+        .unwrap_or_default();
+    lire_cadeaux(&list, excluded)
+}
+
+fn lire_cadeaux(list: &[Value], excluded: &HashSet<String>) -> Vec<StoreItem> {
+    list.iter()
+        .filter(|it| it["type"].as_str() == Some("game"))
+        .filter_map(item_from_deal)
+        .filter(|it| it.price == 0.0 && it.normal_price > 0.0 && !excluded.contains(&it.store_name))
+        .take(8)
+        .collect()
 }
 
 /// La vitrine ITAD impose UNE offre par jeu : si elle vient d'un revendeur masqué, on
@@ -373,6 +432,9 @@ pub fn search(query: &str, excluded: &HashSet<String>) -> Vec<StoreItem> {
                 savings: num(&best["cut"]).unwrap_or(0.0).round() as u32,
                 store_name: best["shop"]["name"].as_str().unwrap_or_default().to_string(),
                 buy_url: best["url"].as_str().unwrap_or_default().to_string(),
+                record: est_record(best),
+                expiry: fin_offre(best),
+                ..Default::default()
             })
         })
         .collect()
@@ -845,6 +907,35 @@ mod tests {
         assert_eq!(item.price, 12.49);
         assert_eq!(item.savings, 69);
         assert_eq!(item.buy_url, "https://fana/1");
+    }
+
+    /// Tête réelle de `deals/v2?sort=price` (22/10/2026, raccourcie) : seuls les JEUX à
+    /// 0 € sont des cadeaux — pas la démo (`type` nul) ni le pack de skins (`dlc`).
+    #[test]
+    fn cadeaux_seulement_les_jeux_a_zero() {
+        let list: Vec<Value> = serde_json::from_str(
+            r#"[
+              {"id":"a","title":"Sker Ritual","type":"game","assets":{"boxart":"https://x/a.jpg","banner600":"https://x/a6.jpg"},
+               "deal":{"shop":{"name":"Epic Game Store"},"price":{"amount":0,"currency":"EUR"},"regular":{"amount":19.99},"cut":100,"flag":"N","expiry":"2026-10-29T16:00:00+01:00","url":"https://epic/a"}},
+              {"id":"b","title":"Stellar End Demo Version","type":null,
+               "deal":{"shop":{"name":"Humble Store"},"price":{"amount":0},"regular":{"amount":4.99},"cut":100,"url":"https://h/b"}},
+              {"id":"c","title":"Squad Weapon Skins","type":"dlc",
+               "deal":{"shop":{"name":"Steam"},"price":{"amount":0},"regular":{"amount":2.99},"cut":100,"url":"https://s/c"}},
+              {"id":"d","title":"Pongo","type":"game",
+               "deal":{"shop":{"name":"Dreamgame"},"price":{"amount":0.06},"regular":{"amount":0.79},"cut":92,"url":"https://d/d"}},
+              {"id":"e","title":"Terraspace","type":"game",
+               "deal":{"shop":{"name":"GOG"},"price":{"amount":0},"regular":{"amount":14.99},"cut":100,"url":"https://gog/e"}}
+            ]"#,
+        )
+        .unwrap();
+        let tous = lire_cadeaux(&list, &HashSet::new());
+        assert_eq!(tous.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), vec!["Sker Ritual", "Terraspace"]);
+        assert_eq!(tous[0].banner_url.as_deref(), Some("https://x/a6.jpg"));
+        assert_eq!(tous[0].expiry.as_deref(), Some("2026-10-29T16:00:00+01:00"));
+        assert!(tous[0].record);
+
+        let sans_gog: HashSet<String> = ["GOG".to_string()].into_iter().collect();
+        assert_eq!(lire_cadeaux(&list, &sans_gog).len(), 1);
     }
 
     #[test]

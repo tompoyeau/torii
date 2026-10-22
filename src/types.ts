@@ -152,7 +152,7 @@ export type LibraryFilter =
   | "horsLauncher"
   | PlatformId;
 
-// --- Boutique (découverte de jeux à acheter, source CheapShark) ---------------
+// --- Boutique (découverte de jeux à acheter : Steam + comparateur ITAD) --------
 
 /** Un jeu de la vitrine ou des résultats de recherche (carte de grille). */
 export interface StoreItem {
@@ -176,6 +176,62 @@ export interface StoreItem {
   storeName: string;
   /** Lien d'achat direct. */
   buyUrl: string;
+  /** Bannière paysage (600×344) : carrousels de l'accueil. */
+  bannerUrl?: string | null;
+  /** L'offre touche le plus bas historique du jeu (avec une vraie remise). */
+  record?: boolean;
+  /** Fin annoncée de l'offre (ISO 8601), si le vendeur la donne. */
+  expiry?: string | null;
+}
+
+/** Rayons de l'accueil chargés à la demande (`store_shelf`). */
+export type StoreShelfKind = "topSellers" | "newReleases" | "upcoming" | "genre" | "freeToPlay";
+
+/**
+ * Un jeu d'un rayon de l'accueil : choisi et décrit par Steam (visuels, tags, avis,
+ * sortie, dans la langue et le pays de la région), tarifé par le comparateur.
+ */
+export interface StoreShelfItem {
+  appId: number;
+  /** Identifiant ITAD (fiche produit) ; vide si le comparateur ne connaît pas le jeu. */
+  gameId: string;
+  title: string;
+  capsuleUrl?: string | null;
+  headerUrl?: string | null;
+  heroUrl?: string | null;
+  description?: string | null;
+  tags: string[];
+  /** Appréciation Steam de 1 à 9 ; 0 = pas encore d'avis. */
+  reviewScore: number;
+  reviewPercent?: number | null;
+  reviewCount: number;
+  /** Date de sortie, Unix en secondes. */
+  releaseDate?: number | null;
+  /** Précision de la date : `date_full`, `date_month`, `date_quarter`, `date_year`, `text_comingsoon`. */
+  releaseDisplay: string;
+  /** Texte libre de l'éditeur (« Prochainement »), déjà traduit par Steam. */
+  releaseText?: string | null;
+  comingSoon: boolean;
+  isFree: boolean;
+  /** Meilleure offre actuelle ; absente si aucune boutique ne le vend. */
+  price?: number | null;
+  normalPrice?: number | null;
+  currency?: string;
+  savings: number;
+  storeName: string;
+  buyUrl: string;
+  historyLow?: number | null;
+  record: boolean;
+  expiry?: string | null;
+}
+
+/** Ce que l'accueil de la Boutique affiche d'emblée (`store_home`). */
+export interface StoreHome {
+  featured: StoreShelfItem[];
+  topSellers: StoreShelfItem[];
+  /** Vitrine du comparateur (tendances) : « Promos du moment ». */
+  deals: StoreItem[];
+  giveaways: StoreItem[];
 }
 
 /** Suggestion d'autocomplétion de la barre de recherche (titre + jaquette). */

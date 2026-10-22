@@ -93,8 +93,9 @@ function cardFor(g: LibGame): Game {
  * Repli identique à `GameDetail.viewInStore` : sans correspondance exacte, `openForTitle`
  * bascule en recherche, et il faut alors montrer la Boutique où sont les résultats.
  *
- * `useStore()` est appelé ici et pas au montage de la vue : l'instancier charge la vitrine,
- * et ouvrir la bibliothèque d'un ami n'est pas une raison d'aller chercher des promotions.
+ * `useStore()` est appelé ici et pas au montage de la vue : ouvrir la bibliothèque d'un ami
+ * n'a rien à demander à la Boutique. (La vitrine elle-même n'est plus chargée à
+ * l'instanciation, mais à l'ouverture de la Boutique : `ensureDeals`.)
  */
 async function onOpen(g: LibGame) {
   const found = mine(g);

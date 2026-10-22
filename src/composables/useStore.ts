@@ -11,10 +11,15 @@ import {
   storeSuggest,
 } from "../lib/tauri";
 import { useWishlist } from "./useWishlist";
+import { useStoreHome } from "./useStoreHome";
+import { jeuDeDemo } from "../data/storeMock";
 import type { StoreGame, StoreItem, StoreSuggestion } from "../types";
 
-/** Critère de tri de la vitrine (mappé côté Rust vers CheapShark). */
+/** Critère de tri de la grille « Toutes les offres » (traduit en `sort` ITAD côté Rust). */
 export type StoreSort = "featured" | "savings" | "price" | "recent" | "rating";
+
+/** Taille d'une page de la vitrine côté Rust (`store::PAGE_SIZE`). */
+const TAILLE_PAGE = 48;
 
 // État partagé (singleton) de la boutique.
 const items = ref<StoreItem[]>([]);
@@ -36,7 +41,20 @@ const randomLoading = ref(false);
 /** La grille affiche une sélection aléatoire (et non la vitrine triée). */
 const randomMode = ref(false);
 
+/** Dernière page chargée de la grille (« Charger plus »). */
+const page = ref(0);
+/** La dernière page reçue était pleine : il en reste peut-être une autre. */
+const hasMore = ref(false);
+const loadingMore = ref(false);
+
 let loadedOnce = false;
+/**
+ * La grille n'est chargée qu'à l'ouverture de la Boutique (`ensureDeals`).
+ * 🔑 `useStore()` est instancié dès le démarrage par `App.vue` (fiche produit globale) :
+ * charger la vitrine ici coûtait un appel au comparateur à chaque lancement de Torii,
+ * Boutique ouverte ou non.
+ */
+let dealsLoaded = false;
 /** Jeton anti-course : seule la dernière requête lancée applique son résultat. */
 let reqToken = 0;
 let suggestToken = 0;
@@ -86,27 +104,51 @@ async function clearExcludedStores() {
  * (La fiche produit, elle, reçoit TOUTES les offres et filtre en direct — rien à faire.)
  */
 function onExclusionChanged() {
-  if (loadedOnce) {
-    if (activeQuery.value) {
-      query.value = activeQuery.value;
-      void runSearch();
-    } else {
-      void loadHome();
-    }
+  if (activeQuery.value) {
+    query.value = activeQuery.value;
+    void runSearch();
+  } else if (dealsLoaded) {
+    void loadHome();
   }
+  useStoreHome().invalider();
   useWishlist().invalidate();
+}
+
+/** Charge la grille « Toutes les offres » au premier affichage de la Boutique. */
+function ensureDeals() {
+  if (dealsLoaded) return;
+  dealsLoaded = true;
+  void loadHome();
 }
 
 /** Charge la vitrine (mises en avant / promos) selon le tri courant. */
 async function loadHome() {
+  dealsLoaded = true;
   loading.value = true;
   activeQuery.value = "";
   randomMode.value = false;
+  page.value = 0;
   const token = ++reqToken;
   const res = (await storeDeals(0, sort.value)) ?? mockDeals(sort.value);
   if (token !== reqToken) return; // une requête plus récente a pris le relais
   items.value = res;
+  hasMore.value = res.length >= TAILLE_PAGE - 8; // les DLC écartés côté Rust raccourcissent la page
   loading.value = false;
+}
+
+/** Ajoute la page suivante de la vitrine à la grille (sans doublon). */
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value || activeQuery.value || randomMode.value) return;
+  loadingMore.value = true;
+  const token = reqToken;
+  const suivante = page.value + 1;
+  const res = await storeDeals(suivante, sort.value);
+  loadingMore.value = false;
+  if (token !== reqToken || !res) return; // tri changé entre-temps, ou hors Tauri
+  const deja = new Set(items.value.map((i) => i.gameId));
+  items.value = [...items.value, ...res.filter((i) => !deja.has(i.gameId))];
+  page.value = suivante;
+  hasMore.value = res.length >= TAILLE_PAGE - 8;
 }
 
 /** Lance une recherche (ou revient à la vitrine si la requête est vide). */
@@ -120,6 +162,7 @@ async function runSearch() {
   loading.value = true;
   activeQuery.value = q;
   randomMode.value = false;
+  hasMore.value = false;
   const token = ++reqToken;
   const res = (await storeSearch(q)) ?? mockSearch(q);
   if (token !== reqToken) return;
@@ -191,6 +234,7 @@ async function pickRandom() {
   clearSuggestions();
   activeQuery.value = "";
   randomMode.value = true;
+  hasMore.value = false;
   const token = ++reqToken;
   try {
     const sorts: StoreSort[] = ["featured", "savings", "price", "recent", "rating"];
@@ -242,15 +286,20 @@ async function openForTitle(title: string): Promise<boolean> {
 }
 
 export function useStore() {
-  // Premier affichage de la boutique : charge la vitrine une seule fois.
+  // Premier usage : la liste des revendeurs masqués (locale, sans réseau). La vitrine,
+  // elle, attend l'ouverture de la Boutique (`ensureDeals`).
   if (!loadedOnce) {
     loadedOnce = true;
-    void loadHome();
     void loadExcludedStores();
   }
   return {
     items,
     loading,
+    page,
+    hasMore,
+    loadingMore,
+    ensureDeals,
+    loadMore,
     sort,
     query,
     activeQuery,
@@ -312,7 +361,7 @@ function mockSuggest(q: string): StoreSuggestion[] {
 }
 
 function mockGame(gameId: string): StoreGame {
-  const it = MOCK_ITEMS.find((i) => i.gameId === gameId) ?? MOCK_ITEMS[0];
+  const it = MOCK_ITEMS.find((i) => i.gameId === gameId) ?? jeuDeDemo(gameId) ?? MOCK_ITEMS[0];
   const r2 = (n: number) => Math.round(n * 100) / 100;
   return {
     gameId,
