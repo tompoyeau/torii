@@ -31,7 +31,13 @@ fn main() {
         return;
     };
     println!("  Steam : avis {} / {:?} % ({}) · tags {:?}", s.review_score, s.review_percent, s.review_count, s.tags);
-    println!("  captures {} · aperçu {:?}", s.captures.len(), s.apercu.as_ref().map(|a| &a.nom));
+    println!(
+        "  captures {} · bandes-annonces {} (avec flux {}) : {:?}",
+        s.captures.len(),
+        s.bandes_annonces.len(),
+        s.bandes_annonces.iter().filter(|b| b.hls.is_some()).count(),
+        s.bandes_annonces.iter().map(|b| b.nom.as_str()).collect::<Vec<_>>()
+    );
     println!("  langues {} : {:?}", s.langues.len(), s.langues.iter().take(4).map(|l| format!("{}{}{}", l.code, if l.voix { "+voix" } else { "" }, if l.sous_titres { "+st" } else { "" })).collect::<Vec<_>>());
     println!("  classification {:?}", s.classification);
     println!("  catégories {:?}", s.categories.iter().map(|c| format!("{}:{}", c.id, c.libelle)).collect::<Vec<_>>());

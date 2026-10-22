@@ -198,11 +198,12 @@ const detailOffre = (p: StorePrice) =>
           </div>
           <template v-else-if="product">
             <StoreSheetMedia
+              :key="product.gameId"
               class="sd-sec"
-              :apercu="product.steam?.apercu"
+              :bandes-annonces="product.steam?.bandesAnnonces ?? []"
               :captures="captures"
               @agrandir="zoom = $event"
-              @bande-annonce="ouvrirSteam"
+              @steam="ouvrirSteam"
             />
 
             <section class="sd-sec">

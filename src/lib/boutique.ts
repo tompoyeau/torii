@@ -132,6 +132,28 @@ export function activation(boutique: string, drm: string[] | undefined): string 
   return autres.length ? t("boutique.produit.activation", { drm: autres.join(", ") }) : "";
 }
 
+/**
+ * Titre d'une bande-annonce. Certains éditeurs laissent le nom du fichier de montage
+ * (« 032_2_1_UpdateTrailer_FR_PEGI 18_16x9_1080_Burned in Subs », relevé sur Cyberpunk
+ * 2077) : on affiche alors « Bande-annonce 4 ».
+ */
+export function nomBandeAnnonce(nom: string, rang: number): string {
+  const brut = !nom.trim() || /_|\b(16x9|1080p?|PEGI\s?\d+)\b/i.test(nom);
+  return brut ? t("boutique.produit.bandeAnnonceN", { n: rang }) : nom.trim();
+}
+
+/**
+ * La WebView sait-elle lire un flux HLS (les bandes-annonces avec le son) ? Oui pour le
+ * WebView2 d'Edge 155 (mesuré), sans bibliothèque ; sinon, l'aperçu muet prend le relais.
+ */
+export function hlsLisible(): boolean {
+  try {
+    return document.createElement("video").canPlayType("application/vnd.apple.mpegurl") !== "";
+  } catch {
+    return false;
+  }
+}
+
 export type Verdict = "record" | "proche" | "troisMois" | "annee" | "cher";
 
 /**

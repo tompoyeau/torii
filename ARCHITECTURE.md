@@ -1497,7 +1497,7 @@ fin et son code promo.
   sortie, studios, nombre de suiveurs ; `games/prices/v3` donne `historyLow.{all,y1,m3}`
   et, par offre, `drm`, `expiry`, `voucher`. La fiche ne les affichait pas.
 - **+ 2 appels Steam sans clé**, en parallèle (`fiche::fiche`) : `GetItems` (captures,
-  microtrailer, langues avec voix/sous-titres, tags, avis) et `appdetails` (configuration,
+  bandes-annonces, langues avec voix/sous-titres, tags, avis) et `appdetails` (configuration,
   catégories traduites par Steam, succès, classification, DLC, site, description).
 - `store::game` lance désormais tout **en parallèle** une fois `games/info/v2` reçu
   (prix, Instant Gaming, IGDB, description traduite, fiche Steam) : 2,3 s pour Cyberpunk
@@ -1510,9 +1510,21 @@ fin et son code promo.
 - ⚠️ **Beaucoup de descriptions ne contiennent que des images et des vidéos en boucle**
   (celle de Cyberpunk 2077 n'a pas un mot de texte) : sans le bloc `video`, il n'en
   restait qu'une image.
-- ⚠️ **Plus de vraies bandes-annonces en mp4** : Steam ne sert plus que du DASH/HLS, qui
-  demanderait une bibliothèque de lecture (dépendance refusée). On montre le
-  « microtrailer » (quelques secondes, muet, mp4/webm) et un bouton vers la page Steam.
+- 🔑 **Bandes-annonces avec le son : le HLS, lu NATIVEMENT par le WebView2.** Steam ne sert
+  plus de mp4 pour ses bandes-annonces, seulement des flux adaptatifs (`adaptive_trailers` :
+  DASH AV1/H.264, HLS H.264) avec une piste son séparée. J'avais d'abord cru qu'il fallait
+  une bibliothèque de lecture (hls.js) : FAUX. Mesuré le 23/10/2026 sur Edge 155 (même
+  version que le WebView2) piloté par le protocole de débogage : `canPlayType` HLS =
+  « maybe », et 11 s de lecture décodent image ET son de la bande-annonce de Cyberpunk
+  2077. Le DASH, lui, n'est pas lu (`canPlayType` vide).
+  - Au repos : l'aperçu muet (« microtrailer », mp4/webm) tourne en boucle sous un bouton
+    de lecture (affiche fixe si « réduire les animations »).
+  - Au clic : le flux HLS avec le son et les commandes (`<video controls>`). Jamais de son
+    sans geste de l'utilisateur.
+  - Repli (`lib/boutique.ts::hlsLisible` faux, ou erreur du flux) : l'aperçu muet est joué,
+    avec un mot d'explication et le lien vers Steam.
+  - Certains noms de bandes-annonces sont des noms de fichiers de montage
+    (« 032_2_1_UpdateTrailer_FR_PEGI 18_16x9_1080… ») : affichés « Bande-annonce 4 ».
 - **CSP** : `media-src 'self' https://video.akamai.steamstatic.com
   https://shared.akamai.steamstatic.com`, dans `csp` ET `devCsp` (sans elle, `default-src
   'self'` bloque toute vidéo). Rappel : seul `npm run tauri build` exerce la CSP de

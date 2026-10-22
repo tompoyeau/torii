@@ -13,9 +13,8 @@
 //! (paragraphe, titre, puce, image) : le texte est décodé et rendu comme du texte, les
 //! images ne sont gardées que si elles viennent des serveurs d'images de Steam.
 //!
-//! ⚠️ Les vraies bandes-annonces ne sont plus servies qu'en flux adaptatifs (DASH/HLS),
-//! qu'il faudrait une bibliothèque de lecture pour lire. On ne garde que le
-//! « microtrailer » : quelques secondes en mp4/webm, muettes, lisibles par la WebView.
+//! Les bandes-annonces sont servies en flux HLS (avec le son), que la WebView lit
+//! nativement, et en « microtrailer » muet, gardé en repli (voir `bande_annonce`).
 
 use crate::locale;
 use serde::Serialize;
@@ -43,7 +42,8 @@ pub struct FicheSteam {
     /// Les mêmes, en identifiants : ils servent à chercher les jeux similaires.
     pub tag_ids: Vec<u64>,
     pub captures: Vec<Capture>,
-    pub apercu: Option<Apercu>,
+    /// Bandes-annonces, dans l'ordre de Steam (8 au plus).
+    pub bandes_annonces: Vec<BandeAnnonce>,
     pub langues: Vec<Langue>,
     pub classification: Option<Classification>,
     /// Fonctionnalités Steam (solo, coop, manette, succès…), libellés traduits par Steam.
@@ -63,12 +63,15 @@ pub struct Capture {
     pub grande: String,
 }
 
-/// Aperçu vidéo (« microtrailer ») : quelques secondes, sans son.
+/// Une bande-annonce : le flux complet, avec le son, et son aperçu muet en repli.
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct Apercu {
+pub struct BandeAnnonce {
     pub nom: String,
     pub affiche: Option<String>,
+    /// Flux HLS (vidéo + son, plusieurs qualités). Lu nativement par la WebView.
+    pub hls: Option<String>,
+    /// « Microtrailer » : quelques secondes, muettes, en fichier simple.
     pub mp4: Option<String>,
     pub webm: Option<String>,
 }
@@ -219,26 +222,10 @@ fn lire_item(f: &mut FicheSteam, item: &Value, noms: &HashMap<u64, String>) {
         })
         .unwrap_or_default();
 
-    f.apercu = item["trailers"]["highlights"].as_array().and_then(|t| t.first()).map(|t| {
-        let micro = t["microtrailer"].as_array().cloned().unwrap_or_default();
-        let fichier = |genre: &str| {
-            micro
-                .iter()
-                .find(|m| m["type"].as_str() == Some(genre))
-                .and_then(|m| m["filename"].as_str())
-                .map(|f| format!("{VIDEOS}{f}"))
-        };
-        Apercu {
-            nom: t["trailer_name"].as_str().unwrap_or_default().to_string(),
-            affiche: t["screenshot_full"].as_str().map(|s| format!("{IMAGES}steam/apps/{s}")),
-            mp4: fichier("video/mp4"),
-            webm: fichier("video/webm"),
-        }
-    });
-    // Un aperçu sans vidéo ne sert à rien.
-    if f.apercu.as_ref().is_some_and(|a| a.mp4.is_none() && a.webm.is_none()) {
-        f.apercu = None;
-    }
+    f.bandes_annonces = item["trailers"]["highlights"]
+        .as_array()
+        .map(|liste| liste.iter().filter_map(bande_annonce).take(MAX_BANDES_ANNONCES).collect())
+        .unwrap_or_default();
 
     f.langues = item["supported_languages"]
         .as_array()
@@ -255,6 +242,44 @@ fn lire_item(f: &mut FicheSteam, item: &Value, noms: &HashMap<u64, String>) {
                 .collect()
         })
         .unwrap_or_default();
+}
+
+/// Au-delà, ce sont des variantes (versions sous-titrées, montages par classe…).
+const MAX_BANDES_ANNONCES: usize = 8;
+
+/// Une entrée de `trailers.highlights`.
+///
+/// 🔑 **LE SON EST DANS LE FLUX HLS, PAS DANS LE « MICROTRAILER ».** Steam ne sert plus ses
+/// bandes-annonces qu'en flux adaptatifs (`adaptive_trailers` : DASH en AV1 et H.264, HLS
+/// en H.264), avec une piste son séparée. Le WebView2 de Torii lit le HLS **nativement**
+/// — mesuré sur Edge 155 le 23/10/2026, même version que le WebView2 : image et son
+/// décodés sur la bande-annonce de Cyberpunk 2077, sans aucune bibliothèque. Le
+/// microtrailer (mp4/webm, muet, quelques secondes) reste le repli pour un WebView2 qui
+/// ne saurait pas lire le flux.
+fn bande_annonce(t: &Value) -> Option<BandeAnnonce> {
+    let micro = t["microtrailer"].as_array().cloned().unwrap_or_default();
+    let fichier = |genre: &str| {
+        micro
+            .iter()
+            .find(|m| m["type"].as_str() == Some(genre))
+            .and_then(|m| m["filename"].as_str())
+            .map(|f| format!("{VIDEOS}{f}"))
+    };
+    let hls = t["adaptive_trailers"].as_array().and_then(|a| {
+        a.iter()
+            .find(|f| f["encoding"].as_str() == Some("hls_h264"))
+            .and_then(|f| f["cdn_path"].as_str())
+            .map(|p| format!("{VIDEOS}{p}"))
+    });
+    let b = BandeAnnonce {
+        nom: t["trailer_name"].as_str().unwrap_or_default().trim().to_string(),
+        affiche: t["screenshot_full"].as_str().map(|s| format!("{IMAGES}steam/apps/{s}")),
+        hls,
+        mp4: fichier("video/mp4"),
+        webm: fichier("video/webm"),
+    };
+    // Rien à lire du tout : pas une bande-annonce.
+    (b.hls.is_some() || b.mp4.is_some() || b.webm.is_some()).then_some(b)
 }
 
 impl FicheSteam {
@@ -729,8 +754,12 @@ mod tests {
             "reviews": { "summary_filtered": { "review_count": 10, "percent_positive": 87, "review_score": 8 } },
             "tags": [ { "tagid": 4115 }, { "tagid": 6650 }, { "tagid": 1695 }, { "tagid": 4182 }, { "tagid": 122 } ],
             "screenshots": { "all_ages_screenshots": [ { "filename": "steam/apps/1/ss_a.jpg?t=1" } ] },
-            "trailers": { "highlights": [ { "trailer_name": "Rêves brisés", "screenshot_full": "257/abc/movie_full.jpg",
-                "microtrailer": [ { "filename": "1/2/micro.webm", "type": "video/webm" }, { "filename": "1/2/micro.mp4", "type": "video/mp4" } ] } ] },
+            "trailers": { "highlights": [
+                { "trailer_name": "Rêves brisés", "screenshot_full": "257/abc/movie_full.jpg",
+                  "microtrailer": [ { "filename": "1/2/micro.webm", "type": "video/webm" }, { "filename": "1/2/micro.mp4", "type": "video/mp4" } ],
+                  "adaptive_trailers": [ { "cdn_path": "1/2/dash_av1.mpd", "encoding": "dash_av1" }, { "cdn_path": "1/2/hls_264_master.m3u8", "encoding": "hls_h264" } ] },
+                { "trailer_name": "Sans vidéo", "screenshot_full": "9/x/movie_full.jpg" }
+            ] },
             "supported_languages": [
                 { "elanguage": 0, "supported": true, "full_audio": true, "subtitles": true },
                 { "elanguage": 2, "supported": true, "full_audio": false, "subtitles": true },
@@ -747,7 +776,10 @@ mod tests {
         assert_eq!(f.tags, vec!["Cyberpunk", "Monde ouvert", "RPG"]);
         assert_eq!(f.captures.len(), 1);
         assert!(f.captures[0].mini.ends_with("ss_a.600x338.jpg?t=1"));
-        let a = f.apercu.unwrap();
+        // La seconde entrée n'a rien à lire : écartée.
+        assert_eq!(f.bandes_annonces.len(), 1);
+        let a = &f.bandes_annonces[0];
+        assert_eq!(a.hls.as_deref(), Some("https://video.akamai.steamstatic.com/store_trailers/1/2/hls_264_master.m3u8"));
         assert_eq!(a.mp4.as_deref(), Some("https://video.akamai.steamstatic.com/store_trailers/1/2/micro.mp4"));
         assert_eq!(a.affiche.as_deref(), Some("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257/abc/movie_full.jpg"));
         assert_eq!(f.langues, vec![

@@ -281,6 +281,17 @@ export interface StoreBloc {
   affiche?: string | null;
 }
 
+/** Une bande-annonce Steam (`metadata/fiche.rs::BandeAnnonce`). */
+export interface StoreTrailer {
+  nom: string;
+  affiche?: string | null;
+  /** Flux HLS : vidéo complète avec le son. */
+  hls?: string | null;
+  /** Aperçu de quelques secondes, muet. */
+  mp4?: string | null;
+  webm?: string | null;
+}
+
 /** Ce que Steam ajoute à la fiche produit (`metadata/fiche.rs`). */
 export interface StoreSteamSheet {
   reviewScore: number;
@@ -289,8 +300,8 @@ export interface StoreSteamSheet {
   tags: string[];
   tagIds: number[];
   captures: { mini: string; grande: string }[];
-  /** Aperçu vidéo de quelques secondes, muet. */
-  apercu?: { nom: string; affiche?: string | null; mp4?: string | null; webm?: string | null } | null;
+  /** Bandes-annonces : flux HLS avec le son, et aperçu muet (mp4/webm) en repli. */
+  bandesAnnonces: StoreTrailer[];
   /** Langues prises en charge ; `code` = étiquette BCP 47. */
   langues: { code: string; voix: boolean; sousTitres: boolean }[];
   classification?: { systeme: string; note: string; descripteurs: string[] } | null;
