@@ -73,7 +73,9 @@ h2 { margin: 0; font-size: 15px; font-weight: 800; }
 .n { font-family: var(--mono); font-weight: 400; color: var(--text-faint); }
 .lien { margin-left: auto; background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 600; padding: 0; }
 .lien:hover { text-decoration: underline; }
-.bande { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 10px; overflow-x: auto; scrollbar-width: thin; }
+/* Barre de défilement : celle de Torii (`style.css`). Surtout pas de `scrollbar-width` ici,
+   qui ferait revenir la barre grise de Windows (voir le commentaire de `style.css`). */
+.bande { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .jeu {
   display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 10px; min-width: 0;
   background: var(--surface); border: 1px solid var(--border); color: inherit; text-align: left; cursor: pointer;

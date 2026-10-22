@@ -1519,8 +1519,11 @@ fin et son code promo.
   2077. Le DASH, lui, n'est pas lu (`canPlayType` vide).
   - Au repos : l'aperçu muet (« microtrailer », mp4/webm) tourne en boucle sous un bouton
     de lecture (affiche fixe si « réduire les animations »).
-  - Au clic : le flux HLS avec le son et les commandes (`<video controls>`). Jamais de son
-    sans geste de l'utilisateur.
+  - Au clic : le flux HLS avec le son, dans `StoreTrailerPlayer.vue` — des commandes aux
+    couleurs de Torii plutôt que celles, grises, de Windows : lecture, progression (avec ce
+    qui est déjà chargé), temps, volume retenu pour la session, plein écran ; au clavier
+    Espace/K, ← →, ↑ ↓, M, F. Les curseurs sont de vrais `<input type="range">` (clavier
+    et lecteurs d'écran sans rien réécrire). Jamais de son sans geste de l'utilisateur.
   - Repli (`lib/boutique.ts::hlsLisible` faux, ou erreur du flux) : l'aperçu muet est joué,
     avec un mot d'explication et le lien vers Steam.
   - Certains noms de bandes-annonces sont des noms de fichiers de montage

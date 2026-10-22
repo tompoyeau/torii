@@ -72,7 +72,7 @@ const detail = (j: StoreShelfItem) =>
 
 <template>
   <section class="classements">
-    <div role="tablist" :aria-label="t('boutique.accueil.classements.titre')" class="onglets">
+    <div role="tablist" :aria-label="t('boutique.accueil.classements.titre')" class="onglets no-scrollbar">
       <button
         v-for="(o, i) in ONGLETS"
         :id="`onglet-${o.cle}`"
@@ -137,7 +137,7 @@ const detail = (j: StoreShelfItem) =>
 
 <style scoped>
 .classements { min-width: 0; display: flex; flex-direction: column; }
-.onglets { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 8px; overflow-x: auto; scrollbar-width: none; }
+.onglets { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-bottom: 8px; overflow-x: auto; }
 .onglet {
   padding: 0 0 11px; border: none; background: none; color: var(--text-faint); white-space: nowrap;
   font-weight: 700; font-size: 16px; letter-spacing: -0.01em;

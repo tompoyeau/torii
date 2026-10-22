@@ -69,7 +69,8 @@ watch(
       </div>
     </div>
     <slot name="avant" />
-    <div ref="piste" class="piste" :class="format" @scroll.passive="mesurer">
+    <!-- Barre masquée : on défile avec les flèches, la molette ou le clavier. -->
+    <div ref="piste" class="piste no-scrollbar" :class="format" @scroll.passive="mesurer">
       <slot />
     </div>
   </section>
@@ -78,11 +79,10 @@ watch(
 <style scoped>
 .piste {
   display: grid; grid-auto-flow: column; gap: 20px; overflow-x: auto; overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory; scrollbar-width: none;
+  scroll-snap-type: x mandatory;
   /* Marge interne : l'ombre et le soulèvement des cartes au survol ne sont pas rognés. */
   padding: 8px 4px 18px; margin: -8px -4px -18px;
 }
-.piste::-webkit-scrollbar { display: none; }
 .piste.portrait { grid-auto-columns: 172px; }
 .piste.paysage { grid-auto-columns: 280px; }
 .piste > :deep(*) { scroll-snap-align: start; }

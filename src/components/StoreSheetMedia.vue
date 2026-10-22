@@ -4,6 +4,7 @@ import { usePreferences } from "../composables/usePreferences";
 import { hlsLisible, nomBandeAnnonce } from "../lib/boutique";
 import { t } from "../i18n";
 import type { StoreTrailer } from "../types";
+import StoreTrailerPlayer from "./StoreTrailerPlayer.vue";
 
 /**
  * Médias de la fiche produit : une grande vue et la bande des miniatures, bandes-annonces
@@ -84,17 +85,14 @@ function defiler(sens: number) {
   <section v-if="total" class="medias" :aria-label="t('boutique.produit.medias')">
     <div class="vue">
       <template v-if="bande">
-        <!-- La vraie bande-annonce, avec le son et les commandes. -->
-        <video
-          v-if="etat === 'lecture'"
-          ref="video"
+        <!-- La vraie bande-annonce, avec le son et les commandes de Torii. -->
+        <StoreTrailerPlayer
+          v-if="etat === 'lecture' && bande.hls"
           :key="`flux-${choisi}`"
-          :src="bande.hls ?? undefined"
-          :poster="bande.affiche ?? undefined"
-          controls
-          autoplay
-          playsinline
-          @error="echecFlux"
+          :src="bande.hls"
+          :affiche="bande.affiche"
+          :nom="nomBandeAnnonce(bande.nom, choisi + 1)"
+          @echec="echecFlux"
         />
         <!-- Aperçu muet : en boucle au repos (sauf animations réduites), ou en repli. -->
         <video
@@ -177,8 +175,6 @@ function defiler(sens: number) {
   border: 1px solid var(--border); background: #0e0a14;
 }
 .vue > video, .vue > img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* En lecture, l'image entière plutôt que recadrée : les commandes du lecteur restent visibles. */
-.vue > video[controls] { object-fit: contain; background: #000; }
 .grande { display: block; width: 100%; height: 100%; padding: 0; border: none; background: none; cursor: zoom-in; }
 .grande img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lecture {

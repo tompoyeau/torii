@@ -115,9 +115,11 @@ button { font-family: inherit; cursor: pointer; }
    thème, donc elles suivent le clair comme le sombre sans une ligne en double.
 
    🔑 On s'en tient aux pseudo-éléments `::-webkit-scrollbar`, sans déclarer
-   `scrollbar-width` / `scrollbar-color` ailleurs que sur `.no-scrollbar` : dès que les
-   propriétés standard sont posées sur un élément, Chromium ignore les pseudo-éléments
-   pour celui-ci. Mélanger les deux revient à écrire du style qui ne s'applique jamais. */
+   `scrollbar-width` / `scrollbar-color` ailleurs que sur `.no-scrollbar` et dans le bloc
+   réservé à Firefox (plus bas) : dès que les propriétés standard sont posées sur un
+   élément, Chromium ignore les pseudo-éléments pour celui-ci, et la barre grise de
+   Windows revient. Arrivé avec la bande « Ta wishlist en promo » (`scrollbar-width:
+   thin`), corrigé. Une barre à masquer : la classe `.no-scrollbar`, rien d'autre. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
@@ -292,6 +294,12 @@ button { font-family: inherit; cursor: pointer; }
    posé sur les visuels, prend un peu plus d'opacité pour compenser. */
 @supports (-moz-appearance: none) {
   *, *::before, *::after { backdrop-filter: none !important; }
+  /* Firefox ignore les pseudo-éléments `::-webkit-scrollbar` : sans ça, la démo web y
+     montrait les barres grises du système. Les propriétés standard ne savent faire
+     qu'une barre fine aux couleurs du thème (pas de survol coloré) ; elles ne sont
+     posées QUE pour Firefox, car Chromium ignore les pseudo-éléments dès qu'elles sont
+     présentes. `.no-scrollbar`, plus spécifique, garde ses barres masquées. */
+  * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
   .btn-ghost { background: rgba(255, 255, 255, 0.2); }
   .btn-ghost:hover { background: rgba(255, 255, 255, 0.28); }
 }
