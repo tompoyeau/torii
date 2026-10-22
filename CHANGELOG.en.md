@@ -5,6 +5,16 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.22.0
+- **A redesigned Store, Steam-style.** At the top, a featured carousel of big, well-reviewed games on sale. Then come the deals right now, charts (top sellers, popular new releases, most anticipated), games free to keep before the deadline, genre shelves and popular free-to-play games. The grid of all deals stays at the bottom, with a “Load more” button.
+- **The charts are your country's**, and each game shows its best offer across every store, minus the sellers you've hidden.
+- **The Store knows what you already have.** A game from your library gets an “In your library” badge (or “Family Sharing”) and is never featured. The genres you play most come first, and your wishlist games on sale show at the top of the page.
+- **A much richer game page**: Steam, Metacritic and OpenCritic scores, age rating, every screenshot, the full description, an “At a glance” section (game modes, controller, your language with voice or subtitles, players, accessibility), additional content, system requirements and similar games.
+- **Real trailers, with sound**, in a player that matches Torii. It works from the keyboard too: Space to play/pause, arrows to seek and set the volume, M for sound, F for full screen.
+- **“Good time to buy?”** compares the best price with the lowest of the last 3 months, of the year and of all time. Each offer also says how it activates (“DRM-free”, “Activates on: GOG”…), how long it runs and whether it needs a promo code.
+- **No more Baldur's Gate 3 page instead of the game you clicked.** When the price comparator didn't answer, Torii showed its demo data. It now says so, with a “Retry” button, and gives the comparator a minute to breathe instead of insisting. The wishlist no longer shows made-up games either.
+- **Torii starts without asking the Store for anything**: the storefront only loads when you open the Store.
+
 ## 0.21.3
 - **Your installed Epic games are back with Epic's new launcher.** Epic is previewing a new version of its launcher, which replaces the old one when you install it. Torii couldn't find the games it manages: they showed as not installed, or vanished if your Epic account wasn't connected. Torii now reads both versions of the launcher, and “Play”, “Install” and “Uninstall” work with the new one just as with the old one.
 - **What the new launcher doesn't record, Torii finds.** Each game's size is measured on disk. Its name comes from your Epic account: without a connected account, a game installed with the new launcher shows its folder name.

@@ -5,6 +5,16 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.22.0
+- **Une Boutique repensée, à la façon de Steam.** En haut, une vedette qui fait défiler de gros jeux en promo et bien notés. Ensuite viennent les promos du moment, des classements (meilleures ventes, nouveautés populaires, jeux les plus attendus), les jeux offerts à récupérer avant la date limite, des rayons par genre et les free-to-play populaires. La grille de toutes les offres reste en bas, avec un bouton « Charger plus ».
+- **Les classements sont ceux de ton pays**, et chaque jeu affiche sa meilleure offre toutes boutiques confondues, sans les vendeurs que tu as masqués.
+- **La Boutique tient compte de ce que tu as déjà.** Un jeu de ta bibliothèque porte un badge « Dans ta bibliothèque » (ou « Partage familial ») et n'apparaît jamais en vedette. Les genres que tu joues le plus passent en premier, et les jeux de ta wishlist en promo s'affichent en haut de la page.
+- **Une fiche de jeu bien plus complète** : notes Steam, Metacritic et OpenCritic, classification PEGI, toutes les captures, description complète, un « En bref » (modes de jeu, manette, ta langue avec voix ou sous-titres, joueurs, accessibilité), contenus additionnels, configuration requise et jeux similaires.
+- **Les vraies bandes-annonces, avec le son**, dans un lecteur aux couleurs de Torii. Il se pilote aussi au clavier : Espace pour lecture/pause, flèches pour avancer et régler le volume, M pour le son, F pour le plein écran.
+- **« Bon moment pour acheter ? »** compare le meilleur prix aux plus bas des 3 derniers mois, de l'année et de tous les temps. Chaque offre dit aussi comment elle s'active (« Sans DRM », « Activation : GOG »…), jusqu'à quand elle court et si elle demande un code promo.
+- **Plus de fiche de Baldur's Gate 3 à la place du jeu cliqué.** Quand le comparateur de prix ne répondait pas, Torii montrait les données de sa démo. Il le dit maintenant, avec un bouton « Réessayer », et laisse le comparateur souffler une minute au lieu d'insister. La wishlist ne montre plus de jeux fictifs non plus.
+- **Torii démarre sans rien demander à la Boutique** : la vitrine ne se charge qu'à l'ouverture de la Boutique.
+
 ## 0.21.3
 - **Tes jeux Epic installés reviennent avec le nouveau launcher d'Epic.** Epic propose en avant-première une nouvelle version de son launcher, qui remplace l'ancienne quand on l'installe. Torii ne trouvait plus les jeux qu'elle gère : ils passaient pour non installés, ou disparaissaient si ton compte Epic n'était pas connecté. Torii lit maintenant les deux versions du launcher, et « Jouer », « Installer » et « Désinstaller » marchent avec la nouvelle comme avec l'ancienne.
 - **Ce que le nouveau launcher ne note pas, Torii le retrouve.** La taille de chaque jeu est mesurée sur le disque. Son nom vient de ton compte Epic : sans compte connecté, un jeu installé avec le nouveau launcher porte le nom de son dossier.
