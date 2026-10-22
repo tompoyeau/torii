@@ -8,6 +8,10 @@ pub struct GameDto {
     /// Identifiant unique préfixé par la plateforme, ex: "steam:440".
     pub id: String,
     pub title: String,
+    /// Titre de repli faute de mieux (le nom du dossier d'un jeu du nouveau launcher Epic) :
+    /// le compte en ligne le remplace dans `merge_owned`. Interne au scan, jamais envoyé au front.
+    #[serde(skip)]
+    pub provisional_title: bool,
     /// "steam" | "epic" | "gog" | "manual"
     pub platform: String,
     #[serde(default = "yes")]

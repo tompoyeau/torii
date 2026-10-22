@@ -171,6 +171,13 @@ fn merge_owned(map: &mut HashMap<String, GameDto>, mut owned: GameDto) {
             if existing.hero_url.is_none() {
                 existing.hero_url = owned.hero_url.take();
             }
+            // Titre : le nouveau launcher Epic ne note pas le nom de ses jeux, le scan local
+            // n'a alors que le nom du dossier. Celui du compte le remplace — sauf si le
+            // compte n'a lui-même que l'identifiant technique (catalogue injoignable).
+            if existing.provisional_title && !owned.title.is_empty() && owned.title != owned.launch_target {
+                existing.title = std::mem::take(&mut owned.title);
+                existing.provisional_title = false;
+            }
         }
         None => {
             map.insert(owned.id.clone(), owned);
@@ -254,7 +261,8 @@ pub fn uninstall(platform: &str, target: &str, install_dir: Option<&str>) -> Res
         // Epic Games Launcher : action `uninstall` sur l'app (confirmation dans le launcher).
         // ⚠️ Contrairement à `launch`, l'uninstall exige l'identifiant canonique COMPLET
         // (`namespace:catalogItemId:artifactId`) : avec le simple AppName, Epic s'ouvre mais
-        // ne cible aucun jeu. On résout le triplet depuis le manifeste (repli AppName seul).
+        // ne cible aucun jeu. On résout le triplet depuis le manifeste ou le journal du
+        // nouveau launcher (repli AppName seul).
         "epic" => {
             let app_id = epic::full_app_id(target).unwrap_or_else(|| target.to_string());
             open_uri(&format!("com.epicgames.launcher://apps/{app_id}?action=uninstall"))
@@ -604,5 +612,37 @@ mod tests {
     fn la_comparaison_survit_a_la_casse_et_aux_slashs() {
         let g = detecte(None, "c:/PROGRAM FILES (X86)/steam/SteamApps/Common/Portal 2/portal2.exe");
         assert!(est_un_sosie(&g, &racines()));
+    }
+
+    /// Un jeu du nouveau launcher Epic n'a que le nom de son dossier : le compte lui
+    /// rend son vrai titre. Un titre lu dans un manifeste, lui, n'est jamais touché.
+    #[test]
+    fn le_compte_remplace_un_titre_provisoire_et_lui_seul() {
+        let installe = |title: &str, provisional_title: bool| GameDto {
+            id: "epic:Calluna".into(),
+            title: title.into(),
+            provisional_title,
+            platform: "epic".into(),
+            launch_target: "Calluna".into(),
+            ..Default::default()
+        };
+        let possede = |title: &str| GameDto {
+            id: "epic:Calluna".into(),
+            title: title.into(),
+            platform: "epic".into(),
+            owned: true,
+            launch_target: "Calluna".into(),
+            ..Default::default()
+        };
+        let titre_apres = |installe: GameDto, possede: GameDto| {
+            let mut map = HashMap::from([(installe.id.clone(), installe)]);
+            merge_owned(&mut map, possede);
+            map["epic:Calluna"].title.clone()
+        };
+
+        assert_eq!(titre_apres(installe("Control_dossier", true), possede("Control")), "Control");
+        assert_eq!(titre_apres(installe("Control (manifeste)", false), possede("Control")), "Control (manifeste)");
+        // Catalogue injoignable : le compte n'a que l'AppName, le dossier reste plus parlant.
+        assert_eq!(titre_apres(installe("Control_dossier", true), possede("Calluna")), "Control_dossier");
     }
 }

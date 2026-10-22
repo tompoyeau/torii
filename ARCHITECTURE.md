@@ -213,6 +213,29 @@ cargo run --example community        # jeux possédés + famille (via session st
   `{artifactId, totalTime}` (totalTime en **secondes**, artifactId = **appName**). `account_id` vient
   de la réponse du refresh token (ajouté à `Tokens`). Appliqué par `asset.app_name`.
 
+## Jeux Epic installés — deux launchers (`platforms/epic.rs`)
+
+- 🔑 **Depuis octobre 2026, deux launchers Epic coexistent.** Le nouveau (préversion, appli
+  Tauri) reprend les jeux de l'ancien **puis le désinstalle** ; l'ancien reste téléchargeable.
+  `epic::scan` lit donc les deux et dédoublonne par `epic:<appName>` :
+  - ancien : manifestes `%ProgramData%\Epic\EpicGamesLauncher\Data\Manifests\*.item` (dossier
+    supprimé par la migration) ;
+  - nouveau : journal `%LOCALAPPDATA%\com.epicgames.eglv2\installations.jsonl`.
+- Le journal : ligne 1 = en-tête (`version`, `entries`), puis **une ligne par écriture**. La
+  dernière ligne d'un `installationId` l'emporte, une ligne `deleted` (« tombstone ») le retire,
+  et à `artifactId` égal on garde la dernière installation écrite — les règles du launcher, lues
+  dans son exécutable. Écartés : `parentInstallationId` (DLC et composants : Fortnite en a trois),
+  `isFab`, `complete: false`, dossier disparu. `artifactId` = l'ancien `AppName`, `itemId` =
+  l'ancien `CatalogItemId` → même triplet `namespace%3AitemId%3AartifactId` pour les deeplinks.
+- ⚠️ **Le journal n'a ni titre ni taille.** Titre = copie de l'ancien manifeste gardée pour les
+  jeux repris (`import-scan\v1-items\<installationId>.item`), sinon le nom du dossier marqué
+  `provisional_title` (champ interne, `serde(skip)`), que `merge_owned` remplace par le titre du
+  compte. Taille = `dir_size` du dossier, mémorisée par installation + version (le relevé local
+  est rejoué par `procwatch` à chaque exécutable inconnu).
+- Inchangé : protocole `com.epicgames.launcher://` (le nouveau launcher le réenregistre, même
+  `EpicGamesLauncher.exe`), connexion du compte (service web) et temps de jeu (API).
+- Ne PAS utiliser l'API locale du nouveau launcher (`api.json` : port + secret) : non documentée.
+
 ## Enrichissement à la demande (fait)
 
 - Commande `enrich_game(id, platform, launch_target, title)` → `metadata::enrich_one`, appelée à
