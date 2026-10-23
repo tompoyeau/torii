@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
+import { useFichePossede } from "../composables/useFichePossede";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
@@ -8,13 +9,22 @@ import { useTorii } from "../composables/useTorii";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { estHorsLauncher, platformName } from "../data/platforms";
+import { libelleAvis, nombre, pageSteam, tonAvis } from "../lib/boutique";
 import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
 import type { FriendLib, GameSource, SteamAchievements } from "../types";
+import GameDetailAchievements from "./GameDetailAchievements.vue";
+import GameDetailDlc from "./GameDetailDlc.vue";
+import GameDetailNews from "./GameDetailNews.vue";
 import PlatformIcon from "./PlatformIcon.vue";
-import { etiquetteIntl, t } from "../i18n";
+import StoreSheetBlocs from "./StoreSheetBlocs.vue";
+import StoreSheetConfig from "./StoreSheetConfig.vue";
+import StoreSheetFacts from "./StoreSheetFacts.vue";
+import StoreSheetMedia from "./StoreSheetMedia.vue";
+import { etiquetteIntl, langueCourante, t } from "../i18n";
 import { useImageCascade } from "../lib/images";
 
 const { byId, ensureEnriched, refreshInfo, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
+const { charger: chargerFiche, entree: entreeFiche } = useFichePossede();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
 const { connected: toriiConnected, isMuted, setMuted } = useTorii();
@@ -218,79 +228,15 @@ const loadingMeta = computed(
   () => !!game.value && enrichingId.value === game.value.id,
 );
 
-/** Vraies captures si disponibles, sinon des panneaux dérivés du dégradé. */
-const realShots = computed(() => game.value?.screenshots ?? []);
-const fallbackShots = computed(() =>
-  game.value
-    ? [0, 1, 2, 3].map((k) => ({
-        background: game.value!.cover,
-        filter: `hue-rotate(${k * 22}deg) saturate(${1 + k * 0.12})`,
-      }))
-    : [],
-);
-
 const { src: bannerSrc, onError: onBannerError } = useImageCascade(() => [game.value?.heroUrl, game.value?.heroAlt]);
 
 function hideBrokenCover(e: Event) {
   (e.target as HTMLElement).style.display = "none";
 }
 
-/* ── Défilement horizontal de la bande de captures ───────────────────────── */
-const shotsRow = ref<HTMLElement | null>(null);
-const shotsAtStart = ref(true);
-const shotsAtEnd = ref(true);
-
-/** Met à jour la visibilité des flèches selon la position de défilement. */
-function updateShotsScroll() {
-  const el = shotsRow.value;
-  if (!el) return;
-  shotsAtStart.value = el.scrollLeft <= 2;
-  shotsAtEnd.value = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
-}
-/** Défile d'environ un écran de captures (sens −1 = gauche, +1 = droite). */
-function scrollShots(dir: number) {
-  const el = shotsRow.value;
-  if (el) el.scrollBy({ left: dir * el.clientWidth * 0.85, behavior: "smooth" });
-}
-// Recalcule (et remet à gauche) quand le jeu ou les captures changent.
-watch([selectedGameId, realShots], () => {
-  nextTick(() => {
-    if (shotsRow.value) shotsRow.value.scrollLeft = 0;
-    updateShotsScroll();
-  });
-});
-onMounted(() => {
-  nextTick(updateShotsScroll);
-  window.addEventListener("resize", updateShotsScroll);
-});
-
-/** Visionneuse plein écran des captures (index dans `realShots`, sinon fermée). */
-const zoomIndex = ref<number | null>(null);
-const zoomedShot = computed(() =>
-  zoomIndex.value != null ? realShots.value[zoomIndex.value] ?? null : null,
-);
-function openShot(i: number) {
-  zoomIndex.value = i;
-}
-function closeShot() {
-  zoomIndex.value = null;
-}
-function stepShot(delta: number) {
-  const n = realShots.value.length;
-  if (zoomIndex.value == null || n === 0) return;
-  zoomIndex.value = (zoomIndex.value + delta + n) % n;
-}
-
-// Réinitialise la visionneuse et le menu de lancement quand on change de jeu.
-watch(selectedGameId, () => {
-  zoomIndex.value = null;
-  launchMenuOpen.value = false;
-  uninstallMenuOpen.value = false;
-});
-
 /**
  * Appid Steam du jeu affiché (jeu Steam direct, ou source Steam d'un jeu fusionné
- * multi-plateforme). `null` si aucune provenance Steam → pas de succès à récupérer.
+ * multi-plateforme). `null` si aucune provenance Steam → ni succès, ni contenus possédés.
  */
 const steamAppid = computed<string | null>(() => {
   const g = game.value;
@@ -301,25 +247,169 @@ const steamAppid = computed<string | null>(() => {
   return g.sources?.find((s) => s.platform === "steam")?.launchTarget ?? null;
 });
 
-/** Vrais succès Steam (nom, icône, date de déblocage) récupérés à l'ouverture de la fiche. */
+/**
+ * Ce que Steam dit du jeu — pour un jeu Steam, mais aussi pour un jeu acheté ailleurs
+ * quand le lien est sûr (Control sur Epic). Chaque bloc de la fiche n'apparaît que si sa
+ * donnée existe : un jeu Riot n'a que ce qu'IGDB et le launcher en savent, et sa fiche
+ * raccourcit d'autant, sans case vide.
+ */
+watch(
+  selectedGameId,
+  (id) => {
+    if (id && game.value) void chargerFiche(game.value, steamAppid.value);
+  },
+  { immediate: true },
+);
+const fiche = computed(() => entreeFiche(game.value?.id).fiche);
+const steam = computed(() => fiche.value?.steam ?? null);
+/** L'appid de la page Steam du jeu, s'il en a une sûre. */
+const appIdSteam = computed(() => fiche.value?.appId ?? (steamAppid.value ? Number(steamAppid.value) : null));
+function ouvrirSteam() {
+  if (appIdSteam.value) void openExternal(pageSteam(appIdSteam.value));
+}
+
+/** Médias : ceux de Steam (bandes-annonces avec le son, toutes les captures), sinon les captures connues. */
+const captures = computed(() =>
+  steam.value?.captures.length
+    ? steam.value.captures
+    : (game.value?.screenshots ?? []).map((s) => ({ mini: s, grande: s })),
+);
+const bandesAnnonces = computed(() => steam.value?.bandesAnnonces ?? []);
+
+/** Visionneuse plein écran des captures (index dans `captures`, sinon fermée). */
+const shots = computed(() => captures.value.map((c) => c.grande));
+const zoomIndex = ref<number | null>(null);
+const zoomedShot = computed(() => (zoomIndex.value != null ? shots.value[zoomIndex.value] ?? null : null));
+function openShot(i: number) {
+  zoomIndex.value = i;
+}
+function closeShot() {
+  zoomIndex.value = null;
+}
+function stepShot(delta: number) {
+  const n = shots.value.length;
+  if (zoomIndex.value == null || n === 0) return;
+  zoomIndex.value = (zoomIndex.value + delta + n) % n;
+}
+
+// Réinitialise la visionneuse et le menu de lancement quand on change de jeu, et repart du haut.
+watch(selectedGameId, () => {
+  zoomIndex.value = null;
+  launchMenuOpen.value = false;
+  uninstallMenuOpen.value = false;
+  if (panneau.value) panneau.value.scrollTop = 0;
+});
+
+/**
+ * Description : celle d'une source sûre dans la langue de l'interface (Steam, GOG, Epic),
+ * sinon le résumé Steam d'un jeu relié à Steam, sinon celle d'IGDB — signalée quand elle
+ * reste en anglais dans une interface qui ne l'est pas.
+ */
+const description = computed(() => {
+  const g = game.value;
+  if (!g) return null;
+  if (g.description && g.descriptionSource === "locale") return { texte: g.description, anglais: false };
+  if (steam.value?.resume) return { texte: steam.value.resume, anglais: false };
+  if (!g.description) return null;
+  return { texte: g.description, anglais: g.descriptionSource === "igdb" && langueCourante.value !== "en" };
+});
+
+/** Vrais succès Steam (rareté comprise) récupérés à l'ouverture de la fiche. */
 const steamAch = ref<SteamAchievements | null>(null);
 const loadingAch = ref(false);
-const showAllAch = ref(false);
 
 /** Joueurs en ce moment sur le jeu Steam (API publique), affiché dans la stat-card. */
 const currentPlayers = ref<number | null>(null);
 const playersLabel = computed(() =>
   currentPlayers.value != null ? currentPlayers.value.toLocaleString(etiquetteIntl.value) : null,
 );
-
-/** Succès affichés : débloqués d'abord (tri backend), limités sauf « tout afficher ». */
-const ACH_PREVIEW = 8;
-const visibleAch = computed(() =>
-  showAllAch.value ? steamAch.value?.items ?? [] : (steamAch.value?.items ?? []).slice(0, ACH_PREVIEW),
-);
 const achPct = computed(() => {
   const a = steamAch.value;
   return a && a.total > 0 ? Math.round((a.unlocked / a.total) * 100) : 0;
+});
+
+/** « 20 octobre », ou « 20 oct. 2025 » pour une autre année. */
+function dateCourte(s: number): string {
+  const d = new Date(s * 1000);
+  const memeAnnee = d.getFullYear() === new Date().getFullYear();
+  return new Intl.DateTimeFormat(etiquetteIntl.value, {
+    day: "numeric",
+    month: memeAnnee ? "long" : "short",
+    year: memeAnnee ? undefined : "numeric",
+  }).format(d);
+}
+const taille = (n: number) => t("fiche.stats.tailleGo", { n: nombre(n) });
+
+/** Sous le titre : ton rapport au jeu, en cases. Une case sans donnée n'existe pas. */
+const bandeau = computed(() => {
+  const g = game.value;
+  if (!g) return [];
+  const cases: { cle: string; titre: string; valeur: string; detail?: string }[] = [];
+  if (g.hoursPlayed != null) {
+    cases.push({
+      cle: "temps",
+      titre: t("fiche.bandeau.tempsDeJeu"),
+      valeur: `${nombre(g.hoursPlayed)} ${t("fiche.stats.heures")}`,
+      detail: t("fiche.bandeau.selon", { plateforme: platformName(g.platform) }),
+    });
+  }
+  if (g.lastPlayedAt) {
+    cases.push({ cle: "session", titre: t("fiche.bandeau.derniereSession"), valeur: dateCourte(g.lastPlayedAt), detail: g.lastPlayed });
+  }
+  if (g.sizeGb) {
+    cases.push({
+      cle: "taille",
+      titre: g.installed ? t("fiche.bandeau.installe") : t("fiche.bandeau.aInstaller"),
+      valeur: taille(g.sizeGb),
+      detail: g.installed ? t("fiche.bandeau.surDisque") : t("fiche.bandeau.aTelecharger"),
+    });
+  }
+  return cases;
+});
+
+/** Le grand chiffre de la carte de droite : le temps de jeu, sinon la dernière session, sinon la taille. */
+const grandChiffre = computed(() => {
+  const g = game.value;
+  if (!g) return null;
+  if (g.hoursPlayed != null) {
+    return {
+      valeur: nombre(g.hoursPlayed),
+      unite: t("fiche.stats.heures"),
+      libelle: `${t("fiche.bandeau.tempsDeJeu")} · ${t("fiche.bandeau.selon", { plateforme: platformName(g.platform) })}`,
+    };
+  }
+  if (g.lastPlayedAt) {
+    // « 27 sept. » : en grand, le mois entier passerait sur deux lignes.
+    const d = new Date(g.lastPlayedAt * 1000);
+    const memeAnnee = d.getFullYear() === new Date().getFullYear();
+    const valeur = new Intl.DateTimeFormat(etiquetteIntl.value, {
+      day: "numeric",
+      month: "short",
+      year: memeAnnee ? undefined : "numeric",
+    }).format(d);
+    return { valeur, unite: "", libelle: t("fiche.bandeau.derniereSession"), texte: true };
+  }
+  if (g.sizeGb) {
+    return {
+      valeur: nombre(g.sizeGb),
+      unite: t("fiche.stats.go"),
+      libelle: g.installed ? t("fiche.stats.surDisque") : t("fiche.stats.tailleJeu"),
+    };
+  }
+  return null;
+});
+
+/** Note Metacritic : même code couleur que la Boutique. */
+const tonNote = (score: number) => (score >= 75 ? "pos" : score >= 50 ? "mixte" : "neg");
+const aDesNotes = computed(() => !!steam.value && !!(steam.value.reviewScore || steam.value.metacritic || steam.value.classification));
+
+const liens = computed(() => {
+  const out: { cle: string; libelle: string; url: string }[] = [];
+  const appId = appIdSteam.value;
+  if (appId) out.push({ cle: "steam", libelle: t("fiche.liens.pageSteam"), url: pageSteam(appId) });
+  if (steam.value?.site) out.push({ cle: "site", libelle: t("fiche.liens.site"), url: steam.value.site });
+  if (appId) out.push({ cle: "communaute", libelle: t("fiche.liens.communaute"), url: `https://steamcommunity.com/app/${appId}` });
+  return out;
 });
 
 // Charge les succès Steam à l'ouverture d'une fiche (anti-course par id).
@@ -327,7 +417,6 @@ watch(
   selectedGameId,
   async (id) => {
     steamAch.value = null;
-    showAllAch.value = false;
     loadingAch.value = false;
     currentPlayers.value = null;
     const appid = steamAppid.value;
@@ -355,10 +444,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") closeGame();
 }
 onMounted(() => document.addEventListener("keydown", onKey));
-onBeforeUnmount(() => {
-  document.removeEventListener("keydown", onKey);
-  window.removeEventListener("resize", updateShotsScroll);
-});
+onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 </script>
 
 <template>
@@ -372,7 +458,7 @@ onBeforeUnmount(() => {
     :aria-label="game ? game.title : t('fiche.fiche')"
   >
     <template v-if="game">
-      <div class="detail-banner">
+      <div class="detail-banner" :class="{ riche: bandeau.length || aDesNotes || (steamAch && steamAch.total) }">
         <div class="detail-banner-art" :style="{ background: game.cover }" />
         <img v-if="bannerSrc" :key="bannerSrc" class="detail-banner-img" :src="bannerSrc" alt="" @error="onBannerError" />
         <div class="detail-banner-scrim" />
@@ -380,6 +466,7 @@ onBeforeUnmount(() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>{{ t("fiche.retour") }}
         </button>
         <div class="detail-header">
+          <div class="detail-head-row">
           <div class="detail-title-wrap">
             <span class="detail-plat"><PlatformIcon :platform="game.platform" />{{ platformName(game.platform) }}</span>
             <h1 class="detail-title">{{ game.title }}</h1>
@@ -464,17 +551,99 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+          </div>
+
+          <!-- Ton rapport au jeu, puis ce que Steam en dit. Rien de vide : une case sans
+               donnée n'est pas dessinée. -->
+          <div v-if="bandeau.length || (steamAch && steamAch.total)" class="detail-strip">
+            <div v-for="c in bandeau" :key="c.cle" class="strip-cell">
+              <span class="strip-titre">{{ c.titre }}</span>
+              <span class="strip-valeur">{{ c.valeur }}</span>
+              <span v-if="c.detail" class="strip-detail">{{ c.detail }}</span>
+            </div>
+            <div v-if="steamAch && steamAch.total" class="strip-cell large">
+              <span class="strip-titre">{{ t("fiche.succes") }}</span>
+              <span class="strip-valeur">{{ steamAch.unlocked }} / {{ steamAch.total }} <small>· {{ achPct }} %</small></span>
+              <span class="strip-barre"><span :style="{ width: `${achPct}%` }" /></span>
+            </div>
+          </div>
+          <div v-if="steam && aDesNotes" class="detail-badges">
+            <button v-if="steam.reviewScore" class="badge" :title="t('boutique.produit.voirSur', { source: 'Steam' })" @click="ouvrirSteam">
+              <span class="pastille" :class="tonAvis(steam.reviewScore)" />
+              Steam · {{ libelleAvis(steam.reviewScore) }}<template v-if="steam.reviewPercent != null"> · {{ steam.reviewPercent }} %</template>
+              <span v-if="steam.reviewCount" class="dim">({{ nombre(steam.reviewCount) }})</span>
+            </button>
+            <button
+              v-if="steam.metacritic"
+              class="badge"
+              :disabled="!steam.metacriticUrl"
+              :title="t('boutique.produit.voirSur', { source: 'Metacritic' })"
+              @click="steam.metacriticUrl && openExternal(steam.metacriticUrl)"
+            >
+              <b class="score" :class="tonNote(steam.metacritic)">{{ steam.metacritic }}</b>Metacritic
+            </button>
+            <span v-if="steam.classification" class="badge fixe">
+              <b>{{ steam.classification.systeme }} {{ steam.classification.note }}</b>
+            </span>
+          </div>
         </div>
       </div>
 
       <div class="detail-body">
-        <div>
-          <div class="detail-section">
-            <h4>{{ t("fiche.apropos") }}</h4>
-            <p v-if="game.description" class="detail-desc">{{ game.description }}</p>
-            <p v-else-if="loadingMeta" class="detail-desc dim">{{ t("fiche.chargementDetails") }}</p>
-            <p v-else class="detail-desc dim">{{ t("fiche.aucuneDescription") }}</p>
+        <div class="detail-main">
+          <StoreSheetMedia
+            v-if="bandesAnnonces.length || captures.length"
+            :key="`${game.id}-${steam ? 'steam' : 'base'}`"
+            class="detail-section"
+            :bandes-annonces="bandesAnnonces"
+            :captures="captures"
+            @agrandir="openShot"
+            @steam="ouvrirSteam"
+          />
+
+          <GameDetailNews
+            v-if="fiche && fiche.actualites.length"
+            class="detail-section"
+            :actualites="fiche.actualites"
+            :app-id="fiche.appId"
+            :studio="game.developer"
+          />
+
+          <GameDetailAchievements
+            v-if="loadingAch || (steamAch && steamAch.items.length)"
+            class="detail-section"
+            :succes="steamAch"
+            :chargement="loadingAch"
+          />
+
+          <GameDetailDlc
+            v-if="fiche && fiche.dlc.length"
+            :key="`dlc-${fiche.appId}`"
+            class="detail-section"
+            :app-id="fiche.appId"
+            :dlc="fiche.dlc"
+            :possedes="fiche.dlcPossedes"
+            :total="steam?.dlcTotal ?? fiche.dlc.length"
+          />
+
+          <div v-if="description || loadingMeta" class="detail-section">
+            <div class="titre-ligne">
+              <h4>{{ t("fiche.apropos") }}</h4>
+              <span v-if="description?.anglais" class="etiquette">{{ t("fiche.enAnglais") }}</span>
+            </div>
+            <p v-if="description" class="detail-desc" :lang="description.anglais ? 'en' : undefined">{{ description.texte }}</p>
+            <p v-else class="detail-desc dim">{{ t("fiche.chargementDetails") }}</p>
+            <StoreSheetBlocs v-if="steam" :key="game.id" :blocs="steam.description" />
           </div>
+
+          <StoreSheetFacts v-if="steam" class="detail-section" :steam="steam" :hors-steam="!steamAppid" />
+
+          <StoreSheetConfig
+            v-if="!game.installed && steam?.configuration"
+            class="detail-section"
+            :configuration="steam.configuration"
+          />
+
           <div v-if="friendOwners.length" class="detail-section">
             <h4>{{ t("fiche.amis") }} <span class="sec-count">{{ friendOwners.length }}</span></h4>
             <div class="owners-list">
@@ -493,102 +662,29 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
-          <div class="detail-section">
-            <h4>{{ t("fiche.captures") }}</h4>
-            <div class="shots-wrap">
-              <button
-                v-if="!shotsAtStart"
-                class="shots-nav prev"
-                type="button"
-                :aria-label="t('fiche.capturesPrecedentes')"
-                @click="scrollShots(-1)"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
-              </button>
-              <div ref="shotsRow" class="shots no-scrollbar" @scroll="updateShotsScroll">
-                <template v-if="realShots.length">
-                  <button
-                    v-for="(s, i) in realShots"
-                    :key="'r' + i"
-                    class="shot shot-btn"
-                    type="button"
-                    :aria-label="t('fiche.agrandir')"
-                    @click="openShot(i)"
-                  >
-                    <img :src="s" alt="" loading="lazy" @error="hideBrokenCover" />
-                  </button>
-                </template>
-                <template v-else>
-                  <div v-for="(s, i) in fallbackShots" :key="'f' + i" class="shot" :style="s" />
-                </template>
-              </div>
-              <button
-                v-if="!shotsAtEnd"
-                class="shots-nav next"
-                type="button"
-                :aria-label="t('fiche.capturesSuivantes')"
-                @click="scrollShots(1)"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
-              </button>
-            </div>
-          </div>
-          <div v-if="loadingAch || (steamAch && steamAch.items.length)" class="detail-section">
-            <h4>
-              {{ t("fiche.succes") }}
-              <span v-if="steamAch" class="sec-count">{{ steamAch.unlocked }} / {{ steamAch.total }}</span>
-            </h4>
-            <p v-if="loadingAch && !steamAch" class="detail-desc dim">{{ t("fiche.chargementSucces") }}</p>
-            <template v-else-if="steamAch">
-              <div class="ach-list">
-                <div v-for="a in visibleAch" :key="a.name" class="ach" :class="{ locked: !a.unlocked }">
-                  <div class="ach-badge">
-                    <img :src="a.icon" alt="" loading="lazy" @error="hideBrokenCover" />
-                  </div>
-                  <div class="ach-info">
-                    <div class="ach-name">{{ a.name }}</div>
-                    <div v-if="a.description" class="ach-desc">{{ a.description }}</div>
-                    <div class="ach-pct">{{ a.unlocked ? (a.unlockedAt ?? t("fiche.debloque")) : t("fiche.verrouille") }}</div>
-                  </div>
-                </div>
-              </div>
-              <button
-                v-if="steamAch.items.length > ACH_PREVIEW"
-                class="ach-toggle"
-                @click="showAllAch = !showAllAch"
-              >
-                {{ showAllAch ? t("fiche.reduire") : t("fiche.toutAfficher", { n: steamAch.items.length }) }}
-              </button>
-            </template>
-          </div>
         </div>
 
-        <aside class="stat-card">
-          <template v-if="game.hoursPlayed != null">
-            <div class="stat-play">{{ game.hoursPlayed }}<span> {{ t("fiche.stats.heures") }}</span></div>
-            <div class="stat-label">{{ t("fiche.stats.tempsDeJeu") }}</div>
-          </template>
-          <template v-else-if="game.sizeGb">
-            <div class="stat-play">{{ game.sizeGb }}<span> {{ t("fiche.stats.go") }}</span></div>
-            <div class="stat-label">{{ game.installed ? t("fiche.stats.surDisque") : t("fiche.stats.tailleJeu") }}</div>
-          </template>
-          <template v-else>
-            <div class="stat-play">—</div>
-            <div class="stat-label">{{ t("fiche.stats.aucune") }}</div>
-          </template>
-          <div class="stat-rows">
-            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.statut") }}</span><span class="v">{{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}</span></div>
-            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{{ t("fiche.stats.derniereSession") }}</span><span class="v">{{ game.lastPlayed ?? "—" }}</span></div>
-            <div v-if="playersLabel" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.enCeMoment") }}</span><span class="v">{{ playersLabel }}</span></div>
-            <div v-if="game.developer" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10" /></svg>{{ t("fiche.stats.developpeur") }}</span><span class="v">{{ game.developer }}</span></div>
-            <div v-if="game.year" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></svg>{{ t("fiche.stats.sortie") }}</span><span class="v">{{ game.year }}</span></div>
-            <div v-if="game.genre" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg>{{ t("fiche.stats.genre") }}</span><span class="v">{{ game.genre }}</span></div>
-            <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.taille") }}</span><span class="v">{{ game.sizeGb ? t("fiche.stats.tailleGo", { n: game.sizeGb }) : "—" }}</span></div>
-            <div v-if="showFamily" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.familleSteam") }}</span><span class="v">{{ t("fiche.stats.copies", { n: familyCopies }) }}</span></div>
+        <aside class="detail-aside">
+          <div class="stat-card">
+            <template v-if="grandChiffre">
+              <div class="stat-play" :class="{ texte: 'texte' in grandChiffre }">{{ grandChiffre.valeur }}<span v-if="grandChiffre.unite"> {{ grandChiffre.unite }}</span></div>
+              <div class="stat-label">{{ grandChiffre.libelle }}</div>
+            </template>
+            <div class="stat-rows" :class="{ seules: !grandChiffre }">
+              <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.statut") }}</span><span class="v">{{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}</span></div>
+              <div v-if="game.lastPlayed" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{{ t("fiche.stats.derniereSession") }}</span><span class="v">{{ game.lastPlayed }}</span></div>
+              <div v-if="playersLabel" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.enCeMoment") }}</span><span class="v">{{ playersLabel }}</span></div>
+              <div v-if="game.developer" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10" /></svg>{{ t("fiche.stats.developpeur") }}</span><span class="v">{{ game.developer }}</span></div>
+              <div v-if="game.year" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></svg>{{ t("fiche.stats.sortie") }}</span><span class="v">{{ game.year }}</span></div>
+              <div v-if="game.genre" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18" /></svg>{{ t("fiche.stats.genre") }}</span><span class="v">{{ game.genre }}</span></div>
+              <div v-if="game.sizeGb" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.taille") }}</span><span class="v">{{ taille(game.sizeGb) }}</span></div>
+              <div v-if="showFamily" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.familleSteam") }}</span><span class="v">{{ t("fiche.stats.copies", { n: familyCopies }) }}</span></div>
+            </div>
           </div>
-          <div v-if="steamAch && steamAch.total" class="ach-progress">
-            <div class="top"><span>{{ t("fiche.succes") }}</span><span><b>{{ steamAch.unlocked }} / {{ steamAch.total }} ({{ achPct }}%)</b></span></div>
-            <div class="ach-bar"><div class="ach-fill" :style="{ width: `${achPct}%` }" /></div>
+
+          <div v-if="liens.length" class="liens-card">
+            <span class="liens-titre">{{ t("fiche.liens.titre") }}</span>
+            <button v-for="l in liens" :key="l.cle" class="lien" @click="openExternal(l.url)">{{ l.libelle }} ↗</button>
           </div>
         </aside>
       </div>
@@ -598,7 +694,7 @@ onBeforeUnmount(() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
         <button
-          v-if="realShots.length > 1"
+          v-if="shots.length > 1"
           class="lb-nav prev"
           :aria-label="t('fiche.capturePrecedente')"
           @click.stop="stepShot(-1)"
@@ -607,14 +703,14 @@ onBeforeUnmount(() => {
         </button>
         <img class="lb-img" :src="zoomedShot" alt="" @error="hideBrokenCover" />
         <button
-          v-if="realShots.length > 1"
+          v-if="shots.length > 1"
           class="lb-nav next"
           :aria-label="t('fiche.captureSuivante')"
           @click.stop="stepShot(1)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
         </button>
-        <div v-if="realShots.length > 1" class="lb-count">{{ (zoomIndex ?? 0) + 1 }} / {{ realShots.length }}</div>
+        <div v-if="shots.length > 1" class="lb-count">{{ (zoomIndex ?? 0) + 1 }} / {{ shots.length }}</div>
       </div>
     </template>
   </div>
@@ -650,8 +746,47 @@ onBeforeUnmount(() => {
 }
 :root[data-theme="light"] .detail-back { color: var(--text); border-color: var(--border); background: rgba(255, 255, 255, 0.6); }
 .detail-back svg { width: 17px; height: 17px; }
-.detail-header { position: absolute; bottom: 0; left: 0; right: 0; padding: 0 56px 26px; display: flex; align-items: flex-end; gap: 20px; }
+/* Bannière plus haute quand le bandeau et les notes s'ajoutent sous le titre. */
+.detail-banner.riche { height: 56vh; min-height: 460px; }
+.detail-header {
+  position: absolute; bottom: 0; left: 0; right: 0; padding: 0 56px 22px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.detail-head-row { display: flex; align-items: flex-end; gap: 20px; }
 .detail-title-wrap { flex: 1; min-width: 0; }
+
+/* Bandeau et notes : toujours clair sur sombre, ils sont posés sur l'image du jeu. */
+/* Aussi large que ses cases : deux cases étirées sur tout l'écran flottaient dans le vide. */
+.detail-strip {
+  align-self: flex-start; max-width: 100%;
+  display: flex; flex-wrap: wrap; row-gap: 12px; padding: 12px 6px; border-radius: 14px;
+  background: rgba(12, 8, 18, 0.72); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(10px);
+}
+.strip-cell { flex: 0 1 auto; min-width: 170px; display: flex; flex-direction: column; gap: 3px; padding: 0 24px 0 18px; }
+.strip-cell + .strip-cell { border-left: 1px solid rgba(255, 255, 255, 0.1); }
+.strip-cell.large { min-width: 260px; gap: 6px; }
+.strip-titre { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.6); font-weight: 700; }
+.strip-valeur { font-size: 16px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+.strip-valeur small { font-size: 12px; font-weight: 500; color: rgba(255, 255, 255, 0.6); }
+.strip-detail { font-size: 12px; color: rgba(255, 255, 255, 0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip-barre { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.strip-barre span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), #ffb08a); }
+.detail-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 9px; font-size: 12.5px;
+  background: rgba(12, 8, 18, 0.72); border: 1px solid rgba(255, 255, 255, 0.16); color: #fff; cursor: pointer;
+}
+.badge:hover:not(:disabled):not(.fixe) { border-color: rgba(255, 255, 255, 0.35); }
+.badge.fixe, .badge:disabled { cursor: default; }
+.badge .dim { color: rgba(255, 255, 255, 0.6); }
+.pastille { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.4); flex: none; }
+.pastille.pos { background: #6ee7a8; }
+.pastille.mixte { background: #f0b73f; }
+.pastille.neg { background: #ff8a80; }
+.score { font-family: var(--mono); }
+.score.pos { color: #6ee7a8; }
+.score.mixte { color: #f0b73f; }
+.score.neg { color: #ff8a80; }
 .detail-plat {
   display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px;
   letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.9); margin-bottom: 12px;
@@ -728,7 +863,11 @@ onBeforeUnmount(() => {
   font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint);
   font-weight: 700; margin: 0 0 16px;
 }
-.detail-desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 90ch; }
+.detail-main { min-width: 0; }
+.titre-ligne { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+.titre-ligne h4 { margin: 0; }
+.etiquette { font-size: 11.5px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-dim); }
+.detail-desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 90ch; margin: 0; }
 .detail-desc.dim { color: var(--text-faint); font-style: italic; }
 .sec-count {
   display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 8px;
@@ -746,38 +885,6 @@ onBeforeUnmount(() => {
 .owner-av img, .owner-av-fb { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; }
 .owner-av-fb { background: linear-gradient(140deg, #6b6f7a, #3a3d47); color: #fff; font-size: 11px; font-weight: 700; font-family: var(--mono); }
 .owner-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.shots-wrap { position: relative; }
-.shots { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
-.shots-nav {
-  position: absolute; top: calc(50% - 4px); transform: translateY(-50%); z-index: 6;
-  width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
-  background: rgba(14, 10, 20, 0.62); border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #fff; backdrop-filter: blur(8px); box-shadow: var(--shadow-card); cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.shots-nav:hover { background: rgba(28, 20, 38, 0.9); border-color: rgba(255, 255, 255, 0.4); }
-.shots-nav.prev { left: 8px; }
-.shots-nav.next { right: 8px; }
-.shots-nav svg { width: 21px; height: 21px; }
-.shot {
-  flex: none; width: 300px; aspect-ratio: 16 / 9; border-radius: 13px; border: 1px solid var(--border);
-  box-shadow: var(--shadow-card); position: relative; overflow: hidden;
-}
-.shot::after {
-  content: ""; position: absolute; inset: 0;
-  background: repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 9px);
-  mix-blend-mode: overlay;
-}
-img.shot { object-fit: cover; }
-.shot-btn { padding: 0; cursor: zoom-in; background: none; display: block; }
-.shot-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.shot-btn::after {
-  content: ""; position: absolute; inset: 0;
-  background: repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 9px);
-  mix-blend-mode: overlay; pointer-events: none;
-}
-.shot-btn:hover { border-color: var(--border-strong); }
-
 .lightbox {
   position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 4vh 5vw;
   background: rgba(6, 4, 10, 0.86); backdrop-filter: blur(6px); cursor: zoom-out;
@@ -803,38 +910,14 @@ img.shot { object-fit: cover; }
   font-family: var(--mono); font-size: 12.5px; color: rgba(255, 255, 255, 0.85);
   padding: 5px 12px; border-radius: 99px; background: rgba(14, 10, 20, 0.55); backdrop-filter: blur(8px);
 }
-.ach-list { display: flex; flex-direction: column; gap: 12px; }
-.ach { display: flex; align-items: center; gap: 14px; }
-.ach-badge {
-  width: 44px; height: 44px; border-radius: 10px; flex: none; overflow: hidden;
-  background: var(--surface-2); border: 1px solid var(--border);
-}
-.ach-badge img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* Succès verrouillé : icône désaturée + assombrie, texte atténué. */
-.ach.locked .ach-badge img { filter: grayscale(1) brightness(0.65); }
-.ach.locked .ach-name { color: var(--text-dim); }
-.ach-info { flex: 1; min-width: 0; }
-.ach-name { font-size: 14px; font-weight: 600; }
-.ach-desc {
-  font-size: 12.5px; color: var(--text-dim); margin-top: 1px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ach-pct { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
-.ach-toggle {
-  margin-top: 16px; padding: 8px 14px; border-radius: 9px; border: 1px solid var(--border);
-  background: var(--surface); color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
-}
-.ach-toggle:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); }
-
-.stat-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px;
-  position: sticky; top: 24px;
-}
+.detail-aside { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px; }
 .stat-play {
   font-family: var(--mono); font-size: 44px; font-weight: 700; letter-spacing: -0.03em; color: var(--text);
   line-height: 1; font-variant-numeric: tabular-nums;
 }
 .stat-play span { font-size: 20px; color: var(--text-faint); }
+.stat-play.texte { font-size: 34px; white-space: nowrap; }
 .stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); font-weight: 700; margin-top: 8px; }
 .stat-rows { margin-top: 22px; display: flex; flex-direction: column; }
 .stat-row {
@@ -843,16 +926,19 @@ img.shot { object-fit: cover; }
 }
 .stat-row .k { color: var(--text-dim); display: flex; align-items: center; gap: 9px; }
 .stat-row .k svg { width: 15px; height: 15px; color: var(--text-faint); }
-.stat-row .v { font-family: var(--mono); color: var(--text); font-variant-numeric: tabular-nums; }
-.ach-progress { margin-top: 22px; }
-.ach-progress .top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 9px; }
-.ach-progress .top b { font-family: var(--mono); }
-.ach-bar { height: 7px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
-.ach-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), #ffb08a); }
-
+.stat-row .v { font-family: var(--mono); color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+.stat-rows.seules { margin-top: 0; }
+.stat-rows.seules .stat-row:first-child { border-top: none; padding-top: 0; }
+.liens-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 16px 18px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+}
+.liens-titre { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); font-weight: 700; }
+.liens-card .lien { background: none; border: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; text-align: left; }
+.liens-card .lien:hover { text-decoration: underline; }
 @media (max-width: 980px) {
   .detail-body { grid-template-columns: minmax(0, 1fr); }
-  .stat-card { position: static; }
+  .detail-aside { position: static; }
 }
 @media (max-width: 820px) {
   .detail-header, .detail-body { padding-left: 22px; padding-right: 22px; }

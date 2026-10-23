@@ -131,6 +131,11 @@ export interface Game {
   year?: number;
   genre?: string;
   description?: string;
+  /**
+   * D'où vient la description : `locale`, une source sûre interrogée dans la langue de
+   * l'interface (Steam, GOG, Epic) ; `igdb`, l'anglais d'IGDB. Absent : inconnu.
+   */
+  descriptionSource?: "locale" | "igdb";
   achievements?: { unlocked: number; total: number };
   /** Masqué par l'utilisateur (liste d'exclusion). */
   hidden?: boolean;
@@ -314,8 +319,35 @@ export interface StoreSteamSheet {
     notes: string[];
   } | null;
   dlc: number[];
+  /** Nombre total de contenus additionnels (`dlc` n'en garde que 12). */
+  dlcTotal: number;
   site?: string | null;
+  metacritic?: number | null;
+  metacriticUrl?: string | null;
+  /** Le résumé de la page Steam, en texte simple. */
+  resume?: string | null;
   description: StoreBloc[];
+}
+
+/** Une annonce officielle de l'éditeur sur Steam (`metadata/possede.rs`). */
+export interface GameNews {
+  titre: string;
+  url: string;
+  /** Unix en secondes. */
+  date: number;
+  /** Début du texte, dans la langue de l'éditeur (Steam ne traduit pas les annonces). */
+  extrait: string;
+  image?: string | null;
+}
+
+/** Ce que Steam ajoute à la fiche d'un jeu de la bibliothèque (commande `owned_game_sheet`). */
+export interface OwnedGameSheet {
+  appId: number;
+  steam?: StoreSteamSheet | null;
+  actualites: GameNews[];
+  /** Contenus additionnels à montrer (6 au plus), possédés d'abord. Vide hors Steam. */
+  dlc: number[];
+  dlcPossedes: number[];
 }
 
 /** Bas de la fiche produit, chargé à la demande (`store_game_extras`). */
@@ -380,12 +412,19 @@ export interface SteamProfile {
 
 /** Un succès Steam d'un jeu (commande Rust `steam_achievements`). */
 export interface SteamAchievement {
+  /** Vide pour un succès caché encore verrouillé (`cache`). */
   name: string;
   description: string;
   icon: string;
   unlocked: boolean;
-  /** Texte de déblocage localisé (ex. « Débloqué le 30 aout 2023 à 10h28 »), si débloqué. */
-  unlockedAt?: string | null;
+  /** Date de déblocage, Unix en secondes. */
+  unlockedAt?: number | null;
+  /** Part des joueurs qui l'ont débloqué, en %. */
+  rarete?: number | null;
+  /** Avancement d'un succès à paliers pas encore débloqué. */
+  progression?: { actuel: number; max: number } | null;
+  /** Succès caché encore verrouillé : ni nom ni description, comme sur Steam. */
+  cache: boolean;
 }
 
 /** Les succès d'un jeu Steam pour l'utilisateur (commande Rust `steam_achievements`). */

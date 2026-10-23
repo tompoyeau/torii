@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreShelfItem, StoreShelfKind, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, OwnedGameSheet, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreShelfItem, StoreShelfKind, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 import { avatarFictif } from "./covers";
 import { t } from "../i18n";
 
@@ -798,6 +798,19 @@ export async function steamAchievements(appid: string): Promise<SteamAchievement
 }
 
 /**
+ * Ce que Steam ajoute à la fiche d'un jeu de la bibliothèque, si le jeu y est relié avec
+ * certitude. `steamAppid` : le jeu est aussi possédé sur Steam (succès et contenus
+ * additionnels possédés n'ont de sens que là). `null` hors Tauri, faute de lien ou de réponse.
+ */
+export async function ownedGameSheet(game: Game, steamAppid: string | null): Promise<OwnedGameSheet | null> {
+  return await call<OwnedGameSheet | null>(
+    "owned_game_sheet",
+    { id: game.id, title: game.title, platform: game.platform, steamAppid: steamAppid ? Number(steamAppid) : null },
+    null,
+  );
+}
+
+/**
  * Nombre de joueurs en ce moment sur un jeu Steam (`appid`), via l'API publique.
  * `null` si indisponible ; valeur fictive hors Tauri (preview).
  */
@@ -885,13 +898,14 @@ function mockAchievements(): SteamAchievements {
     `https://shared.fastly.steamstatic.com/community_assets/images/apps/1086940/${h}.jpg`;
   return {
     unlocked: 3,
-    total: 8,
+    total: 6,
     items: [
-      { name: t("demo.succes.nom1"), description: t("demo.succes.desc1"), icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: true, unlockedAt: t("demo.succes.date1") },
-      { name: t("demo.succes.nom2"), description: t("demo.succes.desc2"), icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: true, unlockedAt: t("demo.succes.date2") },
-      { name: t("demo.succes.nom3"), description: t("demo.succes.desc3"), icon: icon("3c6d05ff648b66925238963a658ee307e31ff870"), unlocked: true, unlockedAt: t("demo.succes.date3") },
-      { name: t("demo.succes.nom4"), description: t("demo.succes.desc4"), icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: false, unlockedAt: null },
-      { name: t("demo.succes.nom5"), description: t("demo.succes.desc5"), icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: false, unlockedAt: null },
+      { name: t("demo.succes.nom3"), description: t("demo.succes.desc3"), icon: icon("3c6d05ff648b66925238963a658ee307e31ff870"), unlocked: true, unlockedAt: 1706275860, rarete: 41.2, cache: false },
+      { name: t("demo.succes.nom2"), description: t("demo.succes.desc2"), icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: true, unlockedAt: 1700378640, rarete: 63.5, cache: false },
+      { name: t("demo.succes.nom1"), description: t("demo.succes.desc1"), icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: true, unlockedAt: 1693384080, rarete: 87.9, cache: false },
+      { name: t("demo.succes.nom5"), description: t("demo.succes.desc5"), icon: icon("628cdbbfd2e731735e4817252ce6633bf3bcd8ed"), unlocked: false, rarete: 36.4, progression: { actuel: 3, max: 10 }, cache: false },
+      { name: t("demo.succes.nom4"), description: t("demo.succes.desc4"), icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: false, rarete: 23.1, cache: false },
+      { name: "", description: "", icon: icon("0cb31fd9ec036550a374aa702a37464a98da3bfa"), unlocked: false, rarete: 4.7, cache: true },
     ],
   };
 }

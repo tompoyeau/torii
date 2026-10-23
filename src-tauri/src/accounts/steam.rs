@@ -126,6 +126,16 @@ fn fetch_userdata(cookie: &str) -> Option<Value> {
     serde_json::from_str(&body).ok()
 }
 
+/// Appids possédés par le compte — jeux ET contenus additionnels, contrairement à la page
+/// communautaire des jeux. `None` si la session ne répond pas : une session expirée
+/// renvoie une liste vide, qu'on ne confond pas avec « rien possédé ».
+pub fn owned_appids(cookie: &str) -> Option<std::collections::HashSet<u64>> {
+    let json = fetch_userdata(cookie)?;
+    let ids: std::collections::HashSet<u64> =
+        json["rgOwnedApps"].as_array()?.iter().filter_map(Value::as_u64).collect();
+    (!ids.is_empty()).then_some(ids)
+}
+
 /// Bibliothèque possédée via la **page communautaire des jeux** (XML) : uniquement
 /// des jeux (pas de DLC), avec leurs noms et le temps de jeu, en un seul appel.
 /// Nécessite le cookie de session du domaine `steamcommunity.com`.
@@ -406,15 +416,29 @@ fn parse_profile(steam_id: &str, html: &str) -> Option<SteamProfile> {
 }
 
 /// Un succès Steam (débloqué ou non), pour la fiche détail.
-#[derive(serde::Serialize, Clone, Debug)]
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Achievement {
+    /// Vide pour un succès caché encore verrouillé (voir `cache`).
     pub name: String,
     pub description: String,
     pub icon: String,
     pub unlocked: bool,
-    /// Texte de déblocage localisé (ex. « Débloqué le 30 aout 2023 à 10h28 »), si débloqué.
-    pub unlocked_at: Option<String>,
+    /// Date de déblocage (secondes Unix), si débloqué : l'interface la formate dans sa langue.
+    pub unlocked_at: Option<i64>,
+    /// Part des joueurs du jeu qui l'ont débloqué, en %.
+    pub rarete: Option<f32>,
+    /// Avancement d'un succès à paliers pas encore débloqué (« 184 / 250 »).
+    pub progression: Option<Progression>,
+    /// Succès caché encore verrouillé : Steam n'en montre ni le nom ni la description, et
+    /// la fiche non plus — c'est tout l'intérêt d'un succès caché.
+    pub cache: bool,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+pub struct Progression {
+    pub actuel: u32,
+    pub max: u32,
 }
 
 /// Les succès d'un jeu Steam pour l'utilisateur, envoyés au frontend.
@@ -426,33 +450,25 @@ pub struct GameAchievements {
     pub items: Vec<Achievement>,
 }
 
-/// Succès Steam d'un jeu pour l'utilisateur connecté, par **scrape de la page perso**
-/// des succès (`ISteamUserStats/GetPlayerAchievements` exige une clé API ; le WebAPIToken
-/// ne marche PAS pour `ISteamUserStats`). Donne nom, description, icône et date de
-/// déblocage par succès. Le total exact (succès cachés inclus) vient du % global public.
-/// Nécessite le cookie de session (couvre aussi les profils privés, c'est le nôtre).
-/// `None` = jeu sans succès ou page indisponible.
+/// Succès Steam d'un jeu pour l'utilisateur connecté, lus sur sa **page perso** des succès
+/// (`ISteamUserStats/GetPlayerAchievements` exige une clé API ; le WebAPIToken ne marche
+/// PAS pour `ISteamUserStats`). Nécessite le cookie de session (couvre aussi les profils
+/// privés, c'est le nôtre). `None` = jeu sans succès, page indisponible ou session expirée.
+///
+/// 🔑 UN SEUL APPEL DONNE TOUT. Depuis octobre 2026, la page est une application React
+/// rendue côté serveur : elle embarque la liste des succès (noms, descriptions, icônes),
+/// ceux du joueur (date de déblocage, avancement) ET la part des joueurs qui ont débloqué
+/// chacun. L'ancienne page en HTML (`achieveRow`) n'existe plus — la lire renvoyait une
+/// liste vide, et la fiche n'affichait plus aucun succès.
 pub fn achievements(steam_id: &str, appid: u64, cookie: &str) -> Option<GameAchievements> {
-    // ⚠️ Les noms et descriptions de succès sont traduits par Steam : ils suivent donc la
-    // langue de l'interface, comme les descriptions de jeux.
+    // ⚠️ Les noms et descriptions sont traduits par Steam : ils suivent la langue de
+    // l'interface. La nouvelle page ignore le paramètre `?l=` et lit la langue dans le
+    // cookie `Steam_Language`.
     let langue = crate::locale::steam_langue();
-    let url = format!(
-        "https://steamcommunity.com/profiles/{steam_id}/stats/{appid}/achievements/?l={langue}"
-    );
-    let html = fetch_text(&url, cookie, "https://steamcommunity.com/")?;
-    let items = parse_achievements(&html);
-    if items.is_empty() {
-        return None;
-    }
-    let unlocked = items.iter().filter(|a| a.unlocked).count() as u32;
-    // Total exact (succès cachés non listés inclus) via le % global public, sans clé.
-    // Replis : la barre de progression de la page, puis le nombre de succès affichés.
-    let total = global_total(appid)
-        .filter(|&t| t >= unlocked)
-        .or_else(|| total_from_bar(&html, unlocked))
-        .unwrap_or(0)
-        .max(items.len() as u32);
-    Some(GameAchievements { unlocked, total, items })
+    let url = format!("https://steamcommunity.com/profiles/{steam_id}/stats/{appid}/achievements/");
+    let cookie = format!("{cookie}; Steam_Language={langue}");
+    let html = fetch_text(&url, &cookie, "https://steamcommunity.com/")?;
+    lire_page_succes(&html, appid)
 }
 
 /// Nombre de joueurs en ce moment sur un jeu Steam, via `GetNumberOfCurrentPlayers`
@@ -469,77 +485,94 @@ pub fn current_players(appid: u64) -> Option<u32> {
         .map(|n| n as u32)
 }
 
-/// Total des succès du jeu via `GetGlobalAchievementPercentagesForApp` (public, sans clé).
-fn global_total(appid: u64) -> Option<u32> {
-    let url = format!(
-        "https://api.steampowered.com/ISteamUserStats/\
-         GetGlobalAchievementPercentagesForApp/v2/?gameid={appid}"
-    );
-    let n = get_json(&url)?["achievementpercentages"]["achievements"]
-        .as_array()?
-        .len();
-    (n > 0).then_some(n as u32)
+/// Les données que la page embarque pour son rendu (`<script id="valve-ssr-data">`).
+fn donnees_ssr(html: &str) -> Option<Value> {
+    let debut = html.find("id=\"valve-ssr-data\"")?;
+    let corps = &html[debut..];
+    let corps = &corps[corps.find('>')? + 1..];
+    serde_json::from_str(&corps[..corps.find("</script>")?]).ok()
 }
 
-/// Total dérivé de la largeur de la barre de progression (« width: X% ») + le nb débloqué.
-fn total_from_bar(html: &str, unlocked: u32) -> Option<u32> {
-    let pct: f64 = slice_between(html, "achieveBarProgress\" style=\"width: ", "%")?
-        .trim()
-        .parse()
-        .ok()?;
-    (pct > 0.0).then(|| (unlocked as f64 * 100.0 / pct).round() as u32)
-}
-
-/// Parse les blocs `achieveRow` de la page perso des succès. Débloqués d'abord
-/// (ordre de la page conservé), puis verrouillés.
-fn parse_achievements(html: &str) -> Vec<Achievement> {
-    let mut out = Vec::new();
-    for chunk in html.split("class=\"achieveRow\"").skip(1) {
-        // Steam ajoute une ligne récapitulative « N succès cachés restants »
-        // (`achieveHiddenBox`, sans icône) : elle n'est pas un vrai succès → ignorée.
-        if chunk.contains("achieveHiddenBox") {
-            continue;
-        }
-        let name = match slice_between(chunk, "<h3 class=\"ellipsis\">", "</h3>") {
-            Some(n) => decode_entities(n),
-            None => continue,
-        };
-        if name.is_empty() {
-            continue;
-        }
-        let icon = slice_between(chunk, "src=\"", "\"").unwrap_or_default().to_string();
-        let description = slice_between(chunk, "<h5>", "</h5>")
-            .map(decode_entities)
-            .unwrap_or_default();
-        let unlocked = chunk.contains("achieveUnlockTime");
-        let unlocked_at = unlocked
-            .then(|| slice_between(chunk, "achieveUnlockTime\">", "</div>").map(clean_unlock_time))
-            .flatten()
-            .filter(|s| !s.is_empty());
-        out.push(Achievement { name, description, icon, unlocked, unlocked_at });
+/// Lit les succès dans les requêtes embarquées par la page : la liste (`schema`), ceux
+/// du joueur (`user_achievements`) et leur rareté (`globalpercentages`), tous indexés
+/// par une même clé interne.
+///
+/// Ordre : débloqués du plus récent au plus ancien, puis les verrouillés du plus courant
+/// au plus rare (les plus faciles à aller chercher d'abord), puis les cachés.
+fn lire_page_succes(html: &str, appid: u64) -> Option<GameAchievements> {
+    let ssr = donnees_ssr(html)?;
+    // Session expirée : la page est servie anonyme. On rend la main pour que l'appelant
+    // régénère le cookie, plutôt que de montrer un joueur qui n'aurait rien débloqué.
+    if ssr["UserConfig"]["logged_in"].as_bool() != Some(true) {
+        return None;
     }
-    out.sort_by_key(|a| !a.unlocked); // stable : débloqués (false) avant verrouillés (true)
-    out
-}
-
-/// Nettoie le contenu du bloc de date : retire les balises (`<br/>`) et normalise les espaces.
-fn clean_unlock_time(s: &str) -> String {
-    let mut txt = String::new();
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => txt.push(c),
+    let requetes: Value = serde_json::from_str(ssr["renderContext"]["queryData"].as_str()?).ok()?;
+    let (mut schema, mut joueur, mut parts) = (None, None, None);
+    for q in requetes["queries"].as_array()? {
+        let cle = &q["queryKey"];
+        if cle[0].as_str() != Some("achievements") || cle[1].as_u64() != Some(appid) {
+            continue;
+        }
+        let donnees = &q["state"]["data"];
+        match cle[2].as_str() {
+            Some("schema") => schema = Some(donnees),
+            Some("user_achievements") => joueur = Some(&donnees["achievements"]),
+            Some("globalpercentages") => parts = Some(&donnees["percentages"]),
             _ => {}
         }
     }
-    txt.split_whitespace().collect::<Vec<_>>().join(" ")
+
+    let mut items = Vec::new();
+    for groupe in schema?["groups"].as_array()? {
+        for s in groupe["achievements"].as_array().into_iter().flatten() {
+            if s["archived"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(cle) = s["internal_key"].as_u64().map(|k| k.to_string()) else {
+                continue;
+            };
+            let moi = joueur.map(|j| &j[&cle]);
+            let unlocked = moi.and_then(|m| m["unlocked"].as_bool()).unwrap_or(false);
+            let cache = !unlocked && s["hidden"].as_bool() == Some(true);
+            let texte = |champ: &str| if cache { String::new() } else { s[champ].as_str().unwrap_or_default().to_string() };
+            let icone = if unlocked { "icon_achieved" } else { "icon_unachieved" };
+            let max = s["max_progress"].as_u64().filter(|m| *m > 1);
+            let progression = match (unlocked, max, moi.and_then(|m| m["progress"].as_u64())) {
+                (false, Some(max), Some(actuel)) => Some(Progression { actuel: actuel.min(max) as u32, max: max as u32 }),
+                _ => None,
+            };
+            items.push(Achievement {
+                name: texte("name"),
+                description: texte("description"),
+                icon: s[icone].as_str().or(s["icon_achieved"].as_str()).unwrap_or_default().to_string(),
+                unlocked,
+                unlocked_at: unlocked.then(|| moi.and_then(|m| m["unlock_time"].as_i64())).flatten(),
+                rarete: parts.and_then(|p| p[&cle].as_f64()).map(|p| p as f32),
+                progression,
+                cache,
+            });
+        }
+    }
+    if items.is_empty() {
+        return None;
+    }
+    items.sort_by(|a, b| {
+        let rang = |x: &Achievement| if x.unlocked { 0 } else if x.cache { 2 } else { 1 };
+        rang(a).cmp(&rang(b)).then_with(|| {
+            if a.unlocked {
+                b.unlocked_at.cmp(&a.unlocked_at)
+            } else {
+                b.rarete.unwrap_or(-1.0).total_cmp(&a.rarete.unwrap_or(-1.0))
+            }
+        })
+    });
+    let unlocked = items.iter().filter(|a| a.unlocked).count() as u32;
+    Some(GameAchievements { unlocked, total: items.len() as u32, items })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_webapi_token, parse_achievements, parse_friends_page, parse_profile};
+    use super::{extract_webapi_token, parse_friends_page, parse_profile};
 
     #[test]
     fn extracts_webapi_token() {
@@ -573,46 +606,66 @@ mod tests {
         assert_eq!(f[1].game_name, None);
     }
 
-    // Bloc calqué sur la vraie page perso des succès : 1 débloqué, 1 verrouillé,
-    // et la ligne récapitulative « succès cachés » (à ignorer).
+    /// Page perso des succès telle que Steam la sert depuis octobre 2026 : les requêtes
+    /// React sont embarquées, sérialisées DANS une chaîne du JSON de rendu.
+    fn page_succes(connecte: bool, cle_appid: u64) -> String {
+        let requetes = serde_json::json!({ "queries": [
+            { "queryKey": ["achievements", cle_appid, "schema"], "state": { "data": { "groups": [
+                { "achievements": [
+                    { "internal_key": 1, "name": "Fuite de l'Avernus", "description": "Prendre le \"nautiloïde\".", "hidden": false, "archived": false,
+                      "icon_achieved": "https://cdn/a1.jpg", "icon_unachieved": "https://cdn/g1.jpg" },
+                    { "internal_key": 2, "name": "Talent Show", "description": "Facile.", "hidden": false, "archived": false,
+                      "icon_achieved": "https://cdn/a2.jpg", "icon_unachieved": "https://cdn/g2.jpg" },
+                    { "internal_key": 3, "name": "Secret", "description": "Divulgâcheur.", "hidden": true, "archived": false,
+                      "icon_achieved": "https://cdn/a3.jpg", "icon_unachieved": "https://cdn/g3.jpg" },
+                    { "internal_key": 4, "name": "Rare", "description": "Fermer 250 failles.", "hidden": false, "archived": false,
+                      "icon_achieved": "https://cdn/a4.jpg", "icon_unachieved": "https://cdn/g4.jpg", "min_progress": 0, "max_progress": 250 },
+                    { "internal_key": 5, "name": "Retiré", "description": "", "hidden": false, "archived": true,
+                      "icon_achieved": "https://cdn/a5.jpg", "icon_unachieved": "https://cdn/g5.jpg" },
+                    { "internal_key": 6, "name": "Ancien", "description": "Le premier.", "hidden": false, "archived": false,
+                      "icon_achieved": "https://cdn/a6.jpg", "icon_unachieved": "https://cdn/g6.jpg" }
+                ] }
+            ] } } },
+            { "queryKey": ["achievements", cle_appid, "user_achievements", "7656"], "state": { "data": { "achievements": {
+                "1": { "internal_key": 1, "unlocked": true, "unlock_time": 1_700_000_000 },
+                "4": { "internal_key": 4, "progress": 184 },
+                "6": { "internal_key": 6, "unlocked": true, "unlock_time": 1_600_000_000 }
+            } } } },
+            { "queryKey": ["achievements", cle_appid, "globalpercentages"], "state": { "data": { "percentages": {
+                "1": 12.5, "2": 64.0, "3": 3.0, "4": 2.4, "6": 90.0
+            } } } }
+        ] });
+        let ssr = serde_json::json!({
+            "UserConfig": { "logged_in": connecte },
+            "renderContext": { "queryData": requetes.to_string() },
+        });
+        format!("<html><script type=\"application/json\" id=\"valve-ssr-data\" nonce=\"x\">{ssr}</script></html>")
+    }
+
     #[test]
-    fn parses_achievements_page() {
-        let html = r##"
-        <div role="button" class="achieveRow">
-            <div class="achieveImgHolder"><img src="https://cdn/apps/1/aaa.jpg"></div>
-            <div class="achieveTxtHolder"><div class="achieveTxt">
-                <h3 class="ellipsis">Fuite de l&#39;Avernus</h3>
-                <h5>Prendre le contrôle du nautilo&amp;ide.</h5>
-            </div>
-            <div class="achieveUnlockTime">
-                Débloqué le 30 aout 2023 à 10h28<br/>
-            </div></div>
-        </div>
-        <div role="button" class="achieveRow">
-            <div class="achieveImgHolder"><img src="https://cdn/apps/1/bbb.jpg"></div>
-            <div class="achieveTxtHolder"><div class="achieveTxt">
-                <h3 class="ellipsis">Talent Show</h3>
-                <h5>Encore verrouillé.</h5>
-            </div></div>
-        </div>
-        <div role="button" class="achieveRow">
-            <div class="achieveHiddenBox"><span>+9</span></div>
-            <div class="achieveTxtHolder"><div class="achieveTxt">
-                <h3 class="ellipsis">9 succès cachés restants</h3>
-                <h5>Révélés une fois débloqués</h5>
-            </div></div>
-        </div>"##;
-        let a = parse_achievements(html);
-        assert_eq!(a.len(), 2); // la ligne "cachés restants" est ignorée
-        // Débloqué d'abord (tri stable).
-        assert_eq!(a[0].name, "Fuite de l'Avernus"); // entité &#39; décodée
-        assert_eq!(a[0].description, "Prendre le contrôle du nautilo&ide."); // &amp; décodé
-        assert_eq!(a[0].icon, "https://cdn/apps/1/aaa.jpg");
-        assert!(a[0].unlocked);
-        assert_eq!(a[0].unlocked_at.as_deref(), Some("Débloqué le 30 aout 2023 à 10h28"));
-        assert_eq!(a[1].name, "Talent Show");
-        assert!(!a[1].unlocked);
-        assert_eq!(a[1].unlocked_at, None);
+    fn lit_la_page_des_succes() {
+        let a = super::lire_page_succes(&page_succes(true, 1086940), 1086940).unwrap();
+        assert_eq!((a.unlocked, a.total), (2, 5), "le succès archivé ne compte pas");
+        let noms: Vec<&str> = a.items.iter().map(|s| s.name.as_str()).collect();
+        // Débloqués du plus récent au plus ancien, verrouillés du plus courant au plus rare, cachés à la fin.
+        assert_eq!(noms, ["Fuite de l'Avernus", "Ancien", "Talent Show", "Rare", ""]);
+        assert_eq!(a.items[0].description, "Prendre le \"nautiloïde\".");
+        assert_eq!(a.items[0].icon, "https://cdn/a1.jpg");
+        assert_eq!(a.items[0].unlocked_at, Some(1_700_000_000));
+        assert_eq!(a.items[0].rarete, Some(12.5));
+        assert_eq!(a.items[2].icon, "https://cdn/g2.jpg", "un verrouillé prend l'icône grise");
+        assert_eq!(a.items[2].unlocked_at, None);
+        assert_eq!(a.items[3].progression, Some(super::Progression { actuel: 184, max: 250 }));
+        let cache = &a.items[4];
+        assert!(cache.cache && cache.description.is_empty(), "un succès caché ne se dévoile pas");
+        assert_eq!(cache.rarete, Some(3.0));
+    }
+
+    #[test]
+    fn une_page_anonyme_ou_d_un_autre_jeu_ne_donne_rien() {
+        assert!(super::lire_page_succes(&page_succes(false, 1086940), 1086940).is_none(), "session expirée");
+        assert!(super::lire_page_succes(&page_succes(true, 1086940), 620).is_none(), "autre jeu");
+        assert!(super::lire_page_succes("<html>ancienne page</html>", 620).is_none());
     }
 
     // SSR calqué sur une vraie page profil Steam.
@@ -679,6 +732,12 @@ pub fn owned_games(api_key: &str, steam_id: &str) -> Vec<GameDto> {
 /// communautaire → le `Set-Cookie` renvoie le `steamLoginSecure` frais.
 pub fn refresh_web_cookie(refresh_token: &str, steam_id: &str) -> Option<String> {
     refresh_domain_cookie(refresh_token, steam_id, "steamcommunity.com")
+}
+
+/// Le même, pour le **magasin** : `dynamicstore/userdata` traite le cookie de la
+/// communauté en visiteur anonyme (liste des possessions vide), vérifié le 23/10/2026.
+pub fn refresh_store_cookie(refresh_token: &str, steam_id: &str) -> Option<String> {
+    refresh_domain_cookie(refresh_token, steam_id, "store.steampowered.com")
 }
 
 /// Régénère un cookie `steamLoginSecure` frais pour un **domaine** donné (communautaire ou

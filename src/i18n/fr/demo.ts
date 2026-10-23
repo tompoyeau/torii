@@ -34,18 +34,14 @@ export default {
     tir: "Tir",
   },
 
-  // Succès fictifs de la fiche d'exemple (Baldur's Gate 3). Les dates imitent le texte
-  // que Steam renvoie lui-même dans cette langue.
+  // Succès fictifs de la fiche d'exemple (Baldur's Gate 3).
   succes: {
     nom1: "Fuite de l'Avernus",
     desc1: "Prendre le contrôle du nautiloïde et vous enfuir des Enfers.",
-    date1: "Débloqué le 30 août 2023 à 10h28",
     nom2: "De Charybde en Scylla",
     desc2: "Quitter l'acte 1 pour vous rendre dans un lieu bien plus sombre.",
-    date2: "Débloqué le 19 nov. 2023 à 8h24",
     nom3: "La cité vous attend",
     desc3: "Quitter l'acte 2 pour rejoindre la Porte de Baldur.",
-    date3: "Débloqué le 26 janv. 2024 à 14h31",
     nom4: "Tout est bien qui finit bien",
     desc4: "Terminer le jeu.",
     nom5: "L'appel du sang",

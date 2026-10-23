@@ -161,6 +161,96 @@ pub fn oublier(dir: &Path, id: &str) {
     if cache.remove(id).is_some() {
         save_cache(dir, &cache);
     }
+    let mut liens = load_liens(dir);
+    if liens.remove(id).is_some() {
+        save_liens(dir, &liens);
+    }
+}
+
+/// Lien d'un jeu acheté hors de Steam vers sa fiche Steam (id du jeu → lien).
+type Liens = HashMap<String, Lien>;
+
+#[derive(Serialize, Deserialize)]
+struct Lien {
+    appid: Option<u64>,
+    /// Quand le lien a été établi (horodatage Unix).
+    t: u64,
+}
+
+/// Un lien trouvé se revérifie au bout d'un mois, une absence au bout d'une semaine.
+const DUREE_LIEN: u64 = 30 * 86_400;
+
+fn liens_file(dir: &Path) -> PathBuf {
+    dir.join("igdb_steam_cache_v1.json")
+}
+
+fn load_liens(dir: &Path) -> Liens {
+    std::fs::read_to_string(liens_file(dir))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn save_liens(dir: &Path, liens: &Liens) {
+    if let Ok(json) = serde_json::to_string(liens) {
+        let _ = std::fs::write(liens_file(dir), json);
+    }
+}
+
+/// L'appid Steam d'un jeu acheté ailleurs (Control sur Epic), d'après IGDB. Mémorisé par
+/// jeu ; rien n'est retenu d'une panne.
+///
+/// 🔑 MÊMES EXIGENCES QUE LA DESCRIPTION, ET UNE DE PLUS. Le nom doit correspondre
+/// exactement, nom principal ou alternatif (comme `name_meta`), sans repli sur `search` ;
+/// DLC et éditions sont écartés. Et un seul identifiant Steam doit ressortir : IGDB
+/// connaît deux « Hades », dont un seul est sur Steam — c'est celui-là ; deux jeux du même
+/// nom tous deux sur Steam ne donnent aucun lien.
+pub fn steam_appid(id: &str, titre: &str, dir: &Path) -> Option<u64> {
+    let mut liens = load_liens(dir);
+    let t = maintenant();
+    if let Some(l) = liens.get(id) {
+        let duree = if l.appid.is_some() { DUREE_LIEN } else { DUREE_ABSENT };
+        if t.saturating_sub(l.t) < duree {
+            return l.appid;
+        }
+    }
+    let appid = chercher_steam(titre)?;
+    liens.insert(id.to_string(), Lien { appid, t });
+    save_liens(dir, &liens);
+    appid
+}
+
+/// `None` : panne. `Some(None)` : IGDB a répondu, pas de lien sûr.
+fn chercher_steam(titre: &str) -> Option<Option<u64>> {
+    let clean = clean_title(titre);
+    if clean.is_empty() {
+        return Some(None);
+    }
+    let body = format!(
+        "fields name, alternative_names.name, parent_game, version_parent, external_games.uid, \
+         external_games.external_game_source; \
+         where name ~ \"{clean}\" | alternative_names.name ~ \"{clean}\"; limit 10;"
+    );
+    match query("games", &body) {
+        Reponse::Corps(Value::Array(jeux)) => Some(appid_unique(&jeux, &norm(&clean))),
+        Reponse::Corps(_) => Some(None),
+        Reponse::Panne | Reponse::Limite => None,
+    }
+}
+
+fn appid_unique(jeux: &[Value], cible: &str) -> Option<u64> {
+    let ids: HashSet<u64> = jeux
+        .iter()
+        .filter(|g| g["parent_game"].is_null() && g["version_parent"].is_null() && nom_correspond(g, cible))
+        .flat_map(|g| g["external_games"].as_array().into_iter().flatten())
+        .filter(|e| e["external_game_source"].as_u64() == Some(STEAM_SOURCE as u64))
+        .filter_map(|e| e["uid"].as_str()?.parse().ok())
+        .collect();
+    if ids.len() == 1 {
+        ids.into_iter().next()
+    } else {
+        None
+    }
 }
 
 /// Ce qu'a donné un appel au proxy.
@@ -872,6 +962,35 @@ mod tests {
         let nu = serde_json::json!({ "name": "Hadès" });
         assert!(nom_correspond(&nu, &norm("HADÈS")));
         assert!(!nom_correspond(&nu, &norm("Hadès II")));
+    }
+
+    /// Réponses réelles d'IGDB (23/10/2026), réduites aux champs lus.
+    #[test]
+    fn le_lien_steam_exige_un_identifiant_unique() {
+        let steam = |uid: &str| serde_json::json!({ "uid": uid, "external_game_source": 1 });
+        let gog = serde_json::json!({ "uid": "1207664663", "external_game_source": 5 });
+        // Deux « Hades » chez IGDB : un seul est sur Steam, c'est lui.
+        let hades = [
+            serde_json::json!({ "name": "Hades", "external_games": [gog.clone()] }),
+            serde_json::json!({ "name": "Hades", "external_games": [steam("1145360"), gog.clone()] }),
+        ];
+        assert_eq!(appid_unique(&hades, &norm("Hades")), Some(1145360));
+        // Deux jeux du même nom, tous deux sur Steam : aucun lien plutôt qu'un mauvais.
+        let doublon = [
+            serde_json::json!({ "name": "Control", "external_games": [steam("870780")] }),
+            serde_json::json!({ "name": "Control", "external_games": [steam("123")] }),
+        ];
+        assert_eq!(appid_unique(&doublon, &norm("Control")), None);
+        // Le DLC et l'édition ne prêtent pas leur identifiant au jeu.
+        let fortnite = [
+            serde_json::json!({ "name": "Fortnite", "external_games": [] }),
+            serde_json::json!({ "name": "Fortnite", "parent_game": 1905, "external_games": [steam("1")] }),
+            serde_json::json!({ "name": "Fortnite", "version_parent": 1905, "external_games": [steam("2")] }),
+        ];
+        assert_eq!(appid_unique(&fortnite, &norm("Fortnite")), None);
+        // Un nom voisin ne compte pas.
+        let voisin = [serde_json::json!({ "name": "CONTROL Resonant", "external_games": [steam("9")] })];
+        assert_eq!(appid_unique(&voisin, &norm("Control")), None);
     }
 
     /// Un titre localisé et son équivalent anglais ne doivent plus se manquer pour un

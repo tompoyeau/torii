@@ -90,6 +90,10 @@ async function ensureEnriched(id: string) {
      */
     description:
       (meta.localized ? meta.description : null) ?? cur.description ?? meta.description ?? undefined,
+    // La fiche signale une description restée en anglais (IGDB) : il faut donc savoir d'où
+    // vient celle qu'on garde. Une devinette par titre n'est ni l'une ni l'autre.
+    descriptionSource:
+      meta.localized && meta.description ? "locale" : cur.description ? cur.descriptionSource : undefined,
     developer: cur.developer ?? meta.developer ?? undefined,
     year: cur.year ?? meta.year ?? undefined,
     coverUrl: cur.coverUrl ?? meta.coverUrl ?? undefined,
@@ -125,6 +129,14 @@ async function refreshInfo(id: string) {
       genre: igdb?.genre ?? meta.genre ?? cur.genre,
       description:
         (meta.localized ? meta.description : null) ?? igdb?.description ?? meta.description ?? cur.description,
+      descriptionSource:
+        meta.localized && meta.description
+          ? "locale"
+          : igdb?.description
+            ? "igdb"
+            : meta.description
+              ? undefined
+              : cur.descriptionSource,
       developer: igdb?.developer ?? meta.developer ?? cur.developer,
       year: igdb?.year ?? meta.year ?? cur.year,
       coverUrl: r.coverUrl ?? cur.coverUrl ?? igdb?.coverUrl ?? undefined,
@@ -194,6 +206,7 @@ async function fillIgdb() {
         ...g,
         genre: g.genre ?? u.genre ?? undefined,
         description: g.description ?? u.description ?? undefined,
+        descriptionSource: g.description ? g.descriptionSource : u.description ? "igdb" : undefined,
         developer: g.developer ?? u.developer ?? undefined,
         year: g.year ?? u.year ?? undefined,
         // Jaquette/hero : launcher d'abord, IGDB en repli.

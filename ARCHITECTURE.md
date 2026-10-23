@@ -127,6 +127,11 @@ cargo run --example community        # jeux possédés + famille (via session st
 - **`dynamicstore/userdata` renvoie une 302** qui pose les cookies `steamCountry`/`Steam_Language`
   requis sur la requête rejouée. Avec `ureq::builder().redirects(0)`, la 302 revient en **`Ok`**
   (statut 3xx, pas `Err`) → lire `resp.all("set-cookie")`, réinjecter, rejouer (cf. `fetch_text`).
+  ⚠️ Il exige un cookie **du magasin** : celui de la communauté y passe pour anonyme
+  (`rgOwnedApps` vide). Voir « Fiche d'un jeu de la bibliothèque ».
+- **La page perso des succès est une application React depuis octobre 2026** : plus de
+  `achieveRow` à lire, tout est dans le JSON `valve-ssr-data` (voir « Fiche d'un jeu de la
+  bibliothèque »). Sa langue suit le cookie `Steam_Language`, plus `?l=`.
 - **`ISteamApps/GetAppList` keyless est RETIRÉ** (404/403). Ne pas s'en servir pour les noms.
 - **`?xml=1` de la page de jeux est MORT** (302 login, même profil public). La page React
   n'embarque que ~8 jeux récents. **Solution retenue** : extraire le JWT `WebAPIToken` de la page
@@ -1537,6 +1542,12 @@ fin et son code promo.
   liste lisible d'`appdetails`) ; l'interface en tire le nom avec `Intl.DisplayNames`.
 - **Captures** : Steam sert chaque capture en `.600x338.jpg` et `.1920x1080.jpg` en
   suffixant le nom de fichier ; l'original pèse 1 à 2 Mo.
+- **Taille des médias** (`StoreSheetMedia`, commun aux deux fiches) : la grande vue est
+  bornée (860 px de large, la moitié de la hauteur de fenêtre environ) et les miniatures
+  remplissent la place libre à sa droite, en galerie ; sous 720 px de large, elles
+  repassent en bande dessous. ⚠️ Pas d'`overflow: hidden` sur une miniature de la galerie :
+  dans une grille, un élément qui rogne son contenu perd la hauteur minimale de son
+  `aspect-ratio`, et les rangées s'écrasent (miniatures superposées).
 - **Classification** : celle de la région (PEGI en Europe, USK en Allemagne, ESRB en
   Amérique du Nord…), avec repli sur PEGI puis ESRB. Descripteurs PEGI traduits côté
   interface (`lib/boutique.ts::descripteur`), les autres affichés tels quels.
@@ -1552,6 +1563,62 @@ fin et son code promo.
 - **Pas encore** (demande de déployer le proxy) : historique des prix sur 12 mois
   (`games/history/v2`) et « Inclus dans un abonnement » (`games/subs/v1`).
 - Exemple : `cargo run --example fiche [id ITAD] [région] [langue]`.
+
+## Fiche d'un jeu de la bibliothèque (`metadata/possede.rs`, `GameDetail.vue`)
+
+Sous le titre, un **bandeau** (temps de jeu et sa source, dernière session, taille,
+succès avec barre) puis les **notes** (Steam, Metacritic, classification). Dessous : médias
+(le même lecteur que la Boutique), **actualités** de l'éditeur, **succès** (les plus rares
+qu'on a, les prochains à viser, la liste triée par rareté), **contenus additionnels**
+possédés ou non (avec leur meilleur prix), À propos + description complète + « En bref »,
+configuration requise si le jeu n'est pas installé, amis qui l'ont. À droite : la carte de
+stats et les liens (page Steam, site officiel, communauté).
+
+- 🔑 **UNE SEULE FICHE, QUI RACCOURCIT.** Les launchers ne donnent pas tous autant que
+  Steam : chaque bloc n'apparaît que si sa donnée existe, sans case vide ni « — ». Trois cas
+  validés en maquette : Hunt: Showdown (Steam, tout), Control (Epic, données publiques de
+  Steam par un lien sûr, sans succès ni contenus possédés), League of Legends (Riot, IGDB
+  seul : captures, description anglaise étiquetée « en anglais · IGDB »).
+- **Commande `owned_game_sheet`** : la fiche Steam (`fiche::fiche`, la même que la
+  Boutique) et les annonces (`ISteamNews/GetNewsForApp`, filtre `feeds=
+  steam_community_announcements` : sans lui, le fil mêle les articles de presse de
+  PCGamesN & co). Sans clé, hors du quota du comparateur. Gardée pour la session
+  (`useFichePossede`, par région + langue) ; une réponse vide n'est pas retenue.
+- 🔑 **LE LIEN AVEC STEAM N'EST JAMAIS DEVINÉ PAR LE TITRE.** Chercher « Control » sur
+  Steam ramène CONTROL Resonant ; « League of Legends » ramène CONVERGENCE: A League of
+  Legends Story (relevé dans `metadata_cache_v5.json`). Liens admis : jeu aussi possédé
+  sur Steam (l'interface passe l'appid de la source Steam), table Battle.net, ou
+  `igdb::steam_appid` — nom EXACT (ou alias), DLC et éditions écartés, et un seul appid
+  Steam parmi les candidats (IGDB a deux « Hades », un seul sur Steam : lien ; deux jeux
+  du même nom sur Steam : aucun lien). Mémorisé dans `igdb_steam_cache_v1.json` (30 j, une
+  semaine pour « aucun lien », rien sur une panne ; « Actualiser les infos » l'oublie).
+- **Succès et contenus possédés : seulement pour un jeu possédé SUR Steam.** Pour un jeu
+  Epic relié à Steam, « En bref » tait aussi « N succès Steam » et « Steam Cloud ».
+- **Contenus additionnels** : `appdetails` donne la liste complète (`FicheSteam.dlc_tous`,
+  82 pour Hunt), croisée avec les appids possédés ; 6 au plus, possédés d'abord, « Tout
+  voir sur Steam » au-delà. Prix des non-possédés via `store_game_extras` (tags vides →
+  pas de jeux similaires), demandés quand la section arrive à l'écran : seul appel de la
+  fiche au comparateur.
+- ⚠️ **Possessions = `dynamicstore/userdata` avec un cookie du MAGASIN.** Le cookie de la
+  communauté (que `refresh_community_cookie` range aussi dans `steam_login_secure`) y est
+  traité en visiteur anonyme : `rgOwnedApps` vide (vérifié le 23/10/2026). On régénère donc
+  un cookie pour `store.steampowered.com` (`steam::refresh_store_cookie`, non enregistré),
+  et la liste est gardée 10 min en mémoire (`accounts::steam_owned_appids`).
+- ⚠️ **Page des succès refaite par Steam (octobre 2026)** : application React rendue côté
+  serveur, plus de `achieveRow` — l'ancien lecteur ne trouvait plus rien et la fiche
+  n'affichait plus aucun succès. `<script id="valve-ssr-data">` contient un JSON dont
+  `renderContext.queryData` est une **chaîne** JSON de requêtes : `["achievements", appid,
+  "schema"]` (noms, descriptions, icônes, `hidden`, `archived`, `max_progress`),
+  `[…, "user_achievements", steamid]` (`unlocked`, `unlock_time`, `progress`) et
+  `[…, "globalpercentages"]` (rareté), toutes indexées par `internal_key`. Un seul appel,
+  rareté comprise. La langue suit le cookie `Steam_Language` (le paramètre `?l=` est
+  ignoré). `UserConfig.logged_in` faux = session expirée → l'appelant régénère le cookie.
+  Un succès caché encore verrouillé n'est ni nommé ni décrit, comme sur Steam.
+- **Description** : `Game.descriptionSource` dit d'où vient le texte gardé (`locale` : Steam,
+  GOG ou Epic dans la langue de l'interface ; `igdb`). Ordre : source sûre traduite → résumé
+  Steam d'un jeu relié → IGDB, étiquetée quand elle reste en anglais.
+- **Démo web** : pas de fiche Steam (la commande n'existe pas hors Tauri) ; succès fictifs
+  avec rareté. `StoreSheetBlocs` et `StoreSheetConfig` sont partagés avec la Boutique.
 
 ## Prochaines étapes
 

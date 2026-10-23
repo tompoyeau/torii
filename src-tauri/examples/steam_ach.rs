@@ -1,4 +1,4 @@
-//! Valide la récupération des succès Steam (scrape page perso + total % global) contre
+//! Valide la récupération des succès Steam (page perso, rareté comprise) contre
 //! le vrai compte. `cargo run --example steam_ach` (depuis src-tauri).
 
 fn main() {
@@ -31,8 +31,8 @@ fn main() {
                 for it in a.items.iter().take(4) {
                     let mark = if it.unlocked { "✔" } else { "·" };
                     let icon_ok = it.icon.starts_with("http");
-                    println!("  {mark} {}  [icon:{}]  {}",
-                        it.name, icon_ok, it.unlocked_at.as_deref().unwrap_or(""));
+                    println!("  {mark} {}  [icon:{}]  débloqué {:?} · rareté {:?} %",
+                        it.name, icon_ok, it.unlocked_at, it.rarete);
                     if !it.description.is_empty() {
                         println!("      {}", it.description);
                     }

@@ -7,6 +7,9 @@ pub mod secrets;
 pub mod steam;
 
 use crate::models::GameDto;
+use std::collections::HashSet;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use std::path::Path;
 
 /// Régénère un **cookie web Steam frais** via le refresh token (~200 j) quand la session
@@ -146,6 +149,38 @@ pub fn steam_set_wishlist(config_dir: &Path, appid: u64, add: bool) -> bool {
         Some(token) => steam::set_wishlist(appid, add, &token).unwrap_or(false),
         None => false,
     }
+}
+
+/// Appids possédés sur Steam, contenus additionnels compris — pour dire, sur la fiche d'un
+/// jeu, quelles extensions on a déjà. Gardés 10 minutes en mémoire : la fiche les consulte
+/// à chaque ouverture, et la liste ne change qu'avec un achat.
+///
+/// ⚠️ IL FAUT UN COOKIE DU MAGASIN. Celui de la communauté — que `refresh_community_cookie`
+/// range aussi dans `steam_login_secure` — y est traité en visiteur anonyme. Faute de
+/// cookie stocké valable, on en régénère un pour le magasin, sans l'enregistrer : le
+/// refresh token suffit à le refaire.
+pub fn steam_owned_appids(config_dir: &Path) -> Option<HashSet<u64>> {
+    static MEMOIRE: Mutex<Option<(Instant, HashSet<u64>)>> = Mutex::new(None);
+    const DUREE: Duration = Duration::from_secs(600);
+    if let Some((quand, ids)) = MEMOIRE.lock().ok()?.as_ref() {
+        if quand.elapsed() < DUREE {
+            return Some(ids.clone());
+        }
+    }
+    let creds = secrets::load(config_dir);
+    let ids = creds
+        .steam_login_secure
+        .as_deref()
+        .and_then(steam::owned_appids)
+        .or_else(|| {
+            let steam_id = creds.steam_id.clone().or_else(steam::detect_steam_id)?;
+            let magasin = steam::refresh_store_cookie(creds.steam_refresh_token.as_deref()?, &steam_id)?;
+            steam::owned_appids(&magasin)
+        })?;
+    if let Ok(mut m) = MEMOIRE.lock() {
+        *m = Some((Instant::now(), ids.clone()));
+    }
+    Some(ids)
 }
 
 /// Récupère les jeux possédés via les comptes connectés (Steam, GOG et Epic).

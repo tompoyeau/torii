@@ -2,6 +2,7 @@ pub mod fiche;
 pub mod gog_store;
 pub mod igdb;
 pub mod instant_gaming;
+pub mod possede;
 pub mod steam_art;
 pub mod steam_store;
 pub mod store;

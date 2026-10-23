@@ -31,13 +31,10 @@ const en: Forme<typeof fr> = {
   succes: {
     nom1: "Escape From Avernus",
     desc1: "Take control of the nautiloid and escape the Hells.",
-    date1: "Unlocked Aug 30, 2023 @ 10:28am",
     nom2: "Out of the Frying Pan",
     desc2: "Leave Act One for somewhere far darker.",
-    date2: "Unlocked Nov 19, 2023 @ 8:24am",
     nom3: "The City Awaits",
     desc3: "Leave Act Two and head for Baldur's Gate.",
-    date3: "Unlocked Jan 26, 2024 @ 2:31pm",
     nom4: "All's Well That Ends Well",
     desc4: "Finish the game.",
     nom5: "The Call of Blood",

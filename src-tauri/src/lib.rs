@@ -1039,6 +1039,33 @@ async fn steam_achievements(
         .map_err(|e| e.to_string())
 }
 
+/// Fiche d'un jeu de la bibliothèque : ce que Steam en dit (médias, notes, langues,
+/// annonces de l'éditeur…), si le jeu y est relié avec certitude. `steam_appid` : le jeu
+/// est aussi dans la bibliothèque Steam ; à défaut, on cherche un lien sûr (voir
+/// `metadata::possede`). Les contenus additionnels possédés ne sont lus que dans ce
+/// premier cas : ceux d'un jeu acheté ailleurs s'achètent ailleurs. `None` : pas de lien.
+#[tauri::command]
+async fn owned_game_sheet(
+    app: tauri::AppHandle,
+    id: String,
+    title: String,
+    platform: String,
+    steam_appid: Option<u64>,
+) -> Result<Option<metadata::possede::FichePossede>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let appid = steam_appid.or_else(|| metadata::possede::lien_steam(&id, &title, &platform, &dir))?;
+        Some(std::thread::scope(|s| {
+            let possedes = s.spawn(|| steam_appid.and_then(|_| accounts::steam_owned_appids(&dir)));
+            let mut fiche = metadata::possede::fiche_possede(appid, &dir);
+            metadata::possede::marquer_dlc(&mut fiche, possedes.join().ok().flatten().as_ref());
+            fiche
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Nombre de joueurs en ce moment sur un jeu Steam (`appid`), via l'API publique
 /// (sans clé, sans session). `None` si indisponible.
 #[tauri::command]
@@ -2131,6 +2158,7 @@ pub fn run() {
             steam_me,
             steam_achievements,
             steam_current_players,
+            owned_game_sheet,
             wishlist_all,
             wishlist_ids,
             wishlist_add,

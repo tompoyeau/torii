@@ -52,7 +52,17 @@ pub struct FicheSteam {
     pub configuration: Option<Configuration>,
     /// Appids des contenus additionnels (12 au plus).
     pub dlc: Vec<u64>,
+    /// Nombre total de contenus additionnels (Hunt: Showdown en compte plus de 80).
+    pub dlc_total: u32,
+    /// Tous les contenus additionnels : la fiche d'un jeu possédé y cherche ceux qu'on a.
+    #[serde(skip)]
+    pub dlc_tous: Vec<u64>,
     pub site: Option<String>,
+    /// Note Metacritic que Steam affiche, avec le lien vers la page de la critique.
+    pub metacritic: Option<u32>,
+    pub metacritic_url: Option<String>,
+    /// Le résumé de la page Steam (deux ou trois phrases, en texte simple).
+    pub resume: Option<String>,
     pub description: Vec<Bloc>,
 }
 
@@ -351,11 +361,20 @@ fn lire_details(f: &mut FicheSteam, d: &Value, region: &str) {
         })
         .unwrap_or_default();
     f.succes = d["achievements"]["total"].as_u64().filter(|n| *n > 0).map(|n| n as u32);
-    f.dlc = d["dlc"]
+    f.dlc_tous = d["dlc"]
         .as_array()
-        .map(|l| l.iter().filter_map(Value::as_u64).take(12).collect())
+        .map(|l| l.iter().filter_map(Value::as_u64).collect())
         .unwrap_or_default();
+    f.dlc = f.dlc_tous.iter().copied().take(12).collect();
+    f.dlc_total = f.dlc_tous.len() as u32;
     f.site = d["website"].as_str().filter(|s| s.starts_with("https://")).map(String::from);
+    f.metacritic = d["metacritic"]["score"].as_u64().filter(|n| (1..=100).contains(n)).map(|n| n as u32);
+    f.metacritic_url = f
+        .metacritic
+        .and(d["metacritic"]["url"].as_str())
+        .filter(|u| u.starts_with("https://www.metacritic.com/"))
+        .map(String::from);
+    f.resume = d["short_description"].as_str().map(texte_brut).filter(|s| !s.is_empty());
     f.classification = classification(&d["ratings"], region);
     f.configuration = configuration(&d["pc_requirements"]);
     f.description = blocs(d["about_the_game"].as_str().unwrap_or_default());
@@ -548,7 +567,7 @@ fn blocs(html: &str) -> Vec<Bloc> {
 }
 
 /// Une image n'est gardée que si elle vient des serveurs d'images de Steam, en https.
-fn image_steam(url: &str) -> bool {
+pub(super) fn image_steam(url: &str) -> bool {
     let Some(reste) = url.strip_prefix("https://") else { return false };
     let hote = reste.split('/').next().unwrap_or_default();
     hote.ends_with(".steamstatic.com") || hote == "steamcdn-a.akamaihd.net"
@@ -667,6 +686,24 @@ fn decoder(s: &str) -> String {
 /// Espaces repliés et retirés aux deux bouts (le HTML ne compte pas les espaces).
 fn espaces(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Le texte seul d'un fragment HTML : balises retirées, entités décodées, espaces repliés.
+pub(super) fn texte_brut(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut dans_balise = false;
+    for c in html.chars() {
+        match c {
+            '<' => dans_balise = true,
+            '>' if dans_balise => {
+                dans_balise = false;
+                out.push(' ');
+            }
+            _ if !dans_balise => out.push(c),
+            _ => {}
+        }
+    }
+    espaces(&decoder(&out))
 }
 
 #[cfg(test)]

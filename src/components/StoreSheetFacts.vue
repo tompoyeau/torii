@@ -13,6 +13,11 @@ const props = defineProps<{
   joueursJour?: number | null;
   joueursRecord?: number | null;
   suivis?: number | null;
+  /**
+   * Jeu de la bibliothèque possédé ailleurs que sur Steam (Control sur Epic) : ses succès
+   * et sa sauvegarde ne sont pas ceux de Steam, on ne les annonce pas.
+   */
+  horsSteam?: boolean;
 }>();
 
 /** Fonctionnalités Steam, par famille (identifiants des catégories du magasin Steam). */
@@ -48,7 +53,9 @@ const cartes = computed<Carte[]>(() => {
   const out: Carte[] = [];
   if (s) {
     const modes = libelles(MODES);
-    const extras = [s.succes ? t("boutique.produit.succes", { n: s.succes }) : "", ...libelles([CLOUD])].filter(Boolean);
+    const extras = props.horsSteam
+      ? []
+      : [s.succes ? t("boutique.produit.succes", { n: s.succes }) : "", ...libelles([CLOUD])].filter(Boolean);
     if (modes.length) out.push({ cle: "modes", titre: t("boutique.produit.modes"), valeur: modes.slice(0, 3).join(" · "), detail: extras.join(" · ") });
     const manette = libelles(MANETTE);
     if (manette.length) out.push({ cle: "manette", titre: t("boutique.produit.manette"), valeur: manette[0], detail: libelles(MANETTES_PRECISES).join(", ") });

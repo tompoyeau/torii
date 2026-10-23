@@ -7,8 +7,12 @@ import type { StoreTrailer } from "../types";
 import StoreTrailerPlayer from "./StoreTrailerPlayer.vue";
 
 /**
- * Médias de la fiche produit : une grande vue et la bande des miniatures, bandes-annonces
- * d'abord, puis captures. Cliquer une grande capture ouvre la visionneuse du parent.
+ * Médias de la fiche produit : une grande vue et les miniatures, bandes-annonces d'abord,
+ * puis captures. Cliquer une grande capture ouvre la visionneuse du parent.
+ *
+ * La grande vue est bornée en taille ; les miniatures occupent la place libre à sa droite,
+ * en galerie. Quand la colonne est trop étroite pour ça, elles repassent en bande
+ * défilante sous la vue.
  *
  * Une bande-annonce au repos montre son aperçu muet en boucle (ou son affiche, si
  * l'utilisateur a demandé moins d'animations) sous un bouton de lecture. Le clic lance
@@ -66,7 +70,24 @@ watch(
   },
 );
 
-/* Bande de miniatures défilante. */
+/**
+ * Galerie à droite, ou bande dessous ? Selon la largeur de la section : en dessous de
+ * 720 px, il ne resterait pas assez de place à côté de la vue pour une miniature lisible.
+ */
+const LARGEUR_GALERIE = 720;
+const racine = ref<HTMLElement | null>(null);
+const empile = ref(false);
+watch(racine, (el, _avant, nettoyer) => {
+  if (!el || typeof ResizeObserver === "undefined") return;
+  const obs = new ResizeObserver(([e]) => {
+    empile.value = e.contentRect.width < LARGEUR_GALERIE;
+    void nextTick(mesurer);
+  });
+  obs.observe(el);
+  nettoyer(() => obs.disconnect());
+});
+
+/* Bande de miniatures défilante (mode empilé). */
 const bandeEl = ref<HTMLElement | null>(null);
 const debut = ref(true);
 const fin = ref(true);
@@ -82,7 +103,13 @@ function defiler(sens: number) {
 </script>
 
 <template>
-  <section v-if="total" class="medias" :aria-label="t('boutique.produit.medias')">
+  <section
+    v-if="total"
+    ref="racine"
+    class="medias"
+    :class="{ empile, seule: total < 2 }"
+    :aria-label="t('boutique.produit.medias')"
+  >
     <div class="vue">
       <template v-if="bande">
         <!-- La vraie bande-annonce, avec le son et les commandes de Torii. -->
@@ -132,10 +159,12 @@ function defiler(sens: number) {
     </div>
 
     <div v-if="total > 1" class="bande-wrap">
-      <button v-if="!debut" class="defile prec" :aria-label="t('fiche.capturesPrecedentes')" @click="defiler(-1)">
+      <button v-if="empile && !debut" class="defile prec" :aria-label="t('fiche.capturesPrecedentes')" @click="defiler(-1)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
       </button>
-      <div ref="bandeEl" class="bande no-scrollbar" @scroll.passive="mesurer">
+      <!-- En galerie, la barre de défilement (aux couleurs de Torii) dit qu'il y a d'autres
+           miniatures plus bas ; en bande, ce sont les flèches. -->
+      <div ref="bandeEl" class="bande" :class="{ 'no-scrollbar': empile }" @scroll.passive="mesurer">
         <button
           v-for="(b, i) in bandesAnnonces"
           :key="`b${i}`"
@@ -161,7 +190,7 @@ function defiler(sens: number) {
           <img :src="c.mini" alt="" loading="lazy" @load="mesurer" />
         </button>
       </div>
-      <button v-if="!fin" class="defile suiv" :aria-label="t('fiche.capturesSuivantes')" @click="defiler(1)">
+      <button v-if="empile && !fin" class="defile suiv" :aria-label="t('fiche.capturesSuivantes')" @click="defiler(1)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
       </button>
     </div>
@@ -169,11 +198,17 @@ function defiler(sens: number) {
 </template>
 
 <style scoped>
-.medias { display: flex; flex-direction: column; gap: 12px; }
+/* Taille bornée : sur toute la largeur de la colonne, la vidéo occupait presque tout
+   l'écran. Au plus 860 px de large, jamais plus haute que la moitié de la fenêtre, et
+   toujours 150 px de laissés à la galerie de miniatures, à droite. */
+.medias { display: flex; gap: 12px; }
 .vue {
-  position: relative; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden;
-  border: 1px solid var(--border); background: #0e0a14;
+  position: relative; flex: none; width: min(calc(100% - 162px), 860px, calc(48vh * 16 / 9));
+  aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: #0e0a14;
 }
+.medias.seule .vue { width: min(100%, 860px, calc(48vh * 16 / 9)); }
+.medias.empile { flex-direction: column; gap: 10px; }
+.medias.empile .vue { width: min(100%, calc(48vh * 16 / 9)); }
 .vue > video, .vue > img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .grande { display: block; width: 100%; height: 100%; padding: 0; border: none; background: none; cursor: zoom-in; }
 .grande img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -184,8 +219,8 @@ function defiler(sens: number) {
 }
 button.lecture:hover { transform: scale(1.06); background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .lecture svg { width: 30px; height: 30px; margin-left: 3px; }
-.lecture.petite { width: 30px; height: 30px; pointer-events: none; }
-.lecture.petite svg { width: 14px; height: 14px; margin-left: 2px; }
+.lecture.petite { width: 26px; height: 26px; pointer-events: none; }
+.lecture.petite svg { width: 12px; height: 12px; margin-left: 2px; }
 .legende {
   position: absolute; inset: auto 0 0 0; padding: 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   background: linear-gradient(0deg, rgba(8, 5, 14, 0.88), rgba(8, 5, 14, 0)); color: #fff; z-index: 1;
@@ -193,13 +228,24 @@ button.lecture:hover { transform: scale(1.06); background: var(--accent); color:
 .nom { font-size: 13.5px; font-weight: 600; color: rgba(255, 255, 255, 0.92); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .legende .btn-ghost { margin-left: auto; }
 
-.bande-wrap { position: relative; }
-.bande { display: flex; gap: 10px; overflow-x: auto; padding: 3px; }
+/* Galerie à droite : aussi haute que la vue (la position absolue l'empêche de l'agrandir),
+   défilante au-delà. */
+.bande-wrap { position: relative; flex: 1; min-width: 0; }
+.bande {
+  position: absolute; inset: 0; overflow: hidden auto; padding: 3px 6px 3px 3px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); align-content: start; gap: 8px;
+}
+/* ⚠️ PAS D'`overflow: hidden` ICI. Dans une grille, un élément qui rogne son contenu perd
+   la hauteur minimale que lui donne son `aspect-ratio` : les rangées s'écrasaient et les
+   miniatures se chevauchaient. L'arrondi est porté par l'image elle-même. */
 .mini {
-  position: relative; flex: none; width: 150px; aspect-ratio: 16 / 9; padding: 0; border-radius: 9px; overflow: hidden;
+  position: relative; aspect-ratio: 16 / 9; padding: 0; border-radius: 8px;
   border: 2px solid transparent; background: var(--surface-2); opacity: 0.7; transition: opacity 0.15s, border-color 0.15s;
 }
-.mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Bande sous la vue, quand la colonne est trop étroite pour la galerie. */
+.empile .bande { position: static; display: flex; gap: 10px; overflow: auto hidden; padding: 3px; }
+.empile .mini { flex: none; width: 120px; }
+.mini img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 6px; }
 .mini:hover { opacity: 1; }
 .mini.actif { opacity: 1; border-color: var(--accent); }
 .defile {

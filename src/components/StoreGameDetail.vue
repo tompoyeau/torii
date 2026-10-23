@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { usePossession } from "../composables/usePossession";
-import { usePreferences } from "../composables/usePreferences";
 import { useStore } from "../composables/useStore";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
@@ -15,6 +14,8 @@ import { deviseAttendue, instantGamingPertinent } from "../i18n/regions";
 import type { StorePrice, StoreReview } from "../types";
 import StorePossede from "./StorePossede.vue";
 import StoreSheetBas from "./StoreSheetBas.vue";
+import StoreSheetBlocs from "./StoreSheetBlocs.vue";
+import StoreSheetConfig from "./StoreSheetConfig.vue";
 import StoreSheetFacts from "./StoreSheetFacts.vue";
 import StoreSheetMedia from "./StoreSheetMedia.vue";
 import StoreSheetVerdict from "./StoreSheetVerdict.vue";
@@ -24,12 +25,6 @@ const { product, productLoading, productIndisponible, selectedGameId, closeProdu
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 const { possession, idBibliotheque } = usePossession();
 const { openGame } = useUi();
-const { prefs } = usePreferences();
-const reduit = computed(
-  () =>
-    prefs.reduceMotion ||
-    (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches),
-);
 
 const open = computed(() => selectedGameId.value != null);
 useScrollLock(open);
@@ -99,10 +94,9 @@ function stepZoom(delta: number) {
   zoom.value = (zoom.value + delta + n) % n;
 }
 
-// Une autre fiche s'ouvre (un DLC, un jeu similaire) : on repart du haut, description repliée.
-const descriptionOuverte = ref(false);
+// Une autre fiche s'ouvre (un DLC, un jeu similaire) : on repart du haut (la description
+// complète se replie d'elle-même, son composant étant indexé sur le jeu).
 watch(selectedGameId, () => {
-  descriptionOuverte.value = false;
   zoom.value = null;
   if (panneau.value) panneau.value.scrollTop = 0;
 });
@@ -210,26 +204,7 @@ const detailOffre = (p: StorePrice) =>
               <h4>{{ t("fiche.apropos") }}</h4>
               <p v-if="product.description" class="desc">{{ product.description }}</p>
               <p v-else class="desc dim">{{ t("fiche.aucuneDescription") }}</p>
-              <template v-if="product.steam?.description.length">
-                <button class="lien-texte" :aria-expanded="descriptionOuverte" @click="descriptionOuverte = !descriptionOuverte">
-                  {{ descriptionOuverte ? t("boutique.produit.masquerDescription") : t("boutique.produit.descriptionComplete") }}
-                  {{ descriptionOuverte ? "▴" : "▾" }}
-                </button>
-                <!-- Blocs déjà nettoyés côté Rust (`metadata/fiche.rs`) : du texte et des
-                     adresses d'images Steam, jamais de HTML. -->
-                <div v-if="descriptionOuverte" class="blocs">
-                  <template v-for="(b, i) in product.steam.description" :key="i">
-                    <h3 v-if="b.genre === 'h'">{{ b.texte }}</h3>
-                    <p v-else-if="b.genre === 'li'" class="puce">{{ b.texte }}</p>
-                    <p v-else-if="b.genre === 'p'">{{ b.texte }}</p>
-                    <img v-else-if="b.genre === 'img' && b.url" :src="b.url" alt="" loading="lazy" @error="hideBroken" />
-                    <template v-else-if="b.genre === 'video' && b.url">
-                      <img v-if="reduit && b.affiche" :src="b.affiche" alt="" loading="lazy" @error="hideBroken" />
-                      <video v-else-if="!reduit" :src="b.url" :poster="b.affiche ?? undefined" muted loop autoplay playsinline preload="none" />
-                    </template>
-                  </template>
-                </div>
-              </template>
+              <StoreSheetBlocs v-if="product.steam" :key="product.gameId" :blocs="product.steam.description" />
             </section>
 
             <StoreSheetFacts
@@ -242,21 +217,7 @@ const detailOffre = (p: StorePrice) =>
 
             <StoreSheetBas :key="`dlc-${product.gameId}`" class="sd-sec" :jeu="product" partie="dlc" />
 
-            <section v-if="product.steam?.configuration" class="sd-sec">
-              <h4>{{ t("boutique.produit.configuration") }}</h4>
-              <div class="config">
-                <div v-for="col in (['minimale', 'recommandee'] as const)" :key="col" class="config-col">
-                  <template v-if="product.steam.configuration[col].length">
-                    <span class="config-titre">{{ t(`boutique.produit.${col}`) }}</span>
-                    <div v-for="l in product.steam.configuration[col]" :key="l.libelle" class="config-ligne">
-                      <span class="config-libelle">{{ l.libelle }}</span>
-                      <span>{{ l.valeur }}</span>
-                    </div>
-                  </template>
-                </div>
-              </div>
-              <p v-for="n in product.steam.configuration.notes" :key="n" class="config-note">{{ n }}</p>
-            </section>
+            <StoreSheetConfig v-if="product.steam?.configuration" class="sd-sec" :configuration="product.steam.configuration" />
 
             <StoreSheetBas :key="`sim-${product.gameId}`" class="sd-sec" :jeu="product" partie="similaires" />
           </template>
@@ -426,21 +387,6 @@ const detailOffre = (p: StorePrice) =>
 
 .lien-texte { background: none; border: none; padding: 0; margin-top: 10px; color: var(--accent); font-size: 13px; font-weight: 600; }
 .lien-texte:hover { text-decoration: underline; }
-/* Description complète : des blocs de texte et des images, jamais de HTML. */
-.blocs { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; max-width: 90ch; }
-.blocs h3 { margin: 10px 0 0; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; color: var(--text); }
-.blocs p { margin: 0; font-size: 15px; line-height: 1.7; color: var(--text-dim); white-space: pre-line; }
-.blocs p.puce { padding-left: 18px; position: relative; }
-.blocs p.puce::before { content: "•"; position: absolute; left: 4px; color: var(--accent); }
-.blocs img, .blocs video { max-width: 100%; border-radius: 10px; display: block; }
-
-.config { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.config-col { display: flex; flex-direction: column; gap: 9px; padding: 16px 18px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
-.config-col:empty { display: none; }
-.config-titre { font-weight: 800; font-size: 14px; color: var(--text); }
-.config-ligne { display: flex; gap: 12px; font-size: 13px; color: var(--text-dim); }
-.config-libelle { flex: 0 0 120px; color: var(--text-faint); }
-.config-note { margin: 10px 0 0; font-size: 12px; color: var(--text-faint); line-height: 1.5; }
 
 .sd-prices { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px; }
 .best { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px; }
