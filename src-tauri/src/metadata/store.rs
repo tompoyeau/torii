@@ -566,7 +566,7 @@ pub fn game(game_id: &str, config_dir: &Path) -> Option<StoreGame> {
         // plutôt que de laisser croire à une panne.
         let ig = s.spawn(|| {
             crate::locale::zone_euro()
-                .then(|| super::instant_gaming::price(&title))
+                .then(|| super::instant_gaming::price(&title, app_id))
                 .flatten()
         });
         // Enrichissement descriptif via IGDB (cache disque partagé).

@@ -17,6 +17,25 @@ fn get_json(url: &str) -> Option<Value> {
         .ok()
 }
 
+/// Le nom d'un jeu sur Steam, en anglais (réponse `basic` d'`appdetails`, légère).
+///
+/// Sert quand un autre service nomme le jeu autrement : le comparateur appelle « Dying
+/// Light: The Beast Restored Land » ce que Steam et Instant Gaming appellent « Dying Light:
+/// The Beast ».
+pub fn nom(appid: u64) -> Option<String> {
+    let url = format!(
+        "https://store.steampowered.com/api/appdetails?appids={appid}&filters=basic&l=english&cc={CATALOGUE_STEAM}"
+    );
+    let root = get_json(&url)?;
+    // Même prudence qu'`appdetails` : la réponse peut revenir sous un autre appid.
+    let entry = root.get(appid.to_string()).or_else(|| {
+        let obj = root.as_object()?;
+        (obj.len() == 1).then(|| obj.values().next()).flatten()
+    })?;
+    entry["success"].as_bool().filter(|s| *s)?;
+    entry["data"]["name"].as_str().map(str::trim).filter(|n| !n.is_empty()).map(String::from)
+}
+
 /// Récupère les métadonnées d'un jeu Steam via l'API publique `appdetails`.
 pub fn appdetails(appid: &str) -> Option<GameMeta> {
     // 🔑 `l=` traduit description, genres et date de sortie ; `cc=` cale le pays sur

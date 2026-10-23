@@ -560,6 +560,13 @@ arrivait en anglais. Source par source, ce qui est francisable et ce qui ne l'es
   simple remplacement `/en/` → `/fr/` : IG redirige (301) le slug anglais vers son
   équivalent français. Le suffixe « - PC (Steam) » et le marqueur `addtocart` sont
   identiques sur les deux sites, le parseur et le test de stock ne bougent pas.
+  🔑 **Second nom : celui de Steam.** Le titre cherché vient du comparateur, qui ne nomme
+  pas toujours le jeu comme IG : « Dying Light: The Beast Restored Land » contre « Dying
+  Light: The Beast » — et chercher le premier chez IG ne ramène RIEN. Faute de résultat,
+  `instant_gaming::price` réessaie avec le nom anglais du jeu sur Steam
+  (`steam_store::nom`, `appdetails` en `filters=basic`), toujours en titre exact. Mesuré le
+  23/10/2026 sur 60 jeux payants populaires : 4 noms différents, 1 offre IG perdue
+  (Crimson Desert), récupérée par ce repli. Aucun appel de plus quand le premier nom suffit.
 - **IGDB** : ⚠️ **ne localise RIEN** — ni les résumés, ni les genres. Les descriptions IGDB
   restent donc en anglais. Les **genres**, eux, sont traduits par une table
   (`genre_fr`) : leur vocabulaire est **fermé** (23 entrées relevées sur `/genres`), donc

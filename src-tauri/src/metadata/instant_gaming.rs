@@ -90,25 +90,19 @@ fn parse_price(raw: &str) -> Option<f64> {
 
 /// Récupère la meilleure offre Instant Gaming pour un jeu (édition PC, titre exact).
 /// `None` si rien de fiable (jamais d'erreur remontée à l'appelant).
-pub fn price(title: &str) -> Option<IgOffer> {
-    let want = key(title);
-    if want.len() < 3 {
-        return None;
-    }
-    // En français : le site FRANÇAIS d'abord, c'est là qu'on veut envoyer l'utilisateur.
-    // Repli sur l'anglais quand IG a traduit le titre du jeu et que le rapprochement échoue
-    // (« Shadow of the Erdtree » y devient « L'ombre de l'Arbre-monde ») — sans ce repli,
-    // franciser les liens ferait DISPARAÎTRE des offres.
-    //
-    // En anglais : le site anglais seul suffit. Les titres y sont ceux des éditeurs, donc
-    // ceux de la bibliothèque — le problème de traduction qui justifie le repli n'existe
-    // que dans l'autre sens.
+///
+/// 🔑 DEUX NOMS PLUTÔT QU'UN. Le titre vient du comparateur, qui ne nomme pas toujours le
+/// jeu comme Instant Gaming : « Dying Light: The Beast Restored Land » d'un côté, « Dying
+/// Light: The Beast » de l'autre — et chercher le premier chez IG ne ramène RIEN. Faute de
+/// résultat, on réessaie donc avec le nom du jeu sur Steam (`steam_appid`), celui que les
+/// revendeurs de clés reprennent. Le titre doit toujours correspondre exactement : on
+/// change de nom, pas d'exigence.
+pub fn price(title: &str, steam_appid: Option<u64>) -> Option<IgOffer> {
     let francais = crate::locale::langue() == crate::locale::Langue::Fr;
-    let mut offer = if francais {
-        cherche(RECHERCHE_FR, title, &want).or_else(|| cherche(RECHERCHE_EN, title, &want))?
-    } else {
-        cherche(RECHERCHE_EN, title, &want)?
-    };
+    let mut offer = trouver(title, francais).or_else(|| {
+        let nom = super::steam_store::nom(steam_appid?)?;
+        (key(&nom) != key(title)).then(|| trouver(&nom, francais)).flatten()
+    })?;
     // 🔑 Le slug anglais placé sous `/fr/` est redirigé (301) par IG vers son équivalent
     // français : on francise donc l'URL d'un résultat venu du repli sans avoir à connaître
     // son slug FR. Mesuré sur `/fr/4824-buy-elden-ring-pc-steam/`.
@@ -123,6 +117,27 @@ pub fn price(title: &str) -> Option<IgOffer> {
     // ⚠️ Ce marqueur est le même sur la page française (vérifié).
     offer.available = is_available(&offer.url);
     Some(offer)
+}
+
+/// La meilleure offre exacte pour un nom de jeu, sur le site de la langue.
+fn trouver(title: &str, francais: bool) -> Option<IgOffer> {
+    let want = key(title);
+    if want.len() < 3 {
+        return None;
+    }
+    // En français : le site FRANÇAIS d'abord, c'est là qu'on veut envoyer l'utilisateur.
+    // Repli sur l'anglais quand IG a traduit le titre du jeu et que le rapprochement échoue
+    // (« Shadow of the Erdtree » y devient « L'ombre de l'Arbre-monde ») — sans ce repli,
+    // franciser les liens ferait DISPARAÎTRE des offres.
+    //
+    // En anglais : le site anglais seul suffit. Les titres y sont ceux des éditeurs, donc
+    // ceux de la bibliothèque — le problème de traduction qui justifie le repli n'existe
+    // que dans l'autre sens.
+    if francais {
+        cherche(RECHERCHE_FR, title, &want).or_else(|| cherche(RECHERCHE_EN, title, &want))
+    } else {
+        cherche(RECHERCHE_EN, title, &want)
+    }
 }
 
 /// Interroge une des recherches IG et en tire la meilleure offre exacte.
