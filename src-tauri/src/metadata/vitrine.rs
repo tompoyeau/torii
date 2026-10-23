@@ -582,6 +582,14 @@ fn ids_itad(appids: &[u64], dir: &Path) -> HashMap<u64, String> {
         .collect()
 }
 
+/// L'identifiant ITAD d'un jeu Steam, pour ouvrir SA fiche depuis la bibliothèque.
+///
+/// 🔑 Par l'appid, pas par le titre : chercher « Icarus » chez le comparateur ramène
+/// d'abord « Guns of Icarus Online », le bon jeu n'arrivant qu'en troisième.
+pub fn id_itad(appid: u64, dir: &Path) -> Option<String> {
+    ids_itad(&[appid], dir).remove(&appid)
+}
+
 /// L'appel groupé. `None` = refusé ou en panne (on bascule sur l'appel jeu par jeu).
 fn lookup_groupe(appids: &[u64]) -> Option<Vec<(u64, Option<String>)>> {
     let corps: Vec<String> = appids.iter().map(|a| format!("app/{a}")).collect();

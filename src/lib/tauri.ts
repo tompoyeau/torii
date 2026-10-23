@@ -691,6 +691,14 @@ export async function storeSuggest(query: string): Promise<StoreSuggestion[] | n
   return await call<StoreSuggestion[] | null>("store_suggest", { query }, null);
 }
 
+/**
+ * Boutique — l'identifiant de la fiche d'un jeu Steam, par son appid (exact, sans
+ * recherche par titre). `null` hors Tauri ou si le comparateur ne connaît pas le jeu.
+ */
+export async function storeIdForSteam(appId: number): Promise<string | null> {
+  return await call<string | null>("store_id_for_steam", { appId }, null);
+}
+
 /** Boutique — fiche produit (comparatif de prix + méta IGDB). `null` hors Tauri. */
 export async function storeGame(gameId: string): Promise<StoreGame | null> {
   return await call<StoreGame | null>("store_game", { gameId }, null);

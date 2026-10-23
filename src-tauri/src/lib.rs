@@ -971,6 +971,17 @@ async fn store_game_extras(
     .map_err(|e| e.to_string())
 }
 
+/// Boutique — l'identifiant de la fiche d'un jeu Steam (`app_id`), pour l'ouvrir depuis la
+/// bibliothèque sans passer par une recherche par titre. `None` si le comparateur ne
+/// connaît pas le jeu.
+#[tauri::command]
+async fn store_id_for_steam(app: tauri::AppHandle, app_id: u64) -> Result<Option<String>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || metadata::vitrine::id_itad(app_id, &dir))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Boutique — recherche de jeux par titre (renvoie le prix le plus bas de chacun,
 /// hors revendeurs masqués).
 #[tauri::command]
@@ -2151,6 +2162,7 @@ pub fn run() {
             store_home,
             store_shelf,
             store_game_extras,
+            store_id_for_steam,
             store_search,
             store_suggest,
             store_game,

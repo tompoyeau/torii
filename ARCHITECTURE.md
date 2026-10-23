@@ -1565,6 +1565,13 @@ fin et son code promo.
 - **Pas encore** (demande de déployer le proxy) : historique des prix sur 12 mois
   (`games/history/v2`) et « Inclus dans un abonnement » (`games/subs/v1`).
 - Exemple : `cargo run --example fiche [id ITAD] [région] [langue]`.
+- 🔑 **« Voir dans la boutique » (fiche d'un jeu, bibliothèque d'un ami) : JAMAIS le premier
+  résultat d'une recherche.** `useStore.openForTitle` ouvrait la première suggestion du
+  comparateur : « Icarus » donnait « Guns of Icarus Online » (le bon jeu arrive 3ᵉ).
+  Désormais : appid Steam connu (jeu Steam ou relié avec certitude) → identifiant exact
+  par `store_id_for_steam` (`vitrine::id_itad`, le même cache que les rayons) ; sinon,
+  titre identique après `normaliserTitre` (un titre qui se réduit à rien, japonais par
+  exemple, ne correspond à rien) ; sinon, la grille de résultats, pour choisir soi-même.
 
 ## Fiche d'un jeu de la bibliothèque (`metadata/possede.rs`, `GameDetail.vue`)
 

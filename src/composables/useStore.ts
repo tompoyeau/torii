@@ -8,9 +8,11 @@ import {
   setStoreExcluded,
   storeDeals,
   storeGame,
+  storeIdForSteam,
   storeSearch,
   storeSuggest,
 } from "../lib/tauri";
+import { normaliserTitre } from "./usePossession";
 import { useWishlist } from "./useWishlist";
 import { useStoreHome } from "./useStoreHome";
 import { jeuDeDemo } from "../data/storeMock";
@@ -309,33 +311,44 @@ function closeProduct() {
 }
 
 /**
- * Ouvre la fiche boutique correspondant au **titre** d'un jeu (depuis la bibliothèque) :
- * on résout le meilleur résultat via l'autocomplétion (rapide), puis on ouvre sa fiche.
- * Sans correspondance exacte, on bascule sur une recherche classique (grille de résultats).
- */
-/**
- * Ouvre la fiche Boutique correspondant à un titre de la bibliothèque.
+ * Ouvre la fiche Boutique d'un jeu de la bibliothèque (ou de celle d'un ami).
  * Renvoie `true` si une fiche a pu être ouverte, `false` si on est retombé sur une
  * recherche — l'appelant doit alors montrer la section Boutique pour voir les résultats.
+ *
+ * 🔑 JAMAIS « LE PREMIER RÉSULTAT ». Chercher « Icarus » ramenait d'abord « Guns of
+ * Icarus Online », et c'est sa fiche qui s'ouvrait. Deux chemins sûrs :
+ *   - avec un appid Steam (jeu Steam, ou relié à Steam avec certitude), l'identifiant
+ *     exact du comparateur ;
+ *   - sinon, le titre, mais seulement s'il correspond EXACTEMENT (lettres et chiffres,
+ *     sans accents ni ™/®) à une suggestion. Sans ça, la grille de résultats laisse
+ *     choisir plutôt que d'ouvrir un autre jeu.
  */
-async function openForTitle(title: string): Promise<boolean> {
+async function openForTitle(title: string, steamAppId?: number | null): Promise<boolean> {
   clearSuggestions();
   // Affiche tout de suite l'overlay en chargement (évite un flash de la vitrine).
   selectedGameId.value = "__loading__";
   product.value = null;
   productLoading.value = true;
+  const parAppid = steamAppId ? await storeIdForSteam(steamAppId) : null;
+  if (parAppid) {
+    await openProduct(parAppid);
+    return true;
+  }
   // Comparateur injoignable : pas de correspondance, on bascule sur la recherche, qui
   // affichera l'indisponibilité à sa place.
   const res = (await storeSuggest(title)) ?? (demo() ? mockSuggest(title) : []);
-  const first = res[0];
-  if (!first) {
+  const cible = normaliserTitre(title);
+  // Un titre sans lettre latine ni chiffre (japonais, coréen…) se réduit à rien : il
+  // « correspondrait » à n'importe quoi, on laisse alors la recherche trancher.
+  const exact = cible ? res.find((s) => normaliserTitre(s.title) === cible) : undefined;
+  if (!exact) {
     selectedGameId.value = null;
     productLoading.value = false;
     query.value = title;
     void runSearch();
     return false;
   }
-  await openProduct(first.gameId);
+  await openProduct(exact.gameId);
   return true;
 }
 

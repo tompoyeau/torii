@@ -35,13 +35,15 @@ const { selectedGameId, closeGame, showStore, openEditGame } = useUi();
  * bibliothèque : refermer la fiche prix ramène donc exactement là où on était.
  * (Avant, on basculait sur la section Boutique et le retour laissait l'utilisateur
  * sur la vitrine, loin de son jeu.)
+ * Le jeu est retrouvé par son appid Steam quand on l'a (jeu Steam, ou relié à Steam
+ * avec certitude), sinon par son titre exact.
  * Repli : si le jeu n'est pas trouvé tel quel, `openForTitle` bascule en recherche —
  * là il FAUT montrer la Boutique, puisque les résultats sont dans la vue de section.
  */
 async function viewInStore() {
   const g = game.value;
   if (!g) return;
-  const opened = await openForTitle(g.title);
+  const opened = await openForTitle(g.title, appIdSteam.value);
   if (!opened) {
     closeGame();
     showStore();
