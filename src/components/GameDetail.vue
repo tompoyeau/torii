@@ -591,6 +591,27 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 
       <div class="detail-body">
         <div class="detail-main">
+          <!-- Les amis qui ont le jeu, tout de suite sous le bandeau : c'est souvent la première
+               chose qu'on cherche en ouvrant la fiche d'un jeu multijoueur. -->
+          <div v-if="friendOwners.length" class="detail-section amis">
+            <h4>{{ t("fiche.amis") }} <span class="sec-count">{{ friendOwners.length }}</span></h4>
+            <div class="owners-list">
+              <button
+                v-for="f in friendOwners"
+                :key="f.steamId"
+                class="owner"
+                :title="t('fiche.voirProfil', { nom: f.name })"
+                @click="openFriendProfile(f)"
+              >
+                <span class="owner-av">
+                  <img v-if="ownerAvatar(f)" :src="ownerAvatar(f)!" alt="" loading="lazy" @error="onOwnerAvatarError(f.avatarUrl)" />
+                  <span v-else class="owner-av-fb">{{ ownerInitials(f.name) }}</span>
+                </span>
+                <span class="owner-name">{{ f.name }}</span>
+              </button>
+            </div>
+          </div>
+
           <StoreSheetMedia
             v-if="bandesAnnonces.length || captures.length"
             :key="`${game.id}-${steam ? 'steam' : 'base'}`"
@@ -644,24 +665,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             :configuration="steam.configuration"
           />
 
-          <div v-if="friendOwners.length" class="detail-section">
-            <h4>{{ t("fiche.amis") }} <span class="sec-count">{{ friendOwners.length }}</span></h4>
-            <div class="owners-list">
-              <button
-                v-for="f in friendOwners"
-                :key="f.steamId"
-                class="owner"
-                :title="t('fiche.voirProfil', { nom: f.name })"
-                @click="openFriendProfile(f)"
-              >
-                <span class="owner-av">
-                  <img v-if="ownerAvatar(f)" :src="ownerAvatar(f)!" alt="" loading="lazy" @error="onOwnerAvatarError(f.avatarUrl)" />
-                  <span v-else class="owner-av-fb">{{ ownerInitials(f.name) }}</span>
-                </span>
-                <span class="owner-name">{{ f.name }}</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         <aside class="detail-aside">
