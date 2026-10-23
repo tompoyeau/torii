@@ -5,6 +5,17 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.23.0
+- **A completely redesigned page for each game in your library.** Under the title, how you play it: playtime, last session, disk space and achievement progress. Right below, the Steam and Metacritic scores and the age rating. Then come the friends who also own the game, real trailers with sound and every screenshot, the publisher's latest announcements, the additional content, the full description and an “At a glance” section (game modes, controller, your language).
+- **Achievements that say more**: your rarest achievements, with the share of players who have them, the next ones to go for (the easiest among those you're missing, with your progress), and the full list sorted by rarity. Hidden achievements stay hidden.
+- **Steam achievements show up again.** Steam rebuilt its achievements page and Torii could no longer read it: they had vanished from game pages.
+- **The additional content you already own is marked** and moves to the top of the list; the rest shows its best price.
+- **A game bought elsewhere also gets what Steam knows about it**, when Torii is sure it's the same game: Control on Epic gets scores, trailers, screenshots and announcements. Otherwise the page sticks to what the launcher and IGDB know, with no empty boxes.
+- **Every piece of additional content**, on the Store page as on your library page, five per page. The Store stopped at the first twelve.
+- **A more compact player**: the video no longer fills the screen, and the thumbnails sit beside it.
+- **“View in store” opens the right game.** The button opened the first search result: Icarus gave Guns of Icarus Online. Torii now goes through the game's Steam ID, or its exact title.
+- **More Instant Gaming prices.** When the price comparator names a game differently from Instant Gaming (Dying Light: The Beast, Crimson Desert…), Torii finds it under its Steam name.
+
 ## 0.22.0
 - **A redesigned Store, Steam-style.** At the top, a featured carousel of big, well-reviewed games on sale. Then come the deals right now, charts (top sellers, popular new releases, most anticipated), games free to keep before the deadline, genre shelves and popular free-to-play games. The grid of all deals stays at the bottom, with a “Load more” button.
 - **The charts are your country's**, and each game shows its best offer across every store, minus the sellers you've hidden.

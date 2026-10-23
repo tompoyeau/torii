@@ -5,6 +5,17 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.23.0
+- **La fiche d'un jeu de ta bibliothèque, entièrement repensée.** Sous le titre, ton rapport au jeu : temps de jeu, dernière session, place sur le disque et progression des succès. Juste dessous, les notes Steam et Metacritic et la classification d'âge. Viennent ensuite les amis qui ont aussi le jeu, les vraies bandes-annonces avec le son et toutes les captures, les dernières annonces de l'éditeur, les extensions, la description complète et un « En bref » (modes de jeu, manette, ta langue).
+- **Des succès plus parlants** : tes succès les plus rares, avec la part des joueurs qui les ont, les prochains à viser (les plus faciles parmi ceux qui te manquent, avec ton avancement), et la liste complète triée par rareté. Les succès cachés restent cachés.
+- **Les succès Steam s'affichent de nouveau.** Steam a refait sa page des succès, et Torii ne savait plus la lire : ils avaient disparu de la fiche des jeux.
+- **Les extensions que tu as déjà sont marquées** et passent en tête de liste ; les autres affichent leur meilleur prix.
+- **Un jeu acheté ailleurs profite aussi de ce que Steam en sait**, quand Torii est sûr qu'il s'agit du même jeu : Control sur Epic reçoit notes, bandes-annonces, captures et annonces. Sinon, la fiche s'en tient à ce que le launcher et IGDB connaissent, sans case vide, et signale une description restée en anglais.
+- **Toutes les extensions d'un jeu**, dans la fiche de la Boutique comme dans celle de ta bibliothèque, par pages de cinq. La Boutique s'arrêtait aux douze premières.
+- **Un lecteur plus compact** : la vidéo ne prend plus tout l'écran, et les miniatures se rangent à côté.
+- **« Voir dans la boutique » ouvre le bon jeu.** Le bouton ouvrait le premier résultat de la recherche : Icarus donnait Guns of Icarus Online. Torii passe maintenant par l'identifiant Steam du jeu, ou par son titre exact.
+- **Plus de prix Instant Gaming.** Quand le comparateur nomme un jeu autrement qu'Instant Gaming (Dying Light: The Beast, Crimson Desert…), Torii le retrouve sous son nom Steam.
+
 ## 0.22.0
 - **Une Boutique repensée, à la façon de Steam.** En haut, une vedette qui fait défiler de gros jeux en promo et bien notés. Ensuite viennent les promos du moment, des classements (meilleures ventes, nouveautés populaires, jeux les plus attendus), les jeux offerts à récupérer avant la date limite, des rayons par genre et les free-to-play populaires. La grille de toutes les offres reste en bas, avec un bouton « Charger plus ».
 - **Les classements sont ceux de ton pays**, et chaque jeu affiche sa meilleure offre toutes boutiques confondues, sans les vendeurs que tu as masqués.
