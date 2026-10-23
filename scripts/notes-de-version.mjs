@@ -196,12 +196,27 @@ function enligne(texte) {
 }
 
 /** « 6 septembre 2026 » / « September 6, 2026 ». */
+/**
+ * 🔑 LES DATES SONT CELLES DE PARIS, pour le texte comme pour l'attribut `datetime`.
+ * GitHub donne l'heure en UTC : la 0.23.0, publiée à 0 h 11 à Paris le 24 octobre, était
+ * le 23 en UTC. Le texte suivait le fuseau de la machine et l'attribut l'UTC — la page
+ * affichait « 24 octobre » avec `datetime="2026-10-23"`. Un fuseau fixe rend aussi la
+ * page identique quelle que soit la machine qui la génère.
+ */
+const FUSEAU = "Europe/Paris";
+
 function dateLisible(iso, locale) {
   return new Date(iso).toLocaleDateString(locale, {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: FUSEAU,
   });
+}
+
+/** Le jour de publication à Paris, au format `AAAA-MM-JJ` de l'attribut `datetime`. */
+function jourIso(iso) {
+  return new Date(iso).toLocaleDateString("sv-SE", { timeZone: FUSEAU });
 }
 
 function rendreUneVersion(L, { version, points, repli }, date, derniere) {
@@ -214,7 +229,7 @@ function rendreUneVersion(L, { version, points, repli }, date, derniere) {
   return `        <article class="note-version" id="${ancre}">
           <header>
             <h2><a href="#${ancre}">${L.version(version)}</a></h2>
-${date ? `            <time datetime="${date.slice(0, 10)}">${dateLisible(date, L.locale)}</time>\n` : ""}${derniere ? `            <span class="etiquette">${L.derniere}</span>\n` : ""}${repli ? `            <span class="etiquette">${L.nonTraduit}</span>\n` : ""}          </header>
+${date ? `            <time datetime="${jourIso(date)}">${dateLisible(date, L.locale)}</time>\n` : ""}${derniere ? `            <span class="etiquette">${L.derniere}</span>\n` : ""}${repli ? `            <span class="etiquette">${L.nonTraduit}</span>\n` : ""}          </header>
           <ul${langueListe}>
 ${lignes}
           </ul>
