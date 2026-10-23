@@ -318,9 +318,8 @@ export interface StoreSteamSheet {
     recommandee: { libelle: string; valeur: string }[];
     notes: string[];
   } | null;
+  /** Tous les contenus additionnels (les fiches les feuillettent par pages de 5). */
   dlc: number[];
-  /** Nombre total de contenus additionnels (`dlc` n'en garde que 12). */
-  dlcTotal: number;
   site?: string | null;
   metacritic?: number | null;
   metacriticUrl?: string | null;
@@ -345,7 +344,7 @@ export interface OwnedGameSheet {
   appId: number;
   steam?: StoreSteamSheet | null;
   actualites: GameNews[];
-  /** Contenus additionnels à montrer (6 au plus), possédés d'abord. Vide hors Steam. */
+  /** Tous les contenus additionnels, possédés d'abord (la fiche en montre 5, puis plus). Vide hors Steam. */
   dlc: number[];
   dlcPossedes: number[];
 }

@@ -1,30 +1,21 @@
 import { reactive } from "vue";
 import { langueCourante } from "../i18n";
 import { regionCourante } from "../i18n/regions";
-import { ownedGameSheet, storeGameExtras } from "../lib/tauri";
-import type { Game, OwnedGameSheet, StoreShelfItem } from "../types";
+import { ownedGameSheet } from "../lib/tauri";
+import type { Game, OwnedGameSheet } from "../types";
 import type { Etat } from "./useStoreHome";
 
 /**
  * Ce que Steam ajoute à la fiche d'un jeu de la bibliothèque (médias, notes, annonces…),
  * gardé pour la session : rouvrir une fiche ne redemande rien. Indexé par région et
- * langue, comme la fiche de la Boutique dont il reprend les données.
+ * langue, comme la fiche de la Boutique dont il reprend les données. Les prix des
+ * contenus additionnels, eux, passent par `useContenusAdditionnels`, commun aux deux fiches.
  */
 interface Entree {
   etat: Etat;
   fiche: OwnedGameSheet | null;
 }
 const fiches = reactive<Record<string, Entree>>({});
-
-/**
- * Contenus additionnels avec leurs prix, demandés seulement quand la section arrive à
- * l'écran : c'est le seul appel de la fiche qui passe par le comparateur.
- */
-interface EntreeDlc {
-  etat: Etat;
-  jeux: StoreShelfItem[];
-}
-const dlcs = reactive<Record<string, EntreeDlc>>({});
 
 const cle = (id: string) => `${regionCourante.value}|${langueCourante.value}|${id}`;
 
@@ -44,21 +35,6 @@ function entree(id: string | null | undefined): Entree {
   return (id && fiches[cle(id)]) || { etat: "vide", fiche: null };
 }
 
-async function chargerDlc(appId: number, ids: number[]) {
-  const k = cle(`dlc:${appId}`);
-  const actuel = dlcs[k];
-  if (!ids.length || actuel?.etat === "pret" || actuel?.etat === "chargement") return;
-  dlcs[k] = { etat: "chargement", jeux: [] };
-  const res = await storeGameExtras(appId, ids, []);
-  // Dans l'ordre demandé : ceux qu'on possède d'abord.
-  const jeux = (res?.dlc ?? []).slice().sort((a, b) => ids.indexOf(a.appId) - ids.indexOf(b.appId));
-  dlcs[k] = res ? { etat: "pret", jeux } : { etat: "echec", jeux: [] };
-}
-
-function entreeDlc(appId: number): EntreeDlc {
-  return dlcs[cle(`dlc:${appId}`)] ?? { etat: "vide", jeux: [] };
-}
-
 export function useFichePossede() {
-  return { charger, entree, chargerDlc, entreeDlc };
+  return { charger, entree };
 }

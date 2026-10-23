@@ -51,7 +51,14 @@ export default {
     titre: "Contenus additionnels",
     possedes: "{n} possédé | {n} possédés",
     possede: "Possédé",
-    toutVoir: "Tout voir sur Steam",
+    pages: "Pages des contenus additionnels",
+  },
+
+  // Onglets de pages d'une longue liste (`StorePages.vue`).
+  pages: {
+    precedente: "Page précédente",
+    suivante: "Page suivante",
+    page: "Page {n}",
   },
 
   liens: {

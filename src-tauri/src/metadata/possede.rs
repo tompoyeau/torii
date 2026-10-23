@@ -24,7 +24,6 @@ const NEWS: &str = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/";
 /// Adresse que Steam substitue au jeton `{STEAM_CLAN_IMAGE}` des annonces.
 const IMAGES_CLAN: &str = "https://clan.akamai.steamstatic.com/images/";
 const NB_ACTUALITES: u32 = 4;
-const NB_DLC: usize = 6;
 const LONGUEUR_EXTRAIT: usize = 180;
 
 /// Ce que la fiche d'un jeu possédé ajoute à ce que la bibliothèque sait déjà.
@@ -34,7 +33,8 @@ pub struct FichePossede {
     pub app_id: u64,
     pub steam: Option<FicheSteam>,
     pub actualites: Vec<Actualite>,
-    /// Contenus additionnels à montrer (6 au plus), ceux qu'on possède d'abord. Vide quand
+    /// Tous les contenus additionnels, ceux qu'on possède d'abord : l'interface en montre 5,
+    /// puis davantage à la demande (leurs prix sont demandés par lots). Vide quand
     /// le jeu n'est pas possédé sur Steam, ou que la session ne dit pas ce qu'on possède :
     /// une liste de prix sans savoir ce qu'on a déjà ne servirait à rien.
     pub dlc: Vec<u64>,
@@ -86,14 +86,14 @@ pub fn marquer_dlc(f: &mut FichePossede, possedes: Option<&HashSet<u64>>) {
     let (Some(steam), Some(possedes)) = (&f.steam, possedes) else {
         return;
     };
-    f.dlc_possedes = steam.dlc_tous.iter().copied().filter(|d| possedes.contains(d)).collect();
-    f.dlc = dlc_a_montrer(&steam.dlc_tous, &f.dlc_possedes, NB_DLC);
+    f.dlc_possedes = steam.dlc.iter().copied().filter(|d| possedes.contains(d)).collect();
+    f.dlc = possedes_d_abord(&steam.dlc, &f.dlc_possedes);
 }
 
-/// Ceux qu'on possède d'abord, puis les autres dans l'ordre de Steam, `n` au plus.
-fn dlc_a_montrer(tous: &[u64], possedes: &[u64], n: usize) -> Vec<u64> {
-    let mut out: Vec<u64> = possedes.iter().copied().take(n).collect();
-    out.extend(tous.iter().copied().filter(|d| !possedes.contains(d)).take(n - out.len()));
+/// Ceux qu'on possède d'abord, puis les autres dans l'ordre de Steam.
+fn possedes_d_abord(tous: &[u64], possedes: &[u64]) -> Vec<u64> {
+    let mut out = possedes.to_vec();
+    out.extend(tous.iter().copied().filter(|d| !possedes.contains(d)));
     out
 }
 
@@ -212,15 +212,14 @@ mod tests {
 
     #[test]
     fn les_contenus_possedes_passent_devant() {
-        assert_eq!(dlc_a_montrer(&[1, 2, 3, 4, 5, 6, 7, 8], &[7], 6), [7, 1, 2, 3, 4, 5]);
-        assert_eq!(dlc_a_montrer(&[1, 2], &[], 6), [1, 2]);
-        let tous: Vec<u64> = (1..=10).collect();
-        assert_eq!(dlc_a_montrer(&tous, &tous, 6), [1, 2, 3, 4, 5, 6]);
+        assert_eq!(possedes_d_abord(&[1, 2, 3, 4, 5], &[4, 2]), [4, 2, 1, 3, 5]);
+        assert_eq!(possedes_d_abord(&[1, 2], &[]), [1, 2]);
+        assert_eq!(possedes_d_abord(&[1, 2], &[1, 2]), [1, 2]);
     }
 
     #[test]
     fn sans_possession_connue_aucun_contenu_n_est_montre() {
-        let steam = FicheSteam { dlc_tous: vec![10, 20, 30], ..Default::default() };
+        let steam = FicheSteam { dlc: vec![10, 20, 30], ..Default::default() };
         let mut f = FichePossede { steam: Some(steam), ..Default::default() };
         marquer_dlc(&mut f, None);
         assert!(f.dlc.is_empty());

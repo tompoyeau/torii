@@ -50,13 +50,10 @@ pub struct FicheSteam {
     pub categories: Vec<Categorie>,
     pub succes: Option<u32>,
     pub configuration: Option<Configuration>,
-    /// Appids des contenus additionnels (12 au plus).
+    /// Appids de TOUS les contenus additionnels (Hunt: Showdown en compte plus de 80). Les
+    /// fiches les feuillettent par pages de 5 et n'en demandent les prix que page par page :
+    /// les couper à 12, comme avant, ne servait qu'à éviter un gros appel au comparateur.
     pub dlc: Vec<u64>,
-    /// Nombre total de contenus additionnels (Hunt: Showdown en compte plus de 80).
-    pub dlc_total: u32,
-    /// Tous les contenus additionnels : la fiche d'un jeu possédé y cherche ceux qu'on a.
-    #[serde(skip)]
-    pub dlc_tous: Vec<u64>,
     pub site: Option<String>,
     /// Note Metacritic que Steam affiche, avec le lien vers la page de la critique.
     pub metacritic: Option<u32>,
@@ -361,12 +358,10 @@ fn lire_details(f: &mut FicheSteam, d: &Value, region: &str) {
         })
         .unwrap_or_default();
     f.succes = d["achievements"]["total"].as_u64().filter(|n| *n > 0).map(|n| n as u32);
-    f.dlc_tous = d["dlc"]
+    f.dlc = d["dlc"]
         .as_array()
         .map(|l| l.iter().filter_map(Value::as_u64).collect())
         .unwrap_or_default();
-    f.dlc = f.dlc_tous.iter().copied().take(12).collect();
-    f.dlc_total = f.dlc_tous.len() as u32;
     f.site = d["website"].as_str().filter(|s| s.starts_with("https://")).map(String::from);
     f.metacritic = d["metacritic"]["score"].as_u64().filter(|n| (1..=100).contains(n)).map(|n| n as u32);
     f.metacritic_url = f

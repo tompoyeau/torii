@@ -1551,10 +1551,12 @@ fin et son code promo.
 - **Classification** : celle de la région (PEGI en Europe, USK en Allemagne, ESRB en
   Amérique du Nord…), avec repli sur PEGI puis ESRB. Descripteurs PEGI traduits côté
   interface (`lib/boutique.ts::descripteur`), les autres affichés tels quels.
-- **Bas de fiche** (DLC + similaires) : commande `store_game_extras`, demandée quand la
-  fiche défile jusque-là, **un seul** appel au comparateur pour les deux. Similaires =
-  `Query` sur les deux tags principaux (tags génériques écartés : solo, multijoueur,
-  bande-son…), complétés par la paire suivante s'ils sont moins de 6.
+- **Bas de fiche** : commande `store_game_extras`, demandée quand la fiche défile
+  jusque-là. Similaires = `Query` sur les deux tags principaux (tags génériques écartés :
+  solo, multijoueur, bande-son…), complétés par la paire suivante s'ils sont moins de 6.
+  **Contenus additionnels : TOUS** (`FicheSteam.dlc`, plus coupé à 12 : 82 pour Hunt),
+  par pages de 5 en onglets, prix demandés page par page (`useContenusAdditionnels`,
+  commun avec la fiche d'un jeu possédé — voir plus bas).
 - **Mémoire** : fiches gardées 15 min (`useStore.fichesVues`), bas de fiche pour la
   session (`useFicheExtras`), indexés par région + langue.
 - **Verdict** (`lib/boutique.ts::verdict`) : au plus bas (au centime près), à 10 % du
@@ -1594,11 +1596,14 @@ stats et les liens (page Steam, site officiel, communauté).
   semaine pour « aucun lien », rien sur une panne ; « Actualiser les infos » l'oublie).
 - **Succès et contenus possédés : seulement pour un jeu possédé SUR Steam.** Pour un jeu
   Epic relié à Steam, « En bref » tait aussi « N succès Steam » et « Steam Cloud ».
-- **Contenus additionnels** : `appdetails` donne la liste complète (`FicheSteam.dlc_tous`,
-  82 pour Hunt), croisée avec les appids possédés ; 6 au plus, possédés d'abord, « Tout
-  voir sur Steam » au-delà. Prix des non-possédés via `store_game_extras` (tags vides →
-  pas de jeux similaires), demandés quand la section arrive à l'écran : seul appel de la
-  fiche au comparateur.
+- **Contenus additionnels** : `appdetails` donne la liste complète (`FicheSteam.dlc`,
+  82 pour Hunt), croisée avec les appids possédés et renvoyée en entier, possédés d'abord.
+  Les deux fiches (Boutique et jeu possédé) les présentent **par pages de 5, en onglets**
+  (`StorePages.vue` : ‹ 1 2 3 … 16 ›). Prix via `store_game_extras` (tags vides → pas de
+  jeux similaires), **page par page** : la première quand la section arrive à l'écran, les
+  autres quand on les ouvre. `useContenusAdditionnels` ne redemande jamais un appid, et
+  son cache est commun aux deux fiches. Seul appel de la fiche au comparateur. Un contenu
+  que Steam ne décrit plus (retiré de la vente) est sauté.
 - ⚠️ **Possessions = `dynamicstore/userdata` avec un cookie du MAGASIN.** Le cookie de la
   communauté (que `refresh_community_cookie` range aussi dans `steam_login_secure`) y est
   traité en visiteur anonyme : `rgOwnedApps` vide (vérifié le 23/10/2026). On régénère donc

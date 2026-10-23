@@ -6,9 +6,10 @@ import type { StoreExtras, StoreGame } from "../types";
 import type { Etat } from "./useStoreHome";
 
 /**
- * Bas de la fiche produit (contenus additionnels, jeux similaires), gardé pour la
- * session : revenir sur une fiche déjà parcourue ne redemande rien au comparateur.
- * Indexé par région et langue, comme l'accueil.
+ * Jeux similaires du bas de la fiche produit, gardés pour la session : revenir sur une
+ * fiche déjà parcourue ne redemande rien au comparateur. Indexé par région et langue,
+ * comme l'accueil. Les contenus additionnels ont leur propre chargement, page par page
+ * (`useContenusAdditionnels`).
  */
 interface Entree {
   etat: Etat;
@@ -24,13 +25,15 @@ async function charger(jeu: StoreGame, force = false) {
   const actuel = cache[k];
   if (!force && (actuel?.etat === "pret" || actuel?.etat === "chargement")) return;
   const steam = jeu.steam;
-  // Sans fiche Steam (jeu absent de Steam, ou démo web) : ni DLC ni tags à chercher.
+  // Sans fiche Steam (jeu absent de Steam, ou démo web) : pas de tags à chercher.
   if (!steam || !jeu.appId || !hasTauriRuntime()) {
     cache[k] = { etat: "pret", extras: null };
     return;
   }
   cache[k] = { etat: "chargement", extras: actuel?.extras ?? null };
-  const res = await storeGameExtras(jeu.appId, steam.dlc, steam.tagIds);
+  // Aucun contenu additionnel ici : la recherche de Steam ne ramène que des jeux, et les
+  // contenus sont demandés à part, page par page.
+  const res = await storeGameExtras(jeu.appId, [], steam.tagIds);
   cache[k] = res ? { etat: "pret", extras: res } : { etat: "echec", extras: null };
 }
 

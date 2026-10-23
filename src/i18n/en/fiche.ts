@@ -51,7 +51,13 @@ const en: Forme<typeof fr> = {
     titre: "Downloadable content",
     possedes: "{n} owned | {n} owned",
     possede: "Owned",
-    toutVoir: "See all on Steam",
+    pages: "Downloadable content pages",
+  },
+
+  pages: {
+    precedente: "Previous page",
+    suivante: "Next page",
+    page: "Page {n}",
   },
 
   liens: {

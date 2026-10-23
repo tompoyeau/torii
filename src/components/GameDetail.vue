@@ -644,7 +644,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             :app-id="fiche.appId"
             :dlc="fiche.dlc"
             :possedes="fiche.dlcPossedes"
-            :total="steam?.dlcTotal ?? fiche.dlc.length"
           />
 
           <div v-if="description || loadingMeta" class="detail-section">
