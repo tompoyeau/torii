@@ -34,7 +34,7 @@ useScrollLock(open);
 
 /** Même raison que la fiche de la bibliothèque : le panneau recouvre la page. */
 const panneau = ref<HTMLElement | null>(null);
-useFocusTrap(panneau, open);
+useFocusTrap(panneau, open, { boucle: false });
 
 /** Un montant dans la devise de l'offre qui le porte. */
 const price = (montant: number, offre: StorePrice) => formatPrix(montant, offre.currency);
@@ -156,7 +156,7 @@ const detailOffre = (p: StorePrice) =>
 </script>
 
 <template>
-  <div ref="panneau" class="sd" data-defilement="produit" :class="{ open }" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('boutique.produit.fiche')">
+  <div ref="panneau" class="sd" data-defilement="produit" :class="{ open }" role="region" tabindex="-1" :aria-label="t('boutique.produit.fiche')">
     <template v-if="open">
       <div class="sd-banner">
         <div class="sd-banner-art" :style="{ background: 'linear-gradient(160deg,#241a3a,#0e0a18)' }" />
@@ -372,7 +372,8 @@ const detailOffre = (p: StorePrice) =>
 </template>
 
 <style scoped>
-.sd { position: fixed; inset: 0; z-index: 110; background: var(--bg); overflow-y: auto; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
+/* À droite de la barre latérale, comme la fiche d'un jeu de la bibliothèque. */
+.sd { position: fixed; inset: 0 0 0 var(--largeur-laterale); z-index: 110; background: var(--bg); overflow-y: auto; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
 .sd.open { opacity: 1; visibility: visible; }
 .sd-banner { position: relative; height: 40vh; min-height: 300px; overflow: hidden; }
 .sd-banner-art { position: absolute; inset: 0; }

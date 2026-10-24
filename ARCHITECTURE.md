@@ -1657,6 +1657,13 @@ stats et les liens (page Steam, site officiel, communauté).
 - **Bouton retour d'une fiche = une étape** (fiche B → fiche A), et son libellé nomme la
   destination ; **Échap = sortir de la fiche** (B → vitrine). Échap ne ferme que la
   surcouche du dessus : Paramètres > fiche Boutique > fiche d'un jeu.
+- **Les fiches (jeu, Boutique) s'ouvrent À DROITE de la barre latérale**, qui reste
+  visible (`--largeur-laterale`, `style.css`) : ce sont des écrans, plus des fenêtres
+  posées sur tout. Conséquences : un clic dans la barre referme d'abord les fiches
+  (`quitterLesSurcouches`, une seule étape) ; elles ne sont plus modales — `<main>` passe
+  `inert` derrière elles et `useFocusTrap(…, { boucle: false })` y fait entrer le focus
+  sans l'y enfermer, pour que la barre reste joignable au clavier. Les vraies modales
+  (Paramètres, ajout d'un jeu, visionneuse) couvrent toujours toute la fenêtre.
 - **Défilement retenu par étape** (page + chacune des deux fiches, repérées par
   `data-defilement`), relevé en continu et restauré au retour, avec quelques images de
   rattrapage le temps que le contenu arrive.

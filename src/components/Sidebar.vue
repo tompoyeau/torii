@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { estHorsLauncher } from "../data/platforms";
 import { useUi } from "../composables/useUi";
+import { useNavigation } from "../composables/useNavigation";
 import { getSettings } from "../lib/tauri";
 import type { LibraryFilter, PlatformId, Settings } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
@@ -10,7 +11,23 @@ import { t } from "../i18n";
 import { platformName } from "../data/platforms";
 
 const { games } = useLibrary();
-const { section, filter, setFilter, showStore, showCommon, showWishlist, openSettings, settingsOpen } = useUi();
+const ui = useUi();
+const { section, filter, openSettings, settingsOpen } = ui;
+const { quitterLesSurcouches } = useNavigation();
+
+/**
+ * La barre reste visible quand une fiche est ouverte (elle s'ouvre à sa droite) : y
+ * cliquer referme d'abord la fiche, sinon elle resterait affichée par-dessus la section
+ * choisie. Une seule étape d'historique : le retour ramène sur la fiche.
+ */
+function aller(destination: () => void) {
+  quitterLesSurcouches();
+  destination();
+}
+const setFilter = (f: LibraryFilter) => aller(() => ui.setFilter(f));
+const showStore = () => aller(ui.showStore);
+const showCommon = () => aller(ui.showCommon);
+const showWishlist = () => aller(ui.showWishlist);
 
 // État de connexion des launchers, pour adapter le libellé du bouton du bas.
 // Rafraîchi au montage et à chaque fermeture du panneau (où les connexions changent).

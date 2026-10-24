@@ -59,11 +59,12 @@ const game = computed(() => byId(selectedGameId.value));
 useScrollLock(computed(() => !!game.value));
 
 /**
- * Le panneau recouvre la page : au clavier, sans piège, la tabulation continuait de
- * parcourir la bibliothèque cachée derrière lui.
+ * Le panneau recouvre la page, mais pas la barre latérale : le focus y entre à
+ * l'ouverture et revient au bouton d'origine à la fermeture, sans y être enfermé. La
+ * bibliothèque cachée derrière, elle, sort de la tabulation (`inert`, `AppShell.vue`).
  */
 const panneau = ref<HTMLElement | null>(null);
-useFocusTrap(panneau, computed(() => !!game.value));
+useFocusTrap(panneau, computed(() => !!game.value), { boucle: false });
 
 const friendById = computed(() => new Map(friends.value.map((f) => [f.steamId, f])));
 
@@ -476,8 +477,7 @@ function retour() {
     class="detail"
     data-defilement="jeu"
     :class="{ open: !!game }"
-    role="dialog"
-    aria-modal="true"
+    role="region"
     tabindex="-1"
     :aria-label="game ? game.title : t('fiche.fiche')"
   >
@@ -501,8 +501,7 @@ function retour() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
           </button>
         </div>
-        <div class="detail-header">
-          <div class="detail-head-row">
+        <div class="detail-header" :class="{ 'avec-bandeau': bandeau.length || (steamAch && steamAch.total) }">
           <div class="detail-title-wrap">
             <span class="detail-plat"><PlatformIcon :platform="game.platform" />{{ platformName(game.platform) }}</span>
             <h1 class="detail-title">{{ game.title }}</h1>
@@ -586,7 +585,6 @@ function retour() {
                 </button>
               </div>
             </div>
-          </div>
           </div>
 
           <!-- Ton rapport au jeu, puis ce que Steam en dit. Rien de vide : une case sans
@@ -755,8 +753,10 @@ function retour() {
 </template>
 
 <style scoped>
+/* À droite de la barre latérale, qui reste visible : la fiche est un écran de l'application,
+   pas une fenêtre posée par-dessus. */
 .detail {
-  position: fixed; inset: 0; z-index: 100; background: var(--bg); overflow-y: auto;
+  position: fixed; inset: 0 0 0 var(--largeur-laterale); z-index: 100; background: var(--bg); overflow-y: auto;
   opacity: 0; visibility: hidden; transition: opacity 0.28s;
 }
 .detail.open { opacity: 1; visibility: visible; }
@@ -792,30 +792,35 @@ function retour() {
 .detail-back-label { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Bannière plus haute quand le bandeau et les notes s'ajoutent sous le titre. */
 .detail-banner.riche { height: 56vh; min-height: 460px; }
+/* En grille : le titre en haut, puis le bandeau, les boutons à sa droite et centrés sur
+   lui. Plus haut, à côté du titre, ils flottaient au-dessus de la ligne des stats. Dans
+   une fenêtre étroite, c'est le bandeau qui passe sur deux lignes, pas les boutons qui
+   remontent. Sans bandeau (rien à dire), les boutons restent à côté du titre. */
 .detail-header {
   position: absolute; bottom: 0; left: 0; right: 0; padding: 0 56px 22px;
-  display: flex; flex-direction: column; gap: 14px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px; row-gap: 14px; align-items: end;
 }
-.detail-head-row { display: flex; align-items: flex-end; gap: 20px; }
-.detail-title-wrap { flex: 1; min-width: 0; }
+.detail-title-wrap { grid-column: 1; min-width: 0; }
+.detail-header.avec-bandeau .detail-title-wrap { grid-column: 1 / -1; }
+.detail-header.avec-bandeau .detail-actions { grid-row: 2; align-self: center; padding-bottom: 0; }
 
 /* Bandeau et notes : toujours clair sur sombre, ils sont posés sur l'image du jeu. */
 /* Aussi large que ses cases : deux cases étirées sur tout l'écran flottaient dans le vide. */
 .detail-strip {
-  align-self: flex-start; max-width: 100%;
+  grid-column: 1; justify-self: start; max-width: 100%;
   display: flex; flex-wrap: wrap; row-gap: 12px; padding: 12px 6px; border-radius: 14px;
   background: rgba(12, 8, 18, 0.72); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(10px);
 }
-.strip-cell { flex: 0 1 auto; min-width: 170px; display: flex; flex-direction: column; gap: 3px; padding: 0 24px 0 18px; }
+.strip-cell { flex: 0 1 auto; min-width: 140px; display: flex; flex-direction: column; gap: 3px; padding: 0 24px 0 18px; }
 .strip-cell + .strip-cell { border-left: 1px solid rgba(255, 255, 255, 0.1); }
-.strip-cell.large { min-width: 260px; gap: 6px; }
+.strip-cell.large { min-width: 200px; gap: 6px; }
 .strip-titre { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.6); font-weight: 700; }
 .strip-valeur { font-size: 16px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
 .strip-valeur small { font-size: 12px; font-weight: 500; color: rgba(255, 255, 255, 0.6); }
 .strip-detail { font-size: 12px; color: rgba(255, 255, 255, 0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strip-barre { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
 .strip-barre span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), #ffb08a); }
-.detail-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.detail-badges { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
 .badge {
   display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 9px; font-size: 12.5px;
   background: rgba(12, 8, 18, 0.72); border: 1px solid rgba(255, 255, 255, 0.16); color: #fff; cursor: pointer;
@@ -844,7 +849,7 @@ function retour() {
   line-height: 1; text-shadow: 0 3px 24px rgba(0, 0, 0, 0.4); text-wrap: balance;
 }
 :root[data-theme="light"] .detail-title { color: var(--text); text-shadow: none; }
-.detail-actions { display: flex; gap: 10px; flex: none; padding-bottom: 6px; z-index: 10; }
+.detail-actions { grid-column: 2; grid-row: 1; display: flex; gap: 10px; padding-bottom: 6px; z-index: 10; }
 .play-wrap { position: relative; }
 .btn-play.big .caret { width: 17px; height: 17px; margin-left: 2px; }
 .launch-menu {

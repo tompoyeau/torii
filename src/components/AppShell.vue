@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
+import { useStore } from "../composables/useStore";
 import { PLATFORMS, titreFiltre } from "../data/platforms";
 import type { Game, SortKey } from "../types";
 import { etiquetteIntl, t } from "../i18n";
@@ -18,7 +19,17 @@ import WishlistView from "./WishlistView.vue";
 import PageWeb from "./PageWeb.vue";
 
 const { filtered, games } = useLibrary();
-const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, genre, setGenre, openGame } = useUi();
+const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, genre, setGenre, openGame, selectedGameId } = useUi();
+const { selectedGameId: produitOuvert } = useStore();
+
+/**
+ * Une fiche (jeu, Boutique) recouvre le contenu, à droite de la barre latérale : ce qu'elle
+ * cache sort de la tabulation et des lecteurs d'écran (`inert`). La barre, visible, reste
+ * joignable — c'est pourquoi les fiches n'enferment plus le focus.
+ */
+const contenuRecouvert = computed(
+  () => produitOuvert.value != null || (selectedGameId.value != null && games.value.some((g) => g.id === selectedGameId.value)),
+);
 
 /** Le filtre courant vise-t-il une plateforme précise (vs « Tous », « Favoris »…) ? */
 const isPlatformView = computed(() => filter.value in PLATFORMS);
@@ -100,7 +111,7 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 <template>
   <div class="shell">
     <Sidebar />
-    <main class="main" :class="{ 'sur-page': section === 'web' }">
+    <main class="main" :class="{ 'sur-page': section === 'web' }" :inert="contenuRecouvert">
       <TopBar />
 
       <PageWeb v-if="section === 'web'" />
@@ -179,7 +190,7 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 </template>
 
 <style scoped>
-.shell { display: grid; grid-template-columns: 262px 1fr; }
+.shell { display: grid; grid-template-columns: var(--largeur-laterale) 1fr; }
 .main { min-width: 0; padding: 0 34px 60px; }
 /* La page web prend toute la hauteur sous la barre : pas de marge qui ferait défiler. */
 .main.sur-page { padding-bottom: 0; }

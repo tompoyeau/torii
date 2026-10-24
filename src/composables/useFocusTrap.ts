@@ -20,6 +20,11 @@ import { nextTick, onBeforeUnmount, watch, type Ref } from "vue";
  *
  * L'écouteur est posé en **capture** sur le document : une modale peut contenir des champs
  * qui traitent eux-mêmes la touche Tab, et on veut décider avant eux.
+ *
+ * `boucle: false` garde 1 et 3 sans 2 : pour les fiches (jeu, Boutique), qui s'ouvrent à
+ * droite de la barre latérale. Elles ne sont pas modales — la barre reste visible et
+ * doit rester joignable au clavier ; c'est le contenu caché DERRIÈRE elles qui est
+ * retiré de la tabulation (`inert` sur `<main>`, dans `AppShell.vue`).
  */
 const FOCUSABLES = [
   "a[href]",
@@ -30,7 +35,7 @@ const FOCUSABLES = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-export function useFocusTrap(conteneur: Ref<HTMLElement | null>, ouvert: Ref<boolean>) {
+export function useFocusTrap(conteneur: Ref<HTMLElement | null>, ouvert: Ref<boolean>, { boucle = true } = {}) {
   /** L'élément qui avait le focus avant l'ouverture — celui à qui on le rendra. */
   let rendreA: HTMLElement | null = null;
 
@@ -73,7 +78,7 @@ export function useFocusTrap(conteneur: Ref<HTMLElement | null>, ouvert: Ref<boo
 
   function ouvrir() {
     rendreA = document.activeElement as HTMLElement | null;
-    document.addEventListener("keydown", surTab, true);
+    if (boucle) document.addEventListener("keydown", surTab, true);
     void nextTick(() => {
       (focusables()[0] ?? conteneur.value)?.focus();
     });

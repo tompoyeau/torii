@@ -313,3 +313,12 @@ button { font-family: inherit; cursor: pointer; }
   animation: none !important;
   transition: none !important;
 }
+
+/* --- Barre latérale -----------------------------------------------------------
+   Sa largeur, partagée par la grille de l'application et par les fiches (jeu, Boutique)
+   qui s'ouvrent À SA DROITE : la barre reste visible et cliquable partout. Nulle quand
+   elle passe au-dessus du contenu (fenêtre étroite : démo web sur téléphone). */
+:root { --largeur-laterale: 262px; }
+@media (max-width: 820px) {
+  :root { --largeur-laterale: 0px; }
+}
