@@ -27,7 +27,8 @@ import { useUi } from "../composables/useUi";
 import { showToast } from "../composables/useToast";
 import { sourcesOf } from "../lib/friendPresence";
 import { gradientFor } from "../lib/covers";
-import { openExternal, openWebWindow } from "../lib/tauri";
+import { openExternal } from "../lib/tauri";
+import { ouvrirPage } from "../composables/usePageWeb";
 import type { LibGame } from "../types";
 import { t } from "../i18n";
 
@@ -130,17 +131,25 @@ function onSameGame() {
 }
 
 /**
- * Le profil Steam reste accessible quand la personne est amie de ce côté.
+ * Le profil Steam reste accessible quand la personne est amie de ce côté. Il s'ouvre
+ * dans la page web de Torii (une vraie WebView : Steam refuse d'être encadré par une
+ * `iframe`, `X-Frame-Options: SAMEORIGIN`).
  *
- * ⚠️ Il s'ouvre dans une fenêtre Torii et **pas** intégré à la page : Steam sert
- * `X-Frame-Options: SAMEORIGIN` et `frame-ancestors 'self' https://steamloopback.host`
- * sur toutes ses pages. Aucune page Steam ne peut être encadrée par Torii — c'est un refus
- * de Steam, pas une limite de Tauri. Repli sur le navigateur si le natif refuse.
+ * ⚠️ Seulement sur `steamcommunity.com` : l'adresse vient de la liste d'amis, et la page
+ * de Torii partage sa session Steam. Toute autre adresse part dans le navigateur.
  */
-async function openSteam() {
+function openSteam() {
   const url = friend.value?.profileUrl;
   if (!url || url === "#") return;
-  if (!(await openWebWindow(url, t("amis.profil.fenetreSteam", { nom: name.value })))) openExternal(url);
+  let surSteam = false;
+  try {
+    const u = new URL(url);
+    surSteam = u.protocol === "https:" && u.hostname === "steamcommunity.com";
+  } catch {
+    // adresse illisible : navigateur
+  }
+  if (surSteam) ouvrirPage(url);
+  else openExternal(url);
 }
 
 /**

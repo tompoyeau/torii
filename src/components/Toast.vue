@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { useToast } from "../composables/useToast";
+import { useUi } from "../composables/useUi";
 
 const { toasts } = useToast();
+/** La page web intégrée recouvre le bas de la fenêtre : les notifications montent. */
+const { section } = useUi();
 </script>
 
 <template>
@@ -13,7 +16,7 @@ const { toasts } = useToast();
     L'attribut est posé sur le CONTENEUR, qui existe en permanence : une région live
     ajoutée en même temps que son contenu n'est pas annoncée.
   -->
-  <div class="toasts" role="status" aria-live="polite">
+  <div class="toasts" :class="{ haut: section === 'web' }" role="status" aria-live="polite">
     <transition-group name="toast">
       <div v-for="t in toasts" :key="t.id" class="toast">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5" /></svg>
@@ -29,6 +32,7 @@ const { toasts } = useToast();
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   pointer-events: none;
 }
+.toasts.haut { bottom: auto; top: 16px; }
 .toast {
   display: inline-flex; align-items: center; gap: 9px;
   background: var(--surface); color: var(--text); border: 1px solid var(--border);

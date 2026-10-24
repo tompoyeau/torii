@@ -15,6 +15,7 @@ import CommonView from "./CommonView.vue";
 import FriendProfileView from "./FriendProfileView.vue";
 import FriendLibraryView from "./FriendLibraryView.vue";
 import WishlistView from "./WishlistView.vue";
+import PageWeb from "./PageWeb.vue";
 
 const { filtered, games } = useLibrary();
 const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, genre, setGenre, openGame } = useUi();
@@ -99,10 +100,11 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 <template>
   <div class="shell">
     <Sidebar />
-    <main class="main">
+    <main class="main" :class="{ 'sur-page': section === 'web' }">
       <TopBar />
 
-      <StoreView v-if="section === 'store'" />
+      <PageWeb v-if="section === 'web'" />
+      <StoreView v-else-if="section === 'store'" />
       <FriendsView v-else-if="section === 'friends'" />
       <CommonView v-else-if="section === 'common'" />
       <FriendProfileView v-else-if="section === 'friendProfile'" />
@@ -179,6 +181,8 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 <style scoped>
 .shell { display: grid; grid-template-columns: 262px 1fr; }
 .main { min-width: 0; padding: 0 34px 60px; }
+/* La page web prend toute la hauteur sous la barre : pas de marge qui ferait défiler. */
+.main.sur-page { padding-bottom: 0; }
 .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
 .sec-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
 .sec-head .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; }

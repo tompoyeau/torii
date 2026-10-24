@@ -8,6 +8,7 @@ import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { useUi } from "../composables/useUi";
 import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
 import { avecRaccourci } from "../composables/useRaccourcis";
+import { ouvrirPage } from "../composables/usePageWeb";
 import { activation, dateLongue, descripteur, libelleAvis, libelleFin, pageSteam, tonAvis } from "../lib/boutique";
 import { openExternal } from "../lib/tauri";
 import { formatPrix } from "../lib/format";
@@ -56,8 +57,13 @@ const showHidden = ref(false);
 /** Meilleure offre = 1re offre NON exclue ET disponible (jamais une rupture de stock). */
 const best = computed(() => visiblePrices.value.find((p) => p.available !== false) ?? null);
 
+/**
+ * Acheter : la page du revendeur s'ouvre DANS Torii, barre de Torii
+ * au-dessus pour voir sur quel site on paie, et « Ouvrir dans le navigateur » à portée
+ * pour qui préfère son gestionnaire de mots de passe.
+ */
 function buy(url: string) {
-  openExternal(url);
+  ouvrirPage(url);
 }
 
 function hideBroken(e: Event) {
@@ -126,7 +132,7 @@ function voirBibliotheque() {
 }
 
 function ouvrirSteam() {
-  if (product.value?.appId) void openExternal(pageSteam(product.value.appId));
+  if (product.value?.appId) ouvrirPage(pageSteam(product.value.appId));
 }
 
 /** Notes critiques à côté de celle de Steam (qui vient, elle, de la fiche Steam). */

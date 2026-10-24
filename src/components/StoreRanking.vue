@@ -6,10 +6,10 @@ import { useStoreHome, type Etat } from "../composables/useStoreHome";
 import { libelleAvis, libelleSortie, pageSteam, tonAvis } from "../lib/boutique";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
-import { openExternal } from "../lib/tauri";
 import { t } from "../i18n";
 import type { StoreShelfItem, StoreShelfKind } from "../types";
 import StorePossede from "./StorePossede.vue";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 /**
  * Classements façon Steam, en onglets : meilleures ventes (livrées avec l'accueil),
@@ -61,7 +61,7 @@ function reessayer() {
 
 function ouvrir(j: StoreShelfItem) {
   if (j.gameId) void openProduct(j.gameId);
-  else void openExternal(pageSteam(j.appId));
+  else ouvrirPage(pageSteam(j.appId));
 }
 
 const prix = (montant: number, j: StoreShelfItem) => formatPrix(montant, j.currency);

@@ -71,7 +71,6 @@ export default {
     voirBibliotheque: "Voir sa bibliothèque",
     memeJeu: "Jouer au même jeu",
     profilSteam: "Profil Steam",
-    fenetreSteam: "{nom} — profil Steam",
     reglagesRelation: "Réglages de cette relation",
     retirerAmi: "Retirer cet ami",
     totalJeux: "total de jeux",

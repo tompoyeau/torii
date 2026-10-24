@@ -26,7 +26,7 @@ const { section, query, openAddGame, showFriends, openSettings, settingsOpen } =
  * amis et ceux que tu convoites — deux jeux de données que le magasin de la bibliothèque
  * ne contient pas. Chacune a désormais **sa propre** recherche, comme la Boutique.
  */
-const SANS_RECHERCHE = ["store", "friendLibrary", "friendProfile", "common", "wishlist"];
+const SANS_RECHERCHE = ["store", "friendLibrary", "friendProfile", "common", "wishlist", "web"];
 const chercheDansLaBiblio = computed(() => !SANS_RECHERCHE.includes(section.value));
 
 /**
@@ -91,7 +91,8 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 
 <template>
   <div class="topbar">
-    <div class="historique">
+    <!-- Sur une page web, ses propres flèches (dans sa barre) servent les deux historiques. -->
+    <div v-if="section !== 'web'" class="historique">
       <button
         class="icon-btn"
         :disabled="!peutReculer"

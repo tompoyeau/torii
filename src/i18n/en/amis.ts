@@ -67,7 +67,6 @@ const en: Forme<typeof fr> = {
     voirBibliotheque: "View their library",
     memeJeu: "Play the same game",
     profilSteam: "Steam profile",
-    fenetreSteam: "{nom} — Steam profile",
     reglagesRelation: "Settings for this friendship",
     retirerAmi: "Remove this friend",
     totalJeux: "games in total",

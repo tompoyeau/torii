@@ -13,7 +13,8 @@ import type { LibraryFilter } from "../types";
  * haut et le bouton retour des fiches reculent d'une étape ; leurs jumeaux avancent.
  *
  * 🔑 UNE ÉTAPE = TOUT CE QUI SE VOIT : la section (et l'ami consulté), le filtre de la
- * bibliothèque, la fiche d'un jeu, la fiche Boutique et la pop-in Paramètres. La fiche
+ * bibliothèque, la fiche d'un jeu, la fiche Boutique, la pop-in Paramètres et la page
+ * web intégrée. La fiche
  * Boutique manquait à l'ancien historique (elle vit dans `useStore`, pas dans `useUi`) :
  * ouvrir un jeu similaire remplaçait la fiche sans rien retenir, et le retour refermait
  * tout d'un coup — on retombait sur la vitrine au lieu du premier jeu ouvert.
@@ -27,8 +28,8 @@ import type { LibraryFilter } from "../types";
  * nouvelle étape faisait rouvrir la fiche au retour suivant, au lieu de reculer.
  */
 
-/** Les surcouches qui font une étape, de la plus haute à la plus basse. */
-export type Couche = "parametres" | "produit" | "jeu";
+/** Ce qu'Échap referme, du plus haut au plus bas : les surcouches, puis la page web. */
+export type Couche = "parametres" | "produit" | "jeu" | "page";
 
 /** Ce qui défile : la page, et chacune des deux fiches (qui ont leur propre défilement). */
 type Zone = "page" | "jeu" | "produit";
@@ -44,6 +45,12 @@ interface Etape {
   produit: string | null;
   parametres: boolean;
   categorie: SettingsCategory;
+  /**
+   * Page web intégrée (section `web`) : la dernière adresse où l'on était. Les liens
+   * suivis DANS la page la mettent à jour sans faire d'étape — c'est l'historique de la
+   * page elle-même qui les retient — et revenir à cette étape rouvre la page là.
+   */
+  page: string | null;
   /**
    * Où on en était, tenu à jour à chaque défilement tant que l'étape est affichée.
    * Revenir au premier jeu doit ramener en bas de sa fiche, là où on avait cliqué le
@@ -72,6 +79,7 @@ function capturer(precedente?: Etape): Etape {
     produit,
     parametres: ui.settingsOpen.value,
     categorie: ui.settingsCategory.value,
+    page: ui.pageWeb.value,
     // Une fiche qui reste la même garde son défilement ; une autre fiche repart du haut.
     defilement: {
       page: window.scrollY,
@@ -81,7 +89,8 @@ function capturer(precedente?: Etape): Etape {
   };
 }
 
-/** Même écran ? (La catégorie des Paramètres n'en décide pas : voir le `watch`.) */
+/** Même écran ? (Ni la catégorie des Paramètres ni l'adresse de la page web n'en
+    décident : voir le `watch`.) */
 function memeEtape(a: Etape, b: Etape): boolean {
   return (
     a.section === b.section && a.filter === b.filter &&
@@ -102,6 +111,7 @@ watch(
   () => [
     ui.section.value, ui.filter.value, ui.friendProfileKey.value, ui.friendLibraryId.value,
     ui.selectedGameId.value, store.selectedGameId.value, ui.settingsOpen.value, ui.settingsCategory.value,
+    ui.pageWeb.value,
   ],
   () => {
     if (restauration) return;
@@ -111,8 +121,10 @@ watch(
     const nouvelle = capturer(courante);
     if (memeEtape(nouvelle, courante)) {
       // Un onglet des Paramètres remplace l'étape au lieu de s'y ajouter : le retour
-      // referme la pop-in, il ne rejoue pas chaque onglet visité.
+      // referme la pop-in, il ne rejoue pas chaque onglet visité. Idem pour un lien
+      // suivi dans la page web : son propre historique le retient déjà.
       courante.categorie = nouvelle.categorie;
+      courante.page = nouvelle.page;
       return;
     }
     arriere.push(courante);
@@ -190,6 +202,7 @@ function appliquer(e: Etape) {
   ui.selectedGameId.value = e.jeu;
   ui.settingsOpen.value = e.parametres;
   ui.settingsCategory.value = e.categorie;
+  ui.pageWeb.value = e.page;
   if (e.produit !== store.selectedGameId.value) {
     // Rouvrir la fiche, et pas seulement poser son identifiant : c'est `openProduct` qui
     // la charge (depuis le cache des fiches vues, la plupart du temps).
@@ -246,17 +259,33 @@ export function useModaleDeNavigation(modale: Modale) {
 
 // --- Gestes -------------------------------------------------------------------
 
+/**
+ * L'historique de la page web intégrée (`usePageWeb`). Sur cette page, précédent et
+ * suivant passent d'abord par lui, comme dans un navigateur : chaque fonction renvoie
+ * `false` quand la page est au bout de son propre historique.
+ */
+interface HistoriqueInterne {
+  reculer: () => boolean;
+  avancer: () => boolean;
+}
+let historiqueInterne: HistoriqueInterne | null = null;
+export function brancherHistoriqueInterne(h: HistoriqueInterne) {
+  historiqueInterne = h;
+}
+
 function reculer(): boolean {
   const modale = modaleOuverte();
   if (modale) {
     modale.fermer();
     return true;
   }
+  if (ui.section.value === "web" && historiqueInterne?.reculer()) return true;
   return deplacer(-1);
 }
 
 function avancer(): boolean {
   if (modaleOuverte()) return false;
+  if (ui.section.value === "web" && historiqueInterne?.avancer()) return true;
   return deplacer(1);
 }
 
@@ -264,6 +293,7 @@ const estOuverte: Record<Couche, (e: Etape) => boolean> = {
   parametres: (e) => e.parametres,
   produit: (e) => e.produit != null,
   jeu: (e) => e.jeu != null,
+  page: (e) => e.section === "web",
 };
 
 /**
@@ -287,7 +317,8 @@ function fermer(couche: Couche) {
   // la referme simplement, ce qui fait une étape.
   if (couche === "parametres") ui.closeSettings();
   else if (couche === "produit") store.closeProduct();
-  else ui.closeGame();
+  else if (couche === "jeu") ui.closeGame();
+  else ui.showLibrary();
 }
 
 /** La surcouche du dessus, celle qu'Échap referme. */
@@ -295,6 +326,7 @@ function coucheDuDessus(): Couche | null {
   if (ui.settingsOpen.value) return "parametres";
   if (store.selectedGameId.value != null) return "produit";
   if (ui.selectedGameId.value != null) return "jeu";
+  if (ui.section.value === "web") return "page";
   return null;
 }
 
@@ -313,6 +345,22 @@ function quitterLesSurcouches() {
 
 /** Titres des fiches Boutique vues : une étape ne garde que l'identifiant du jeu. */
 const titresProduits = reactive(new Map<string, string>());
+/** Titres des pages web, par adresse (envoyés par la page, voir `usePageWeb`). */
+const titresPages = reactive(new Map<string, string>());
+
+/** Retient le titre d'une page web, pour nommer l'étape dans le bouton retour. */
+export function noterTitrePage(url: string, titre: string) {
+  if (url && titre) titresPages.set(url, titre);
+}
+
+/** Le nom d'un site, à défaut de titre : `store.steampowered.com` sans le `www.`. */
+function domaine(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 watch(store.product, (p) => {
   const id = store.selectedGameId.value;
   if (p && id && id !== CHARGEMENT) titresProduits.set(id, p.title);
@@ -334,6 +382,7 @@ function libelle(e: Etape): string {
   if (e.produit) return titresProduits.get(e.produit) ?? t("boutique.produit.fiche");
   if (e.jeu) return (bibliotheque ??= useLibrary()).byId(e.jeu)?.title ?? t("fiche.fiche");
   switch (e.section) {
+    case "web": return e.page ? titresPages.get(e.page) ?? domaine(e.page) : t("page.titre");
     case "store": return t("bibliotheque.laterale.boutique");
     case "wishlist": return t("bibliotheque.laterale.wishlist");
     case "common": return t("bibliotheque.laterale.enCommun");

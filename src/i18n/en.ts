@@ -17,6 +17,7 @@ import commun from "./en/commun";
 import demo from "./en/demo";
 import comptes from "./en/comptes";
 import fiche from "./en/fiche";
+import page from "./en/page";
 import prix from "./en/prix";
 import reglages from "./en/reglages";
 import systeme from "./en/systeme";
@@ -33,6 +34,7 @@ const en: Forme<typeof fr> = {
   comptes,
   demo,
   fiche,
+  page,
   prix,
   reglages,
   systeme,

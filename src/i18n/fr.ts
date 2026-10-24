@@ -27,6 +27,7 @@ import commun from "./fr/commun";
 import demo from "./fr/demo";
 import comptes from "./fr/comptes";
 import fiche from "./fr/fiche";
+import page from "./fr/page";
 import prix from "./fr/prix";
 import reglages from "./fr/reglages";
 import systeme from "./fr/systeme";
@@ -39,6 +40,7 @@ export default {
   comptes,
   demo,
   fiche,
+  page,
   prix,
   reglages,
   systeme,

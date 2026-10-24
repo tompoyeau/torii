@@ -114,6 +114,36 @@ fn jeton_acces(config_dir: &Path) -> Option<String> {
     renouveler(config_dir, &rt, &mut garde).map(|t| t.access_token)
 }
 
+const ECHANGE_URL: &str =
+    "https://account-public-service-prod03.ol.epicgames.com/account/api/oauth/exchange";
+
+/// Adresse qui ouvre `cible` dans un navigateur **déjà connecté** au compte Epic de Torii.
+///
+/// 🔑 C'est ce que fait le launcher Epic pour ses propres pages web : un code d'échange à
+/// usage unique (5 minutes), tiré du jeton de session, que `www.epicgames.com/id/exchange`
+/// transforme en session web avant de rediriger vers la cible. La page web de Torii n'a
+/// pas besoin de garder la session Epic du jour de la connexion : celle-ci ne survit pas
+/// à la fermeture de l'application (cookie de session), et une reconnexion Steam efface
+/// toutes les données de navigation.
+///
+/// `None` si Epic n'est pas connecté ou ne répond pas : la page s'ouvre alors sans session.
+pub fn url_connectee(config_dir: &Path, cible: &str) -> Option<String> {
+    let jeton = jeton_acces(config_dir)?;
+    let json: Value = ureq::get(ECHANGE_URL)
+        .timeout(Duration::from_secs(15))
+        .set("Authorization", &format!("bearer {jeton}"))
+        .set("User-Agent", UA)
+        .call()
+        .ok()?
+        .into_json()
+        .ok()?;
+    let code = json["code"].as_str()?;
+    Some(format!(
+        "https://www.epicgames.com/id/exchange?exchangeCode={code}&redirectUrl={}",
+        urlencode(cible)
+    ))
+}
+
 /// Fiche d'un jeu Epic dans la langue de l'interface, lue dans le catalogue Epic.
 ///
 /// 🔑 PAR IDENTIFIANT, DONC SÛRE. Sans elle, un jeu Epic était deviné par son titre sur

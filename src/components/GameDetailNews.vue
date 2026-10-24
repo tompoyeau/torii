@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { etiquetteIntl, t } from "../i18n";
-import { openExternal } from "../lib/tauri";
 import type { GameNews } from "../types";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 /**
  * Actualités d'un jeu de la bibliothèque : les dernières annonces de l'éditeur sur Steam
@@ -25,12 +25,12 @@ function cacher(e: Event) {
         <h3>{{ t("fiche.actualites.titre") }}</h3>
         <p>{{ studio ? t("fiche.actualites.sousTitre", { studio }) : t("fiche.actualites.sousTitreEditeur") }}</p>
       </div>
-      <button class="lien" @click="openExternal(`https://store.steampowered.com/news/app/${appId}`)">
+      <button class="lien" @click="ouvrirPage(`https://store.steampowered.com/news/app/${appId}`)">
         {{ t("fiche.actualites.toutes") }} ↗
       </button>
     </div>
     <div class="grille">
-      <button v-for="n in actualites" :key="n.url" class="carte" @click="openExternal(n.url)">
+      <button v-for="n in actualites" :key="n.url" class="carte" @click="ouvrirPage(n.url)">
         <img v-if="n.image" :src="n.image" alt="" loading="lazy" @error="cacher" />
         <span class="texte">
           <span class="date">{{ date(n.date) }}</span>

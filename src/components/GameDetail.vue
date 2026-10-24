@@ -8,6 +8,7 @@ import { useUi } from "../composables/useUi";
 import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
 import { avecRaccourci } from "../composables/useRaccourcis";
 import { useTorii } from "../composables/useTorii";
+import { ouvrirPage } from "../composables/usePageWeb";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { estHorsLauncher, platformName } from "../data/platforms";
@@ -109,7 +110,7 @@ function ownerInitials(name: string): string {
   return name.trim().slice(0, 2).toUpperCase();
 }
 function openFriendProfile(f: FriendLib) {
-  openExternal(`https://steamcommunity.com/profiles/${f.steamId}`);
+  ouvrirPage(`https://steamcommunity.com/profiles/${f.steamId}`);
 }
 
 /** Provenances jouables (jeu multi-plateforme) ; vide si mono-source. */
@@ -269,7 +270,7 @@ const steam = computed(() => fiche.value?.steam ?? null);
 /** L'appid de la page Steam du jeu, s'il en a une sûre. */
 const appIdSteam = computed(() => fiche.value?.appId ?? (steamAppid.value ? Number(steamAppid.value) : null));
 function ouvrirSteam() {
-  if (appIdSteam.value) void openExternal(pageSteam(appIdSteam.value));
+  if (appIdSteam.value) ouvrirPage(pageSteam(appIdSteam.value));
 }
 
 /** Médias : ceux de Steam (bandes-annonces avec le son, toutes les captures), sinon les captures connues. */
@@ -408,11 +409,13 @@ const tonNote = (score: number) => (score >= 75 ? "pos" : score >= 50 ? "mixte" 
 const aDesNotes = computed(() => !!steam.value && !!(steam.value.reviewScore || steam.value.metacritic || steam.value.classification));
 
 const liens = computed(() => {
-  const out: { cle: string; libelle: string; url: string }[] = [];
+  // `dansTorii` : les pages Steam s'ouvrent dans Torii ; le site officiel, adresse
+  // fournie par l'éditeur et non par un launcher, part dans le navigateur (↗).
+  const out: { cle: string; libelle: string; url: string; dansTorii: boolean }[] = [];
   const appId = appIdSteam.value;
-  if (appId) out.push({ cle: "steam", libelle: t("fiche.liens.pageSteam"), url: pageSteam(appId) });
-  if (steam.value?.site) out.push({ cle: "site", libelle: t("fiche.liens.site"), url: steam.value.site });
-  if (appId) out.push({ cle: "communaute", libelle: t("fiche.liens.communaute"), url: `https://steamcommunity.com/app/${appId}` });
+  if (appId) out.push({ cle: "steam", libelle: t("fiche.liens.pageSteam"), url: pageSteam(appId), dansTorii: true });
+  if (steam.value?.site) out.push({ cle: "site", libelle: t("fiche.liens.site"), url: steam.value.site, dansTorii: false });
+  if (appId) out.push({ cle: "communaute", libelle: t("fiche.liens.communaute"), url: `https://steamcommunity.com/app/${appId}`, dansTorii: true });
   return out;
 });
 
@@ -719,7 +722,7 @@ function retour() {
 
           <div v-if="liens.length" class="liens-card">
             <span class="liens-titre">{{ t("fiche.liens.titre") }}</span>
-            <button v-for="l in liens" :key="l.cle" class="lien" @click="openExternal(l.url)">{{ l.libelle }} ↗</button>
+            <button v-for="l in liens" :key="l.cle" class="lien" @click="l.dansTorii ? ouvrirPage(l.url) : openExternal(l.url)">{{ l.libelle }}<template v-if="!l.dansTorii"> ↗</template></button>
           </div>
         </aside>
       </div>

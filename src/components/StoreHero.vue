@@ -6,9 +6,9 @@ import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { libelleAvis, pageSteam, tonAvis } from "../lib/boutique";
 import { formatPrix } from "../lib/format";
 import { useImageCascade } from "../lib/images";
-import { openExternal } from "../lib/tauri";
 import { t } from "../i18n";
 import type { StoreShelfItem } from "../types";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 /**
  * Vedette de la Boutique : grands jeux populaires en promo, un à la fois.
@@ -80,7 +80,7 @@ function ouvrir() {
   const j = jeu.value;
   if (!j) return;
   if (j.gameId) void openProduct(j.gameId);
-  else void openExternal(pageSteam(j.appId));
+  else ouvrirPage(pageSteam(j.appId));
 }
 
 function quitterFocus(e: FocusEvent) {

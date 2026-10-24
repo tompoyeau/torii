@@ -1674,6 +1674,54 @@ stats et les liens (page Steam, site officiel, communauté).
   `listeRaccourcis()`). Les chiffres se lisent par `e.code` (AZERTY : Ctrl+1 = « & ») et
   Ctrl+Alt est écarté (AltGr).
 
+## Page web intégrée (`page_web.rs`, `PageWeb.vue`, `usePageWeb.ts`)
+
+- Les pages des launchers (boutique et communauté Steam, actualités, profils Steam des
+  amis) **et les pages d'achat des revendeurs** s'ouvrent DANS la fenêtre, section `web`,
+  sous une barre Torii : ← → ⟳, domaine + cadenas, « Ouvrir dans le navigateur », ✕.
+  Restent dans le navigateur : site officiel d'un jeu, Metacritic/OpenCritic, GitHub.
+- **WebView enfant native** (`Window::add_child`, feature Tauri **`unstable`**), posée sur
+  la place que mesure `PageWeb.vue` (`getBoundingClientRect` → `page_bornes`, recalée par
+  `ResizeObserver`). Pas d'`iframe` : Steam et la plupart des boutiques l'interdisent
+  (`X-Frame-Options`). Remplace l'ancienne `open_web_window` (fenêtre à part, réservée au
+  profil Steam d'un ami), supprimée.
+- ⚠️ **Elle passe au-dessus de toute l'interface.** Cachée dès qu'une surcouche s'ouvre
+  (fiche, Paramètres, modale) ; les notifications montent en haut pendant qu'elle est
+  affichée ; le bandeau de mise à jour lui rogne le bas. Toute nouvelle surcouche Torii
+  doit entrer dans `recouverte` (`PageWeb.vue`), sinon elle s'ouvrira SOUS la page.
+- 🔑 **Sessions : seul Steam en a une durable.** Même profil WebView2 que les fenêtres de
+  connexion, mais relevé le 24/10/2026 : Steam garde `steamLoginSecure` + `steamRefresh_steam`
+  (des mois) ; Epic n'avait plus que des cookies techniques (sa session web, `EPIC_SSO`, dure
+  quelques HEURES) ; rien pour EA, GOG ni Battle.net (la connexion Steam « fraîche » fait
+  `clear_all_browsing_data`, qui efface tout le profil).
+- 🔑 **Epic est connecté à la demande** (`session_epic`) : à la première arrivée sur
+  `*.epicgames.com` (lien direct ou redirection d'un lien d'achat `itad.link`), la
+  navigation est suspendue, un **code d'échange** est tiré du jeton Epic de Torii
+  (`accounts::epic::url_connectee`, comme le launcher Epic pour ses pages web) et la page
+  repart par `www.epicgames.com/id/exchange?exchangeCode=…&redirectUrl=<cible>`. Une fois
+  par page. ⚠️ Si rien n'est encore affiché, on fait `location.replace` et pas `navigate` :
+  sinon la page blanche de départ restait dans l'historique et « précédent » y menait.
+- 🔑 **Chaque page a son propre nom** (`torii-page-N`), oublié dès la fermeture. Un nom
+  fixe faisait retomber une réouverture sur la page détruite (place vide, aucune erreur).
+- 🔑 **Aucun accès aux commandes** : la capability `default` n'a pas de `remote`, Tauri
+  refuse l'IPC à l'origine distante (vérifié depuis la page : « not allowed »). Ne JAMAIS
+  ajouter de `remote` à une capability sans y repenser.
+- **Ce qu'on y ouvre** : seulement des adresses que Torii fournit (`ouvrirPage`), jamais
+  une adresse venue d'un ami (le profil Steam d'un ami n'y passe que s'il est sur
+  `steamcommunity.com`). **Dans** la page, navigation libre en HTTPS — un paiement passe
+  par PayPal, Stripe, la banque ; c'est le domaine affiché par la barre Torii qui dit où
+  l'on est. http et protocoles des launchers → Windows ; le reste est refusé. Fenêtre
+  surgissante avec taille (PayPal, 3-D Secure) → vraie fenêtre ; lien « nouvel onglet » →
+  suivi dans la page.
+- **Un seul historique** : précédent/suivant reculent d'abord DANS la page (historique
+  WebView2 lu par `HistoryChanged`/`SourceChanged`, via `webview2-com`), puis dans Torii.
+  Les liens suivis dans la page mettent à jour l'étape sans en créer ; ✕ et Échap
+  (`fermer("page")`) reviennent à l'écran d'avant la page.
+- Vérifier en vrai avec le port de débogage :
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333 npm run tauri dev`,
+  puis `http://127.0.0.1:9333/json/list` (une cible par WebView). ⚠️ Ce port donne la main
+  sur les sessions connectées à tout programme du PC : ne jamais le laisser ouvert.
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.

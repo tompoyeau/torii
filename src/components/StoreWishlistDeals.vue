@@ -4,9 +4,9 @@ import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { useWishlist } from "../composables/useWishlist";
 import { formatPrix } from "../lib/format";
-import { openExternal } from "../lib/tauri";
 import { t } from "../i18n";
 import type { WishlistItem } from "../types";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 /**
  * « Ta wishlist en promo », en haut de la Boutique : les jeux suivis dont la meilleure
@@ -31,7 +31,7 @@ const enPromo = computed(() =>
 
 function ouvrir(i: WishlistItem) {
   if (i.gameId) void openProduct(i.gameId);
-  else if (i.appId) void openExternal(`https://store.steampowered.com/app/${i.appId}`);
+  else if (i.appId) ouvrirPage(`https://store.steampowered.com/app/${i.appId}`);
 }
 
 /** Capsule Steam, sinon jaquette de repli (beaucoup de jeux récents n'ont pas la première). */

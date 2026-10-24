@@ -5,7 +5,7 @@ import { initialPrefs } from "./usePreferences";
 /** Section affichée dans la zone principale : bibliothèque, boutique, amis… */
 export type MainSection =
   | "library" | "store" | "friends" | "common" | "wishlist"
-  | "friendProfile" | "friendLibrary";
+  | "friendProfile" | "friendLibrary" | "web";
 
 /** Catégorie affichée dans la pop-in Paramètres. */
 export type SettingsCategory = "general" | "hidden" | "stores" | "accounts" | "torii" | "about" | "raccourcis";
@@ -37,6 +37,9 @@ interface UiState {
   friendProfileKey: string | null;
   /** Compte Torii dont on consulte la bibliothèque (section `friendLibrary`), ou null. */
   friendLibraryId: string | null;
+  /** Adresse affichée par la page web intégrée (section `web`), ou null. Suit la page :
+      elle change quand on y clique un lien, sans faire d'étape d'historique. */
+  pageWeb: string | null;
 }
 
 const state = reactive<UiState>({
@@ -44,6 +47,7 @@ const state = reactive<UiState>({
   section: "library",
   friendProfileKey: null,
   friendLibraryId: null,
+  pageWeb: null,
   filter: initialPrefs.defaultFilter,
   query: "",
   sort: initialPrefs.defaultSort,
@@ -106,6 +110,13 @@ export function useUi() {
     },
     showWishlist: () => {
       state.section = "wishlist";
+      window.scrollTo({ top: 0 });
+    },
+    /** Affiche une page web dans Torii. Passer par `ouvrirPage` (`usePageWeb`), qui
+        referme d'abord les fiches et retombe sur le navigateur hors de l'application. */
+    showWeb: (url: string) => {
+      state.pageWeb = url;
+      state.section = "web";
       window.scrollTo({ top: 0 });
     },
     setSort: (sort: SortKey) => (state.sort = sort),

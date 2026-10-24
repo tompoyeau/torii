@@ -7,10 +7,10 @@ import { libelleAvis, libelleSortie, pageSteam, tonAvis } from "../lib/boutique"
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
 import { useImageCascade } from "../lib/images";
-import { openExternal } from "../lib/tauri";
 import { t } from "../i18n";
 import type { StoreShelfItem } from "../types";
 import StorePossede from "./StorePossede.vue";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 /** Carte d'un jeu choisi par Steam : jaquette (portrait) ou bandeau (paysage). */
 const props = withDefaults(defineProps<{ jeu: StoreShelfItem; format?: "portrait" | "paysage" }>(), {
@@ -34,7 +34,7 @@ const { src, onError } = useImageCascade(() =>
 /** Fiche produit si le comparateur connaît le jeu, sinon sa page Steam. */
 function ouvrir() {
   if (props.jeu.gameId) void openProduct(props.jeu.gameId);
-  else void openExternal(pageSteam(props.jeu.appId));
+  else ouvrirPage(pageSteam(props.jeu.appId));
 }
 
 function basculerWishlist() {

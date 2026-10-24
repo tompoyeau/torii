@@ -8,13 +8,14 @@ import { useStore } from "../composables/useStore";
 import { pageSteam } from "../lib/boutique";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
-import { hasTauriRuntime, openExternal } from "../lib/tauri";
+import { hasTauriRuntime } from "../lib/tauri";
 import { t } from "../i18n";
 import type { StoreGame, StoreShelfItem } from "../types";
 import StorePossede from "./StorePossede.vue";
 import StoreRow from "./StoreRow.vue";
 import StorePages from "./StorePages.vue";
 import StoreShelfCard from "./StoreShelfCard.vue";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 /**
  * Bas de la fiche produit : contenus additionnels et jeux similaires. Rien n'est demandé
@@ -70,7 +71,7 @@ watch([aLEcran, visibles], () => {
 
 function ouvrir(j: StoreShelfItem) {
   if (j.gameId) void openProduct(j.gameId);
-  else void openExternal(pageSteam(j.appId));
+  else ouvrirPage(pageSteam(j.appId));
 }
 const prix = (m: number, j: StoreShelfItem) => formatPrix(m, j.currency);
 </script>

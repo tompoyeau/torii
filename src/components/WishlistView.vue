@@ -3,11 +3,11 @@ import { computed, onMounted, ref } from "vue";
 import { useWishlist } from "../composables/useWishlist";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
-import { openExternal } from "../lib/tauri";
 import { formatPrix } from "../lib/format";
 import { t } from "../i18n";
 import { gradientFor } from "../lib/covers";
 import type { WishlistItem } from "../types";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 const { items, loading, loaded, steamConnected, indisponible, onSaleCount, refresh } = useWishlist();
 const { openProduct } = useStore();
@@ -38,7 +38,7 @@ function coverSrc(it: WishlistItem): string | null {
 /** Clic sur un jeu : fiche Boutique de Torii si connue, sinon page Steam. */
 function open(it: WishlistItem) {
   if (it.gameId) openProduct(it.gameId);
-  else openExternal(`https://store.steampowered.com/app/${it.appId}`);
+  else ouvrirPage(`https://store.steampowered.com/app/${it.appId}`);
 }
 /**
  * Recherche LOCALE, comme dans « En commun ». Celle du bandeau filtre la bibliotheque, or

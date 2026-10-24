@@ -6,10 +6,10 @@ import { useStore } from "../composables/useStore";
 import { pageSteam } from "../lib/boutique";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
-import { openExternal } from "../lib/tauri";
 import { t } from "../i18n";
 import type { StoreShelfItem } from "../types";
 import StorePages from "./StorePages.vue";
+import { ouvrirPage } from "../composables/usePageWeb";
 
 /**
  * Contenus additionnels d'un jeu possédé sur Steam : ceux qu'on a (marqués), puis ceux
@@ -50,7 +50,7 @@ const possede = (j: StoreShelfItem) => props.possedes.includes(j.appId);
 /** Un contenu qu'on n'a pas s'ouvre dans la Boutique (comparatif de prix) ; sinon, sur Steam. */
 function ouvrir(j: StoreShelfItem) {
   if (!possede(j) && j.gameId) void openProduct(j.gameId);
-  else void openExternal(pageSteam(j.appId));
+  else ouvrirPage(pageSteam(j.appId));
 }
 const prix = (m: number, j: StoreShelfItem) => formatPrix(m, j.currency);
 </script>

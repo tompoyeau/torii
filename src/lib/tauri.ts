@@ -730,23 +730,53 @@ export async function openExternal(url: string): Promise<void> {
   }
 }
 
-/**
- * Ouvre une page **dans une fenêtre Torii** au lieu du navigateur de l'utilisateur.
- * Sert au profil d'un ami Steam sans compte Torii : l'information qu'on vient chercher
- * dans l'application ne devrait pas obliger à en sortir.
- *
- * Renvoie `false` si Torii ne peut pas (hors Tauri) ou ne veut pas (domaine hors de sa
- * liste blanche) — l'appelant retombe alors sur `openExternal`, plutôt que de laisser un
- * clic sans effet.
- */
-export async function openWebWindow(url: string, title: string): Promise<boolean> {
-  if (!hasTauriRuntime()) return false;
+// --- Page web intégrée (`page_web.rs`) -------------------------------------------
+// Une WebView posée dans la fenêtre, à l'emplacement que lui réserve `PageWeb.vue`.
+
+/** Emplacement de la page, en pixels CSS depuis le coin de la fenêtre. */
+export interface BornesPage {
+  x: number;
+  y: number;
+  largeur: number;
+  hauteur: number;
+}
+
+/** Ce que la page dit d'elle-même, à chaque changement. */
+export interface EtatPage {
+  url: string;
+  titre: string;
+  chargement: boolean;
+  peutReculer: boolean;
+  peutAvancer: boolean;
+}
+
+/** Ouvre la page (ou y renvoie celle qui est ouverte). L'erreur remonte : elle s'affiche. */
+export async function pageOuvrir(url: string, bornes: BornesPage): Promise<void> {
+  await callOrThrow<void>("page_ouvrir", { url, bornes });
+}
+
+export async function pageBornes(bornes: BornesPage): Promise<void> {
+  await call<void>("page_bornes", { bornes }, undefined);
+}
+
+export async function pageVisible(visible: boolean): Promise<void> {
+  await call<void>("page_visible", { visible }, undefined);
+}
+
+export async function pageFermer(): Promise<void> {
+  await call<void>("page_fermer", undefined, undefined);
+}
+
+export async function pageAction(action: "precedent" | "suivant" | "recharger"): Promise<void> {
+  await call<void>("page_action", { action }, undefined);
+}
+
+export async function onPageWeb(cb: (etat: EtatPage) => void): Promise<() => void> {
   try {
-    await callOrThrow<void>("open_web_window", { url, title });
-    return true;
-  } catch (err) {
-    console.error("[torii] échec de open_web_window", err);
-    return false;
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<EtatPage>("page-web", (e) => cb(e.payload));
+  } catch {
+    return () => {};
   }
 }
 
