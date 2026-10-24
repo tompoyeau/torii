@@ -5,6 +5,14 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.24.0
+- **Back and forward, everywhere.** The mouse back and forward buttons, Alt+← and Alt+→, or the new arrows at the top left: you move around Torii like in a browser. From a similar game, going back now returns to the first game you opened, right where you were, instead of the Store front page. The back button on a game page says where it leads.
+- **Keyboard shortcuts**: Ctrl+F to jump to search, Ctrl+1 to 4 for the Library, Store, Wishlist and Friends, Ctrl+N to add a game, F5 to sync again (it no longer reloads the whole app), Ctrl+, for settings. F1 or ? lists them all in Settings > Keyboard shortcuts.
+- **Web pages open inside Torii**: a game's Steam page, news, your friends' Steam profiles, Metacritic and OpenCritic scores, official websites, and even resellers' purchase pages. A Torii bar always shows which site you're on, with “Open in browser” one click away.
+- **Steam and Epic are already signed in to your account there**: no need to sign in again to buy.
+- **The sidebar stays visible** when you open a game's page, from your library or from the Store: the page opens to its right. The Play button moves level with the stats row.
+- **Esc only closes what's on top**: it used to close the Store page and the game page under it at once. And a page or the settings you closed no longer reopen on the next back.
+
 ## 0.23.0
 - **A completely redesigned page for each game in your library.** Under the title, how you play it: playtime, last session, disk space and achievement progress. Right below, the Steam and Metacritic scores and the age rating. Then come the friends who also own the game, real trailers with sound and every screenshot, the publisher's latest announcements, the additional content, the full description and an “At a glance” section (game modes, controller, your language).
 - **Achievements that say more**: your rarest achievements, with the share of players who have them, the next ones to go for (the easiest among those you're missing, with your progress), and the full list sorted by rarity. Hidden achievements stay hidden.

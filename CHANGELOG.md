@@ -5,6 +5,14 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.24.0
+- **Précédent et suivant, partout.** Boutons retour et avant de la souris, Alt+← et Alt+→, ou les nouvelles flèches en haut à gauche : Torii se parcourt comme un navigateur. Depuis un jeu similaire, le retour ramène au premier jeu ouvert, là où tu en étais, et non plus à la vitrine de la Boutique. Le bouton retour d'une fiche dit où il mène.
+- **Des raccourcis clavier** : Ctrl+F pour aller dans la recherche, Ctrl+1 à 4 pour la Bibliothèque, la Boutique, la Wishlist et les Amis, Ctrl+N pour ajouter un jeu, F5 pour resynchroniser (il ne recharge plus toute l'application), Ctrl+, pour les paramètres. F1 ou ? les rappelle tous dans Paramètres > Raccourcis clavier.
+- **Les pages web s'ouvrent dans Torii** : page Steam d'un jeu, actualités, profils Steam de tes amis, notes Metacritic et OpenCritic, site officiel, et même les pages d'achat des revendeurs. Une barre Torii affiche toujours le site où tu es, avec « Ouvrir dans le navigateur » à portée de clic.
+- **Steam et Epic y sont déjà connectés à ton compte** : pas besoin de te reconnecter pour acheter.
+- **La barre latérale reste affichée** quand tu ouvres la fiche d'un jeu, de ta bibliothèque comme de la Boutique : la fiche s'ouvre à sa droite. Le bouton Jouer passe à la hauteur de la ligne des stats.
+- **Échap ne ferme plus que ce qui est au-dessus** : il refermait d'un coup la fiche Boutique et la fiche du jeu en dessous. Et une fiche ou les Paramètres refermés ne se rouvrent plus au retour suivant.
+
 ## 0.23.0
 - **La fiche d'un jeu de ta bibliothèque, entièrement repensée.** Sous le titre, ton rapport au jeu : temps de jeu, dernière session, place sur le disque et progression des succès. Juste dessous, les notes Steam et Metacritic et la classification d'âge. Viennent ensuite les amis qui ont aussi le jeu, les vraies bandes-annonces avec le son et toutes les captures, les dernières annonces de l'éditeur, les extensions, la description complète et un « En bref » (modes de jeu, manette, ta langue).
 - **Des succès plus parlants** : tes succès les plus rares, avec la part des joueurs qui les ont, les prochains à viser (les plus faciles parmi ceux qui te manquent, avec ton avancement), et la liste complète triée par rareté. Les succès cachés restent cachés.
