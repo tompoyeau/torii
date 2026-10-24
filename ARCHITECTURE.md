@@ -1686,7 +1686,10 @@ stats et les liens (page Steam, site officiel, communauté).
 - Les pages des launchers (boutique et communauté Steam, actualités, profils Steam des
   amis) **et les pages d'achat des revendeurs** s'ouvrent DANS la fenêtre, section `web`,
   sous une barre Torii : ← → ⟳, domaine + cadenas, « Ouvrir dans le navigateur », ✕.
-  Restent dans le navigateur : site officiel d'un jeu, Metacritic/OpenCritic, GitHub.
+  Depuis le 24/10/2026, aussi les notes Metacritic/OpenCritic et le site
+  officiel d'un jeu. Restent dans le navigateur : « Signaler un problème » (GitHub), le
+  bouton « Ouvrir dans le navigateur », un profil d'ami hors `steamcommunity.com`, et
+  toute adresse sans HTTPS.
 - **WebView enfant native** (`Window::add_child`, feature Tauri **`unstable`**), posée sur
   la place que mesure `PageWeb.vue` (`getBoundingClientRect` → `page_bornes`, recalée par
   `ResizeObserver`). Pas d'`iframe` : Steam et la plupart des boutiques l'interdisent

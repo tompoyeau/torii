@@ -13,7 +13,7 @@ import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { estHorsLauncher, platformName } from "../data/platforms";
 import { libelleAvis, nombre, pageSteam, tonAvis } from "../lib/boutique";
-import { installSource, launchSource, openExternal, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
+import { installSource, launchSource, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
 import type { FriendLib, GameSource, SteamAchievements } from "../types";
 import GameDetailAchievements from "./GameDetailAchievements.vue";
 import GameDetailDlc from "./GameDetailDlc.vue";
@@ -410,13 +410,12 @@ const tonNote = (score: number) => (score >= 75 ? "pos" : score >= 50 ? "mixte" 
 const aDesNotes = computed(() => !!steam.value && !!(steam.value.reviewScore || steam.value.metacritic || steam.value.classification));
 
 const liens = computed(() => {
-  // `dansTorii` : les pages Steam s'ouvrent dans Torii ; le site officiel, adresse
-  // fournie par l'éditeur et non par un launcher, part dans le navigateur (↗).
-  const out: { cle: string; libelle: string; url: string; dansTorii: boolean }[] = [];
+  // Tous s'ouvrent dans Torii (page web intégrée), site officiel compris.
+  const out: { cle: string; libelle: string; url: string }[] = [];
   const appId = appIdSteam.value;
-  if (appId) out.push({ cle: "steam", libelle: t("fiche.liens.pageSteam"), url: pageSteam(appId), dansTorii: true });
-  if (steam.value?.site) out.push({ cle: "site", libelle: t("fiche.liens.site"), url: steam.value.site, dansTorii: false });
-  if (appId) out.push({ cle: "communaute", libelle: t("fiche.liens.communaute"), url: `https://steamcommunity.com/app/${appId}`, dansTorii: true });
+  if (appId) out.push({ cle: "steam", libelle: t("fiche.liens.pageSteam"), url: pageSteam(appId) });
+  if (steam.value?.site) out.push({ cle: "site", libelle: t("fiche.liens.site"), url: steam.value.site });
+  if (appId) out.push({ cle: "communaute", libelle: t("fiche.liens.communaute"), url: `https://steamcommunity.com/app/${appId}` });
   return out;
 });
 
@@ -612,7 +611,7 @@ function retour() {
               class="badge"
               :disabled="!steam.metacriticUrl"
               :title="t('boutique.produit.voirSur', { source: 'Metacritic' })"
-              @click="steam.metacriticUrl && openExternal(steam.metacriticUrl)"
+              @click="steam.metacriticUrl && ouvrirPage(steam.metacriticUrl)"
             >
               <b class="score" :class="tonNote(steam.metacritic)">{{ steam.metacritic }}</b>Metacritic
             </button>
@@ -720,7 +719,7 @@ function retour() {
 
           <div v-if="liens.length" class="liens-card">
             <span class="liens-titre">{{ t("fiche.liens.titre") }}</span>
-            <button v-for="l in liens" :key="l.cle" class="lien" @click="l.dansTorii ? ouvrirPage(l.url) : openExternal(l.url)">{{ l.libelle }}<template v-if="!l.dansTorii"> ↗</template></button>
+            <button v-for="l in liens" :key="l.cle" class="lien" @click="ouvrirPage(l.url)">{{ l.libelle }}</button>
           </div>
         </aside>
       </div>

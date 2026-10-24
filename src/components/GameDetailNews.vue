@@ -26,7 +26,7 @@ function cacher(e: Event) {
         <p>{{ studio ? t("fiche.actualites.sousTitre", { studio }) : t("fiche.actualites.sousTitreEditeur") }}</p>
       </div>
       <button class="lien" @click="ouvrirPage(`https://store.steampowered.com/news/app/${appId}`)">
-        {{ t("fiche.actualites.toutes") }} ↗
+        {{ t("fiche.actualites.toutes") }}
       </button>
     </div>
     <div class="grille">

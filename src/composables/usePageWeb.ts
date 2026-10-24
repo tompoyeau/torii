@@ -48,7 +48,7 @@ function ecouter() {
  * l'on venait. Hors de l'application (démo web), un nouvel onglet du navigateur.
  *
  * ⚠️ RÉSERVÉ AUX ADRESSES QUE TORII FOURNIT LUI-MÊME : pages des launchers, liens
- * d'achat du comparateur. La page partage les sessions de Torii (Steam, Epic…) : une
+ * d'achat du comparateur, notes (Metacritic, OpenCritic), site officiel d'un jeu. La page partage les sessions de Torii (Steam, Epic…) : une
  * adresse venue d'un ami, d'un pseudo ou d'un message n'a rien à y faire.
  */
 export function ouvrirPage(url: string) {

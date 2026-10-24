@@ -10,7 +10,6 @@ import { useModaleDeNavigation, useNavigation } from "../composables/useNavigati
 import { avecRaccourci } from "../composables/useRaccourcis";
 import { ouvrirPage } from "../composables/usePageWeb";
 import { activation, dateLongue, descripteur, libelleAvis, libelleFin, pageSteam, tonAvis } from "../lib/boutique";
-import { openExternal } from "../lib/tauri";
 import { formatPrix } from "../lib/format";
 import { t } from "../i18n";
 import { deviseAttendue, instantGamingPertinent } from "../i18n/regions";
@@ -196,7 +195,7 @@ const detailOffre = (p: StorePrice) =>
                 class="badge-note"
                 :title="t('boutique.produit.voirSur', { source: src === 'Metascore' ? 'Metacritic' : src })"
                 :disabled="!note(src)!.url"
-                @click="note(src)!.url && openExternal(note(src)!.url!)"
+                @click="note(src)!.url && ouvrirPage(note(src)!.url!)"
               >
                 <b class="score" :class="tonNote(note(src)!.score)">{{ note(src)!.score }}</b>{{ src === "Metascore" ? "Metacritic" : src }}
               </button>
@@ -340,8 +339,8 @@ const detailOffre = (p: StorePrice) =>
               <span>{{ product.steam.classification.descripteurs.map(descripteur).join(", ") }}</span>
             </div>
             <div class="liens">
-              <button v-if="product.steam?.site" class="lien-texte" @click="openExternal(product.steam.site!)">{{ t("boutique.produit.siteOfficiel") }} ↗</button>
-              <button v-if="product.appId" class="lien-texte" @click="ouvrirSteam">{{ t("boutique.produit.pageSteam") }} ↗</button>
+              <button v-if="product.steam?.site" class="lien-texte" @click="ouvrirPage(product.steam.site!)">{{ t("boutique.produit.siteOfficiel") }}</button>
+              <button v-if="product.appId" class="lien-texte" @click="ouvrirSteam">{{ t("boutique.produit.pageSteam") }}</button>
             </div>
           </div>
 
