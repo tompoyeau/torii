@@ -5,6 +5,16 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.25.0
+- **Categories that really say what you play.** The library filter now uses the tags players put on Steam: Roguelike, Survival, Co-op, Open World, Metroidvania… Hundreds of categories instead of about fifteen, including for your Epic, GOG, Ubisoft or EA games, and even for games that aren't on Steam.
+- **Several categories at once.** Check “Co-op” and “Survival” to keep only the games that have both. The menu can be searched from the keyboard, and each category shows how many games would remain: no more landing on an empty grid by chance.
+- **Browse the Store by category.** A “Categories” button next to the search opens the whole catalogue: games that have every checked category, sorted by top sellers, top rated or popular new releases, each with its best offer across stores.
+- **Tags on game pages are clickable**: on a Store game page, “Survival” shows every survival game. The “Browse by genre” row gets a “See all” link. Going back returns to the game page, then to the categories you had before.
+- **Share a game.** A button on a game's page copies a link to send to a friend: its Steam page, otherwise Epic, GOG or its official website.
+- **Share a page.** The bar of web pages opened in Torii gets “Copy page link”, which never copies a sign-in code to your accounts.
+- **On first launch**, Torii fills in what it knows about your games in the background to sort them into categories. Nothing disappears meanwhile, and this lookup is much faster than before: a few minutes for a thousand games, instead of a quarter of an hour.
+- **Store**: the discount on a game you already own is no longer hidden by the “In your library” badge.
+
 ## 0.24.0
 - **Back and forward, everywhere.** The mouse back and forward buttons, Alt+← and Alt+→, or the new arrows at the top left: you move around Torii like in a browser. From a similar game, going back now returns to the first game you opened, right where you were, instead of the Store front page. The back button on a game page says where it leads.
 - **Keyboard shortcuts**: Ctrl+F to jump to search, Ctrl+1 to 4 for the Library, Store, Wishlist and Friends, Ctrl+N to add a game, F5 to sync again (it no longer reloads the whole app), Ctrl+, for settings. F1 or ? lists them all in Settings > Keyboard shortcuts.

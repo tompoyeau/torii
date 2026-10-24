@@ -5,6 +5,16 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.25.0
+- **Des catégories qui disent vraiment à quoi tu joues.** Le filtre de la bibliothèque utilise maintenant les tags que les joueurs posent sur Steam : Roguelike, Survie, Coop, Monde ouvert, Metroidvania… Des centaines de catégories au lieu d'une quinzaine, y compris pour tes jeux Epic, GOG, Ubisoft ou EA, et même pour ceux qui ne sont pas sur Steam.
+- **Plusieurs catégories à la fois.** Coche « Coop » et « Survie » pour ne garder que les jeux qui ont les deux. Le menu se cherche au clavier, et chaque catégorie dit combien de jeux il resterait : impossible de tomber sur une grille vide par hasard.
+- **Parcourir la Boutique par catégories.** Un bouton « Catégories » à côté de la recherche ouvre tout le catalogue : les jeux qui ont toutes les catégories cochées, triés par meilleures ventes, mieux notés ou nouveautés populaires, chacun avec sa meilleure offre toutes boutiques.
+- **Les tags des fiches sont cliquables** : dans la fiche d'un jeu de la Boutique, « Survie » affiche tous les jeux de survie. Le rayon « Parcourir par genre » gagne un lien « Tout voir ». Le retour ramène à la fiche, puis aux catégories d'avant.
+- **Partager un jeu.** Un bouton dans la fiche d'un jeu copie un lien à envoyer à un ami : sa page Steam, sinon Epic, GOG ou son site officiel.
+- **Partager une page.** La barre des pages web ouvertes dans Torii gagne « Copier le lien », qui ne copie jamais un code de connexion à tes comptes.
+- **Au premier lancement**, Torii complète en arrière-plan ce qu'il sait de tes jeux pour les ranger dans leurs catégories. Rien ne disparaît pendant ce temps, et cette recherche est bien plus rapide qu'avant : quelques minutes pour un millier de jeux, au lieu d'un quart d'heure.
+- **Boutique** : la remise d'un jeu que tu possèdes déjà n'est plus cachée par la pastille « Dans ta bibliothèque ».
+
 ## 0.24.0
 - **Précédent et suivant, partout.** Boutons retour et avant de la souris, Alt+← et Alt+→, ou les nouvelles flèches en haut à gauche : Torii se parcourt comme un navigateur. Depuis un jeu similaire, le retour ramène au premier jeu ouvert, là où tu en étais, et non plus à la vitrine de la Boutique. Le bouton retour d'une fiche dit où il mène.
 - **Des raccourcis clavier** : Ctrl+F pour aller dans la recherche, Ctrl+1 à 4 pour la Bibliothèque, la Boutique, la Wishlist et les Amis, Ctrl+N pour ajouter un jeu, F5 pour resynchroniser (il ne recharge plus toute l'application), Ctrl+, pour les paramètres. F1 ou ? les rappelle tous dans Paramètres > Raccourcis clavier.
