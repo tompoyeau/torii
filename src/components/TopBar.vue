@@ -6,6 +6,8 @@ import { useLibrary } from "../composables/useLibrary";
 import { useFriends } from "../composables/useFriends";
 import { useFriendList } from "../composables/useFriendList";
 import { useTorii } from "../composables/useTorii";
+import { useNavigation } from "../composables/useNavigation";
+import { avecRaccourci } from "../composables/useRaccourcis";
 import { steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
 import { t } from "../i18n";
@@ -62,6 +64,26 @@ function openMyAccount() {
   openSettings("torii");
 }
 
+/**
+ * Précédent / suivant, comme dans un navigateur. L'infobulle dit où mène chaque flèche
+ * (« Revenir à : Boutique ») : les deux piles ne se voient pas autrement.
+ */
+const { peutReculer, peutAvancer, libellePrecedent, libelleSuivant, reculer, avancer } = useNavigation();
+const ctrl = computed(() => t("reglages.raccourcis.touches.ctrl"));
+const alt = computed(() => t("reglages.raccourcis.touches.alt"));
+const titrePrecedent = computed(() =>
+  avecRaccourci(
+    libellePrecedent.value ? t("bibliotheque.barre.precedentVers", { lieu: libellePrecedent.value }) : t("bibliotheque.barre.precedent"),
+    alt.value, "←",
+  ),
+);
+const titreSuivant = computed(() =>
+  avecRaccourci(
+    libelleSuivant.value ? t("bibliotheque.barre.suivantVers", { lieu: libelleSuivant.value }) : t("bibliotheque.barre.suivant"),
+    alt.value, "→",
+  ),
+);
+
 /** Ce qu'on affiche : le pseudo Torii s'il existe, sinon le nom Steam. */
 const myName = computed(() => toriiAccount.value?.displayName ?? me.value?.name ?? t("bibliotheque.barre.monCompte"));
 const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase());
@@ -69,9 +91,31 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 
 <template>
   <div class="topbar">
+    <div class="historique">
+      <button
+        class="icon-btn"
+        :disabled="!peutReculer"
+        :title="titrePrecedent"
+        :aria-label="titrePrecedent"
+        @click="reculer()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
+      </button>
+      <button
+        class="icon-btn"
+        :disabled="!peutAvancer"
+        :title="titreSuivant"
+        :aria-label="titreSuivant"
+        @click="avancer()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
+      </button>
+    </div>
     <label v-if="chercheDansLaBiblio" class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-      <input ref="champ" v-model="query" type="text" :placeholder="t('bibliotheque.barre.rechercher')" autocomplete="off" />
+      <input ref="champ" v-model="query" data-recherche type="text" :placeholder="t('bibliotheque.barre.rechercher')" autocomplete="off" />
+      <!-- Rappel du raccourci tant que le champ est vide : c'est là qu'on le cherche. -->
+      <span v-if="!query" class="hint" aria-hidden="true"><kbd>{{ t("reglages.raccourcis.touches.ctrl") }}</kbd><kbd>F</kbd></span>
       <button
         v-if="query"
         type="button"
@@ -87,21 +131,21 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
     <span v-if="loading" class="enrich-pill">
       <span class="spinner" />{{ t("bibliotheque.barre.actualisation") }}
     </span>
-    <button class="add-btn" :title="t('bibliotheque.barre.ajouterJeu')" @click="openAddGame">
+    <button class="add-btn" :title="avecRaccourci(t('bibliotheque.barre.ajouterJeu'), ctrl, 'N')" @click="openAddGame">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
       <span>{{ t("bibliotheque.barre.ajouter") }}</span>
     </button>
-    <button class="icon-btn friends-btn" :class="{ active: section === 'friends' }" :title="t('bibliotheque.barre.amis')" @click="showFriends">
+    <button class="icon-btn friends-btn" :class="{ active: section === 'friends' }" :title="avecRaccourci(t('bibliotheque.barre.amis'), ctrl, '4')" @click="showFriends">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
       <span v-if="friendsOnline" class="friends-badge">{{ friendsOnline }}</span>
     </button>
-    <button class="icon-btn" :title="t('bibliotheque.barre.resynchroniser')" :disabled="loading" @click="reload()">
+    <button class="icon-btn" :title="avecRaccourci(t('bibliotheque.barre.resynchroniser'), 'F5')" :disabled="loading" @click="reload()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
     </button>
     <button class="icon-btn" :title="t('bibliotheque.barre.theme')" @click="toggleTheme">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5Z" /></svg>
     </button>
-    <button class="icon-btn" :class="{ active: settingsOpen }" :title="t('bibliotheque.barre.parametres')" @click="openSettings()">
+    <button class="icon-btn" :class="{ active: settingsOpen }" :title="avecRaccourci(t('bibliotheque.barre.parametres'), ctrl, ',')" @click="openSettings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3.1" /><path d="M19.4 13a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H8a1.6 1.6 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V8a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></svg>
     </button>
     <button class="me" :title="t('bibliotheque.barre.monCompteTorii', { nom: myName })" @click="openMyAccount">
@@ -120,7 +164,10 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   padding: 18px 0 16px;
   background: linear-gradient(var(--bg) 60%, transparent); backdrop-filter: blur(6px);
 }
-.search { flex: 1; max-width: 420px; position: relative; display: flex; align-items: center; }
+/* Base de 420 px, et pas seulement un maximum : à parts égales avec l'espaceur, le champ
+   tombait sous les 250 px une fois les flèches ajoutées, et le texte d'invite passait
+   sous le rappel « Ctrl F ». Il ne rétrécit que si la barre manque de place. */
+.search { flex: 1 1 420px; min-width: 0; max-width: 420px; position: relative; display: flex; align-items: center; }
 /* ⚠️ Enfant DIRECT : la loupe. Sans le `>`, la regle attrapait aussi le SVG de la croix
    et l envoyait se coller a gauche, par-dessus la loupe. */
 .search > svg { position: absolute; left: 13px; width: 16px; height: 16px; color: var(--text-faint); }
@@ -132,13 +179,33 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 .search .clear svg { width: 15px; height: 15px; }
 .search .clear:hover { background: var(--surface-2); color: var(--text); }
 .search input {
-  /* La place de la croix est reservee en permanence : sans ca le texte sauterait de
-     28 px au moment ou elle apparait, c est-a-dire des la premiere lettre tapee. */
-  width: 100%; padding: 10px 42px 10px 38px; background: var(--surface);
+  /* La place de la croix (champ rempli) ou du rappel « Ctrl F » (champ vide) est reservee
+     en permanence : sans ca le texte sauterait au moment ou l un remplace l autre,
+     c est-a-dire des la premiere lettre tapee. */
+  width: 100%; padding: 10px 64px 10px 38px; background: var(--surface);
   border: 1px solid var(--border); border-radius: 11px; color: var(--text);
   font-size: 13.5px; font-family: inherit;
 }
 .search input::placeholder { color: var(--text-faint); }
+/* Rappel « Ctrl F », à la place de la croix (qui n'apparaît qu'une fois le champ rempli). */
+.search .hint {
+  position: absolute; right: 10px; display: inline-flex; gap: 3px; pointer-events: none;
+}
+.search .hint kbd {
+  padding: 1px 5px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface-2);
+  font-family: var(--mono); font-size: 10.5px; color: var(--text-faint);
+}
+.search input:focus ~ .hint { display: none; }
+/* Fenêtre étroite (940 px au minimum) : le champ n'a plus la place des deux, le texte
+   d'invite passe avant le rappel. */
+.search { container-type: inline-size; }
+@container (max-width: 280px) {
+  .search .hint { display: none; }
+  .search input { padding-right: 42px; }
+}
+.historique { display: flex; gap: 6px; flex: none; }
+.historique .icon-btn:disabled { opacity: 0.4; cursor: default; }
+.historique .icon-btn:disabled:hover { color: var(--text-dim); border-color: var(--border); }
 .search input:focus { border-color: var(--border-strong); background: var(--surface-2); }
 .topbar-spacer { flex: 1; }
 .enrich-pill {

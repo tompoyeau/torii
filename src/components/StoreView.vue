@@ -115,6 +115,8 @@ function onSearchKey(e: KeyboardEvent) {
       submitSearch();
     }
   } else if (e.key === "Escape") {
+    // Menu ouvert : Échap le ferme, et rien d'autre (sinon `useRaccourcis` quitte le champ).
+    if (suggestOpen.value) e.preventDefault();
     closeSuggest();
   }
 }
@@ -163,6 +165,7 @@ function onCoverError(url: string | null) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
           <input
             v-model="query"
+            data-recherche
             type="text"
             :placeholder="t('boutique.rechercher')"
             :aria-label="t('boutique.rechercher')"

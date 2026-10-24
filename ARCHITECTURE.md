@@ -1639,6 +1639,41 @@ stats et les liens (page Steam, site officiel, communauté).
 - **Démo web** : pas de fiche Steam (la commande n'existe pas hors Tauri) ; succès fictifs
   avec rareté. `StoreSheetBlocs` et `StoreSheetConfig` sont partagés avec la Boutique.
 
+## Navigation — historique et raccourcis clavier (`useNavigation.ts`, `useRaccourcis.ts`)
+
+- **Un historique à deux piles**, comme un navigateur : précédent (bouton retour de la
+  souris, Alt+←, flèche de la barre du haut, bouton retour des fiches) et suivant (bouton
+  avant, Alt+→, flèche). Une nouvelle navigation vide la pile « suivant ».
+- 🔑 **Une étape = tout ce qui se voit** : section (+ ami consulté), filtre, fiche d'un jeu,
+  **fiche Boutique**, pop-in Paramètres. La fiche Boutique vit dans `useStore` et manquait à
+  l'ancien historique (`navStack` de `useUi`, supprimé) : un jeu similaire remplaçait la
+  fiche sans rien retenir, et le retour renvoyait sur la vitrine au lieu du premier jeu.
+- Les étapes s'enregistrent **seules** (un `watch` sur ces états) : aucun bouton n'a à
+  appeler l'historique. Exceptions voulues :
+  - la fiche `__loading__` de « Voir dans la boutique » n'est pas une étape ;
+  - changer d'onglet dans les Paramètres **remplace** l'étape (le retour ferme la pop-in) ;
+  - **fermer** (Échap, croix, clic à côté) revient à l'étape d'avant l'ouverture au lieu
+    d'en ajouter une — sinon le retour suivant rouvrait la fiche.
+- **Bouton retour d'une fiche = une étape** (fiche B → fiche A), et son libellé nomme la
+  destination ; **Échap = sortir de la fiche** (B → vitrine). Échap ne ferme que la
+  surcouche du dessus : Paramètres > fiche Boutique > fiche d'un jeu.
+- **Défilement retenu par étape** (page + chacune des deux fiches, repérées par
+  `data-defilement`), relevé en continu et restauré au retour, avec quelques images de
+  rattrapage le temps que le contenu arrive.
+- **Modales hors historique** (`useModaleDeNavigation`) : ajout d'un jeu, connexion Torii,
+  menu contextuel, visionneuses de captures. Le retour les ferme d'abord ; suivant et les
+  raccourcis de navigation attendent qu'elles le soient.
+- ⚠️ **Échap : `preventDefault` = « déjà servi ».** Les raccourcis écoutent `window`, les
+  composants `document` : à la remontée, `document` passe avant, quel que soit l'ordre de
+  montage. Un composant qui consomme Échap (modale, menu, visionneuse) DOIT appeler
+  `preventDefault()`, sinon la fiche du dessous se ferme avec lui.
+- **Raccourcis** : Ctrl+F (recherche de l'écran, sinon celle de la bibliothèque — champs
+  marqués `data-recherche`), Ctrl+1…4 (Bibliothèque, Boutique, Wishlist, Amis), Ctrl+N,
+  Ctrl+, , F5/Ctrl+R (resynchroniser — **dans l'application seulement**, la démo web garde
+  le rechargement), F1 ou ? (Paramètres > Raccourcis clavier, alimenté par
+  `listeRaccourcis()`). Les chiffres se lisent par `e.code` (AZERTY : Ctrl+1 = « & ») et
+  Ctrl+Alt est écarté (AltGr).
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.

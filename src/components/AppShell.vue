@@ -2,8 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
-import { PLATFORMS, platformName } from "../data/platforms";
-import type { Game, LibraryFilter, SortKey } from "../types";
+import { PLATFORMS, titreFiltre } from "../data/platforms";
+import type { Game, SortKey } from "../types";
 import { etiquetteIntl, t } from "../i18n";
 import Sidebar from "./Sidebar.vue";
 import TopBar from "./TopBar.vue";
@@ -94,16 +94,6 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
   { key: "alpha", label: t("bibliotheque.grille.tris.alpha") },
   { key: "playtime", label: t("bibliotheque.grille.tris.playtime") },
 ]);
-
-/** Les filtres qui ne sont pas une plateforme ; les autres prennent le nom de la plateforme. */
-const FILTRES_NOMMES = ["all", "mine", "family", "recent", "favorite", "installed", "hidden", "horsLauncher"] as const;
-type FiltreNomme = (typeof FILTRES_NOMMES)[number];
-
-function title(f: LibraryFilter): string {
-  return (FILTRES_NOMMES as readonly string[]).includes(f)
-    ? t(`bibliotheque.grille.filtres.${f as FiltreNomme}`)
-    : platformName(f as never);
-}
 </script>
 
 <template>
@@ -122,7 +112,7 @@ function title(f: LibraryFilter): string {
       <HeroFeatured />
 
       <div class="sec-head">
-        <h2>{{ title(filter) }}</h2>
+        <h2>{{ titreFiltre(filter) }}</h2>
         <span class="n">{{ t("bibliotheque.jeux", { n: shownGames.length }) }}</span>
         <span class="spacer" />
         <div v-if="availableGenres.length" class="genre-wrap">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useTorii } from "../composables/useTorii";
+import { useModaleDeNavigation } from "../composables/useNavigation";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { showToast } from "../composables/useToast";
@@ -122,9 +123,15 @@ function message(e: unknown): string {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape" && signInOpen.value) fermer();
+  // `preventDefault` : la touche a servi, `useRaccourcis` ne referme pas en plus la fiche dessous.
+  if (e.key === "Escape" && signInOpen.value) {
+    e.preventDefault();
+    fermer();
+  }
 }
 onMounted(() => document.addEventListener("keydown", onKey));
+// Le bouton retour de la souris ferme la fenêtre, comme Échap.
+useModaleDeNavigation({ ouverte: () => signInOpen.value, fermer });
 onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKey);
   // Un rechargement à chaud ne doit pas laisser traîner un laissez-passer inutilisable.

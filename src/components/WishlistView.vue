@@ -71,6 +71,7 @@ function atLow(it: WishlistItem): boolean {
       <input
         v-if="items.length"
         v-model="query"
+        data-recherche
         class="search"
         type="search"
         :placeholder="t('boutique.wishlist.rechercher')"

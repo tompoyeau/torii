@@ -45,6 +45,10 @@ const en: Forme<typeof fr> = {
     monCompte: "My account",
     monCompteTorii: "{nom} — my Torii account",
     toriiConnecte: "Torii account connected",
+    precedent: "Back",
+    suivant: "Forward",
+    precedentVers: "Back to {lieu}",
+    suivantVers: "Forward to {lieu}",
   },
 
   grille: {

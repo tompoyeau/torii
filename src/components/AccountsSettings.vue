@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { t } from "../i18n";
-import { useUi } from "../composables/useUi";
+import { useNavigation } from "../composables/useNavigation";
 import { useLibrary } from "../composables/useLibrary";
 import { useTorii } from "../composables/useTorii";
 import {
@@ -21,7 +21,9 @@ import {
 import type { Settings } from "../types";
 import LauncherAccount from "./LauncherAccount.vue";
 
-const { closeSettings } = useUi();
+// Fermer revient à l'écran d'avant les Paramètres, comme la croix de la pop-in.
+const { fermer } = useNavigation();
+const closeSettings = () => fermer("parametres");
 const { reload } = useLibrary();
 const { reconcilierSteam } = useTorii();
 

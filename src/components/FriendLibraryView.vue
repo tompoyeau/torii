@@ -161,7 +161,7 @@ const familyCount = computed(() => games.value.filter((g) => g.familyShared).len
     <!-- Recherche et filtres sur la même ligne : ils font le même travail — restreindre
          la liste — et les séparer donnait deux barres d'outils pour une seule intention. -->
     <div v-if="games.length" class="filters">
-      <input v-model="query" class="search" type="search" :placeholder="t('amis.bibliotheque.rechercher')" />
+      <input v-model="query" data-recherche class="search" type="search" :placeholder="t('amis.bibliotheque.rechercher')" />
       <button
         v-for="f in FILTRES"
         :key="f.key"

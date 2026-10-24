@@ -5,6 +5,8 @@ import { useFichePossede } from "../composables/useFichePossede";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
+import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
+import { avecRaccourci } from "../composables/useRaccourcis";
 import { useTorii } from "../composables/useTorii";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
@@ -435,24 +437,41 @@ watch(
   { immediate: true },
 );
 
+/**
+ * La visionneuse capte ses touches. Échap pour fermer la FICHE, lui, est géré par
+ * `useRaccourcis`, qui sait quelle surcouche est au-dessus : ici, il refermait aussi la
+ * fiche quand la fiche Boutique ou la modale d'édition était ouverte par-dessus.
+ * ⚠️ `preventDefault` : c'est ce qui dit à `useRaccourcis` que la touche a déjà servi.
+ */
 function onKey(e: KeyboardEvent) {
-  if (zoomIndex.value != null) {
-    // La visionneuse capte les touches avant la fiche.
-    if (e.key === "Escape") closeShot();
-    else if (e.key === "ArrowRight") stepShot(1);
-    else if (e.key === "ArrowLeft") stepShot(-1);
-    return;
-  }
-  if (e.key === "Escape") closeGame();
+  if (zoomIndex.value == null || e.altKey) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeShot();
+  } else if (e.key === "ArrowRight") stepShot(1);
+  else if (e.key === "ArrowLeft") stepShot(-1);
 }
 onMounted(() => document.addEventListener("keydown", onKey));
 onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
+// Le bouton retour de la souris referme la visionneuse avant de quitter la fiche.
+useModaleDeNavigation({ ouverte: () => zoomIndex.value != null, fermer: closeShot });
+
+/**
+ * Le bouton retour mène à l'étape précédente de l'historique, et dit laquelle : la
+ * vitrine, la fiche Boutique d'où l'on vient, la bibliothèque d'un ami… Sans historique
+ * (fiche ouverte au démarrage), il referme simplement la fiche.
+ */
+const { reculer, avancer, peutAvancer, libellePrecedent, libelleSuivant, fermer } = useNavigation();
+function retour() {
+  if (!reculer()) fermer("jeu");
+}
 </script>
 
 <template>
   <div
     ref="panneau"
     class="detail"
+    data-defilement="jeu"
     :class="{ open: !!game }"
     role="dialog"
     aria-modal="true"
@@ -464,9 +483,21 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
         <div class="detail-banner-art" :style="{ background: game.cover }" />
         <img v-if="bannerSrc" :key="bannerSrc" class="detail-banner-img" :src="bannerSrc" alt="" @error="onBannerError" />
         <div class="detail-banner-scrim" />
-        <button class="detail-back" @click="closeGame">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>{{ t("fiche.retour") }}
-        </button>
+        <div class="detail-nav">
+          <button class="detail-back" :title="avecRaccourci(t('bibliotheque.barre.precedent'), t('reglages.raccourcis.touches.alt'), '←')" @click="retour">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
+            <span class="detail-back-label">{{ libellePrecedent ?? t("fiche.retour") }}</span>
+          </button>
+          <button
+            v-if="peutAvancer"
+            class="detail-forward"
+            :title="avecRaccourci(t('bibliotheque.barre.suivantVers', { lieu: libelleSuivant ?? '' }), t('reglages.raccourcis.touches.alt'), '→')"
+            :aria-label="t('bibliotheque.barre.suivantVers', { lieu: libelleSuivant ?? '' })"
+            @click="avancer()"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+        </div>
         <div class="detail-header">
           <div class="detail-head-row">
           <div class="detail-title-wrap">
@@ -743,13 +774,19 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 :root[data-theme="light"] .detail-banner-scrim {
   background: linear-gradient(0deg, var(--bg) 1%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
 }
-.detail-back {
-  position: absolute; top: 22px; left: 24px; z-index: 5; display: inline-flex; align-items: center; gap: 8px;
+.detail-nav {
+  position: absolute; top: 22px; left: 24px; z-index: 5; display: flex; gap: 8px; max-width: calc(100% - 48px);
+}
+.detail-back, .detail-forward {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0;
   padding: 9px 16px 9px 12px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(8px); color: #fff; font-weight: 600; font-size: 13.5px;
 }
-:root[data-theme="light"] .detail-back { color: var(--text); border-color: var(--border); background: rgba(255, 255, 255, 0.6); }
-.detail-back svg { width: 17px; height: 17px; }
+.detail-forward { padding: 9px 10px; flex: none; }
+:root[data-theme="light"] :is(.detail-back, .detail-forward) { color: var(--text); border-color: var(--border); background: rgba(255, 255, 255, 0.6); }
+.detail-back svg, .detail-forward svg { width: 17px; height: 17px; flex: none; }
+/* Le libellé est le nom de l'étape précédente : parfois un long titre de jeu. */
+.detail-back-label { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Bannière plus haute quand le bandeau et les notes s'ajoutent sous le titre. */
 .detail-banner.riche { height: 56vh; min-height: 460px; }
 .detail-header {

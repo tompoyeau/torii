@@ -6,6 +6,8 @@ import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { useUi } from "../composables/useUi";
+import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
+import { avecRaccourci } from "../composables/useRaccourcis";
 import { activation, dateLongue, descripteur, libelleAvis, libelleFin, pageSteam, tonAvis } from "../lib/boutique";
 import { openExternal } from "../lib/tauri";
 import { formatPrix } from "../lib/format";
@@ -62,18 +64,30 @@ function hideBroken(e: Event) {
   (e.target as HTMLElement).style.display = "none";
 }
 
+/**
+ * La visionneuse capte ses touches ; Échap pour fermer la fiche passe par
+ * `useRaccourcis` (même raison que dans `GameDetail.vue`).
+ */
 function onKey(e: KeyboardEvent) {
-  if (zoom.value != null) {
-    // La visionneuse capte les touches avant la fiche.
-    if (e.key === "Escape") zoom.value = null;
-    else if (e.key === "ArrowRight") stepZoom(1);
-    else if (e.key === "ArrowLeft") stepZoom(-1);
-    return;
-  }
-  if (e.key === "Escape" && open.value) closeProduct();
+  if (zoom.value == null || e.altKey) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    zoom.value = null;
+  } else if (e.key === "ArrowRight") stepZoom(1);
+  else if (e.key === "ArrowLeft") stepZoom(-1);
 }
 onMounted(() => document.addEventListener("keydown", onKey));
 onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
+useModaleDeNavigation({ ouverte: () => zoom.value != null, fermer: () => (zoom.value = null) });
+
+/**
+ * Le bouton retour recule d'UNE étape : de la fiche d'un jeu similaire à celle du jeu
+ * d'où l'on vient, et il le dit. Échap, lui, sort de la fiche (retour à la vitrine).
+ */
+const { reculer, avancer, peutAvancer, libellePrecedent, libelleSuivant, fermer } = useNavigation();
+function retour() {
+  if (!reculer()) fermer("produit");
+}
 
 /**
  * Captures : celles de Steam (toutes, en deux tailles) quand le jeu y est, sinon celles
@@ -136,15 +150,27 @@ const detailOffre = (p: StorePrice) =>
 </script>
 
 <template>
-  <div ref="panneau" class="sd" :class="{ open }" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('boutique.produit.fiche')">
+  <div ref="panneau" class="sd" data-defilement="produit" :class="{ open }" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('boutique.produit.fiche')">
     <template v-if="open">
       <div class="sd-banner">
         <div class="sd-banner-art" :style="{ background: 'linear-gradient(160deg,#241a3a,#0e0a18)' }" />
         <img v-if="product?.heroUrl" class="sd-banner-img" :src="product.heroUrl" alt="" @error="hideBroken" />
         <div class="sd-scrim" />
-        <button class="sd-back" @click="closeProduct">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>{{ t("boutique.titre") }}
-        </button>
+        <div class="sd-nav">
+          <button class="sd-back" :title="avecRaccourci(t('bibliotheque.barre.precedent'), t('reglages.raccourcis.touches.alt'), '←')" @click="retour">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
+            <span class="sd-back-label">{{ libellePrecedent ?? t("boutique.titre") }}</span>
+          </button>
+          <button
+            v-if="peutAvancer"
+            class="sd-forward"
+            :title="avecRaccourci(t('bibliotheque.barre.suivantVers', { lieu: libelleSuivant ?? '' }), t('reglages.raccourcis.touches.alt'), '→')"
+            :aria-label="t('bibliotheque.barre.suivantVers', { lieu: libelleSuivant ?? '' })"
+            @click="avancer()"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+        </div>
         <div class="sd-header">
           <span class="sd-tag">{{ t("boutique.titre") }}</span>
           <h1 class="sd-title">{{ product?.title ?? (productIndisponible ? t("boutique.produit.fiche") : t("boutique.produit.chargement")) }}</h1>
@@ -346,12 +372,18 @@ const detailOffre = (p: StorePrice) =>
 .sd-banner-art { position: absolute; inset: 0; }
 .sd-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; display: block; }
 .sd-scrim { position: absolute; inset: 0; background: linear-gradient(0deg, var(--bg) 1%, rgba(10, 7, 16, 0.25) 45%, rgba(10, 7, 16, 0.55) 100%); }
-.sd-back {
-  position: absolute; top: 22px; left: 24px; z-index: 5; display: inline-flex; align-items: center; gap: 8px;
+.sd-nav {
+  position: absolute; top: 22px; left: 24px; z-index: 5; display: flex; gap: 8px; max-width: calc(100% - 48px);
+}
+.sd-back, .sd-forward {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0;
   padding: 9px 16px 9px 12px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(8px); color: #fff; font-weight: 600; font-size: 13.5px;
 }
-.sd-back svg { width: 17px; height: 17px; }
+.sd-forward { padding: 9px 10px; flex: none; }
+.sd-back svg, .sd-forward svg { width: 17px; height: 17px; flex: none; }
+/* Le libellé est le nom de l'étape précédente : souvent un titre de jeu, parfois long. */
+.sd-back-label { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sd-header { position: absolute; bottom: 0; left: 0; right: 0; padding: 0 56px 26px; }
 .sd-tag {
   display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;

@@ -1,14 +1,14 @@
-import { nextTick, reactive, toRefs, watch } from "vue";
+import { reactive, toRefs } from "vue";
 import type { LibraryFilter, SortKey } from "../types";
 import { initialPrefs } from "./usePreferences";
 
 /** Section affichée dans la zone principale : bibliothèque, boutique, amis… */
-type MainSection =
+export type MainSection =
   | "library" | "store" | "friends" | "common" | "wishlist"
   | "friendProfile" | "friendLibrary";
 
 /** Catégorie affichée dans la pop-in Paramètres. */
-export type SettingsCategory = "general" | "hidden" | "stores" | "accounts" | "torii" | "about";
+export type SettingsCategory = "general" | "hidden" | "stores" | "accounts" | "torii" | "about" | "raccourcis";
 
 interface UiState {
   section: MainSection;
@@ -57,67 +57,8 @@ const state = reactive<UiState>({
   selectedGameId: null,
 });
 
-// --- Historique de navigation (pour le bouton « précédent » de la souris) ------
-// On mémorise un instantané des états de navigation à chaque changement, afin de
-// pouvoir revenir en arrière (section, filtre, fiche jeu ouverte, pop-in Paramètres).
-interface NavSnap {
-  section: MainSection;
-  filter: LibraryFilter;
-  selectedGameId: string | null;
-  settingsOpen: boolean;
-  settingsCategory: SettingsCategory;
-  /** ⚠️ Sans lui, revenir depuis la bibliothèque d'un ami rejouerait celle du dernier
-      ami consulté : la section serait restaurée, mais pas de qui il s'agit. */
-  friendLibraryId: string | null;
-  /** ⚠️ Même piège que ci-dessus, pour la page profil. */
-  friendProfileKey: string | null;
-}
-function snap(): NavSnap {
-  return {
-    section: state.section,
-    filter: state.filter,
-    selectedGameId: state.selectedGameId,
-    settingsOpen: state.settingsOpen,
-    settingsCategory: state.settingsCategory,
-    friendLibraryId: state.friendLibraryId,
-    friendProfileKey: state.friendProfileKey,
-  };
-}
-const navStack: NavSnap[] = [];
-let restoring = false;
-let lastSnap = snap();
-watch(
-  () => [
-    state.section, state.filter, state.selectedGameId, state.settingsOpen,
-    state.settingsCategory, state.friendLibraryId, state.friendProfileKey,
-  ],
-  () => {
-    if (restoring) {
-      lastSnap = snap();
-      return;
-    }
-    navStack.push(lastSnap);
-    if (navStack.length > 60) navStack.shift();
-    lastSnap = snap();
-  },
-);
-/** Revient à l'état de navigation précédent, s'il y en a un. */
-function goBack(): boolean {
-  const prev = navStack.pop();
-  if (!prev) return false;
-  restoring = true;
-  state.section = prev.section;
-  state.filter = prev.filter;
-  state.selectedGameId = prev.selectedGameId;
-  state.settingsOpen = prev.settingsOpen;
-  state.settingsCategory = prev.settingsCategory;
-  state.friendLibraryId = prev.friendLibraryId;
-  state.friendProfileKey = prev.friendProfileKey;
-  void nextTick(() => {
-    restoring = false;
-  });
-  return true;
-}
+// L'historique de navigation (précédent / suivant) vit dans `useNavigation.ts` : il
+// suit aussi la fiche Boutique, qui n'est pas un état de ce module.
 
 export function useUi() {
   return {
@@ -126,6 +67,11 @@ export function useUi() {
     setFilter: (filter: LibraryFilter) => {
       state.filter = filter;
       state.section = "library";
+    },
+    /** Revient à la bibliothèque, sur le filtre où on l'avait laissée. */
+    showLibrary: () => {
+      state.section = "library";
+      window.scrollTo({ top: 0 });
     },
     showStore: () => {
       state.section = "store";
@@ -185,6 +131,5 @@ export function useUi() {
     closeAddGame: () => (state.addGameOpen = false),
     openGame: (id: string) => (state.selectedGameId = id),
     closeGame: () => (state.selectedGameId = null),
-    goBack,
   };
 }

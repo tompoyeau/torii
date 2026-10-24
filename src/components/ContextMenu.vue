@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useContextMenu } from "../composables/useContextMenu";
+import { useModaleDeNavigation } from "../composables/useNavigation";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { useTorii } from "../composables/useTorii";
@@ -9,6 +10,8 @@ import { openInstallDir, uninstallGame } from "../lib/tauri";
 import { t } from "../i18n";
 
 const { ctx, closeContext } = useContextMenu();
+// Le bouton retour de la souris referme le menu avant de toucher à l'historique.
+useModaleDeNavigation({ ouverte: () => ctx.open, fermer: closeContext });
 const { setFavorite, setHidden, removeManual, launchOrInstall } = useLibrary();
 const { openGame, openEditGame } = useUi();
 const { connected: toriiConnected, isMuted, setMuted } = useTorii();
@@ -86,7 +89,11 @@ function onOpenFolder() {
 
 // Fermeture au clavier (Échap) ou au défilement de la page.
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape" && ctx.open) closeContext();
+  // `preventDefault` : la touche a servi, `useRaccourcis` ne referme pas en plus la fiche dessous.
+  if (e.key === "Escape" && ctx.open) {
+    e.preventDefault();
+    closeContext();
+  }
 }
 function onScroll() {
   if (ctx.open) closeContext();

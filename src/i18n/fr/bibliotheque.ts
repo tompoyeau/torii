@@ -48,6 +48,11 @@ export default {
     monCompte: "Mon compte",
     monCompteTorii: "{nom} — mon compte Torii",
     toriiConnecte: "Compte Torii connecté",
+    // Flèches de l'historique. `lieu` = l'écran où elles mènent (« Boutique », un jeu…).
+    precedent: "Précédent",
+    suivant: "Suivant",
+    precedentVers: "Revenir à : {lieu}",
+    suivantVers: "Aller à : {lieu}",
   },
 
   grille: {

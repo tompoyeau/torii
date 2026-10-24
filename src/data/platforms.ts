@@ -1,4 +1,4 @@
-import type { Platform, PlatformId } from "../types";
+import type { LibraryFilter, Platform, PlatformId } from "../types";
 import { t } from "../i18n";
 
 export const PLATFORMS: Record<PlatformId, Platform> = {
@@ -41,4 +41,19 @@ export function estHorsLauncher(platform: string | undefined): boolean {
  */
 export function platformName(id: PlatformId): string {
   return estHorsLauncher(id) ? t("bibliotheque.horsLauncher") : PLATFORMS[id].name;
+}
+
+/** Les filtres qui ne sont pas une plateforme ; les autres prennent le nom de la plateforme. */
+const FILTRES_NOMMES = ["all", "mine", "family", "recent", "favorite", "installed", "hidden", "horsLauncher"] as const;
+type FiltreNomme = (typeof FILTRES_NOMMES)[number];
+
+/**
+ * Le titre d'une vue de la bibliothèque (« Tous les jeux », « Favoris », « Steam »…).
+ * Partagé par l'en-tête de la grille et l'historique de navigation, qui nomme l'étape où
+ * mène le bouton retour.
+ */
+export function titreFiltre(f: LibraryFilter): string {
+  return (FILTRES_NOMMES as readonly string[]).includes(f)
+    ? t(`bibliotheque.grille.filtres.${f as FiltreNomme}`)
+    : platformName(f as PlatformId);
 }

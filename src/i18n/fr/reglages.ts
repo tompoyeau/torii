@@ -10,6 +10,7 @@ export default {
 
   categories: {
     general: "Paramètres généraux",
+    raccourcis: "Raccourcis clavier",
     apropos: "À propos & maintenance",
     masques: "Jeux masqués",
     revendeurs: "Revendeurs masqués",
@@ -304,6 +305,49 @@ export default {
       enCours: "Suppression…",
       definitif: "Supprimer définitivement",
       fait: "Ton compte Torii a été supprimé.",
+    },
+  },
+
+  raccourcis: {
+    sous:
+      "Torii se pilote aussi au clavier. Les raccourcis des vidéos marchent une fois le " +
+      "lecteur sélectionné, ceux des captures quand une capture est agrandie.",
+    // Infobulle d'un bouton : « Paramètres (Ctrl+,) ».
+    infobulle: "{action} ({touches})",
+    // Entre deux raccourcis équivalents : « F5 ou Ctrl + R ».
+    ou: "ou",
+    groupes: {
+      navigation: "Se déplacer",
+      actions: "Actions",
+      medias: "Bandes-annonces et captures",
+    },
+    actions: {
+      precedent: "Revenir à l'écran précédent",
+      suivant: "Aller à l'écran suivant",
+      fermer: "Fermer la fiche ou la fenêtre ouverte",
+      bibliotheque: "Bibliothèque",
+      boutique: "Boutique",
+      wishlist: "Wishlist",
+      amis: "Amis",
+      rechercher: "Aller dans la barre de recherche",
+      ajouter: "Ajouter un jeu manuellement",
+      resynchroniser: "Resynchroniser la bibliothèque",
+      parametres: "Ouvrir les paramètres",
+      raccourcis: "Afficher ces raccourcis",
+      capture: "Capture précédente ou suivante",
+      lecture: "Lecture / pause",
+      avanceVideo: "Reculer ou avancer de 5 secondes",
+      volume: "Monter ou baisser le volume",
+      muet: "Couper le son",
+      pleinEcran: "Vidéo en plein écran",
+    },
+    touches: {
+      ctrl: "Ctrl",
+      alt: "Alt",
+      echap: "Échap",
+      espace: "Espace",
+      sourisRetour: "Bouton retour de la souris",
+      sourisAvant: "Bouton avant de la souris",
     },
   },
 } as const;

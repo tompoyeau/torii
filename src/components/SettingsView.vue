@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { usePreferences } from "../composables/usePreferences";
 import { useStore } from "../composables/useStore";
@@ -7,6 +7,8 @@ import { useTheme } from "../composables/useTheme";
 import { useUi } from "../composables/useUi";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
+import { useNavigation } from "../composables/useNavigation";
+import { listeRaccourcis } from "../composables/useRaccourcis";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
 import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openExternal, openLog, relaunchApp, setAutostart, setWindowPrefs } from "../lib/tauri";
@@ -253,11 +255,12 @@ function steamNameOf(steamId: string | null | undefined): string | null {
   return steamFriends.value.find((f) => f.steamId === steamId)?.name ?? null;
 }
 const { theme, setTheme } = useTheme();
-const { settingsOpen, settingsCategory, setSettingsCategory, closeSettings } = useUi();
+const { settingsOpen, settingsCategory, setSettingsCategory } = useUi();
 const { status: updateStatus, version: updateVersion, check: checkUpdate, install: installUpdate } = useUpdater();
 
 const CATEGORIES = computed(() => [
   { key: "general", label: t("reglages.categories.general"), group: t("reglages.groupes.application") },
+  { key: "raccourcis", label: t("reglages.categories.raccourcis"), group: t("reglages.groupes.application") },
   { key: "about", label: t("reglages.categories.apropos"), group: t("reglages.groupes.application") },
   { key: "hidden", label: t("reglages.categories.masques"), group: t("reglages.groupes.bibliotheque") },
   { key: "stores", label: t("reglages.categories.revendeurs"), group: t("reglages.groupes.bibliotheque") },
@@ -373,14 +376,19 @@ async function refreshSystemPrefs() {
   startMinimized.value = wp.startMinimized;
   closeToTray.value = wp.closeToTray;
 }
-onMounted(() => {
-  document.addEventListener("keydown", onKey);
-  void refreshSystemPrefs();
-});
-onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
-function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape" && settingsOpen.value) closeSettings();
-}
+// Pas d'écoute d'Échap ici : `useRaccourcis` referme la surcouche du dessus, et cette
+// pop-in peut s'ouvrir par-dessus une fiche (Ctrl+,), qui ne doit pas se fermer avec elle.
+onMounted(() => void refreshSystemPrefs());
+
+/**
+ * Fermer revient à l'écran d'avant l'ouverture : la pop-in ne se rouvre pas au retour
+ * suivant, comme quand sa fermeture comptait pour une étape de l'historique.
+ */
+const { fermer } = useNavigation();
+const fermerParametres = () => fermer("parametres");
+
+/** Paramètres > Raccourcis clavier : la liste même que lit `useRaccourcis`. */
+const raccourcis = computed(() => listeRaccourcis());
 // Recharge l'état à chaque ouverture (il a pu changer côté système).
 watch(settingsOpen, (open) => {
   if (open) void refreshSystemPrefs();
@@ -461,7 +469,7 @@ function unhide(id: string) {
 </script>
 
 <template>
-  <div v-if="settingsOpen" class="overlay" @click.self="closeSettings">
+  <div v-if="settingsOpen" class="overlay" @click.self="fermerParametres">
     <div ref="modale" class="dialog" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('reglages.titre')">
       <!-- Rail de navigation -->
       <aside class="snav">
@@ -484,7 +492,7 @@ function unhide(id: string) {
 
       <!-- Contenu -->
       <section class="spane">
-        <button class="close" :aria-label="t('commun.fermer')" @click="closeSettings">
+        <button class="close" :aria-label="t('commun.fermer')" @click="fermerParametres">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
 
@@ -687,6 +695,27 @@ function unhide(id: string) {
               </div>
               <span class="switch" :class="{ on: prefs.wishlistNotifications }"><span class="knob" /></span>
             </button>
+          </template>
+
+          <!-- Raccourcis clavier -->
+          <template v-else-if="settingsCategory === 'raccourcis'">
+            <h2 class="pane-title">{{ t("reglages.categories.raccourcis") }}</h2>
+            <p class="pane-hint">{{ t("reglages.raccourcis.sous") }}</p>
+            <section v-for="groupe in raccourcis" :key="groupe.titre" class="kbd-groupe">
+              <h3 class="kbd-titre">{{ groupe.titre }}</h3>
+              <div v-for="ligne in groupe.lignes" :key="ligne.action" class="kbd-ligne">
+                <span class="kbd-action">{{ ligne.action }}</span>
+                <span class="kbd-combis">
+                  <span v-for="(combi, i) in ligne.combinaisons" :key="i" class="kbd-combi">
+                    <span v-if="i" class="kbd-ou">{{ ligne.sens ? "/" : t("reglages.raccourcis.ou") }}</span>
+                    <template v-for="(touche, j) in combi" :key="j">
+                      <span v-if="j" class="kbd-plus">+</span>
+                      <kbd>{{ touche }}</kbd>
+                    </template>
+                  </span>
+                </span>
+              </div>
+            </section>
           </template>
 
           <!-- À propos & maintenance -->
@@ -1188,6 +1217,27 @@ function unhide(id: string) {
 /* Deux interrupteurs qui vont ensemble : groupés sans séparateur, mais pas collés. */
 .toggle-row.spaced { margin-top: 14px; }
 .divider { height: 1px; background: var(--border); margin: 18px 0; }
+
+/* Raccourcis clavier : une ligne par action, ses touches alignées à droite. */
+.kbd-groupe + .kbd-groupe { margin-top: 22px; }
+.kbd-titre {
+  margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.kbd-ligne {
+  display: flex; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.kbd-ligne:last-child { border-bottom: none; }
+.kbd-action { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text); }
+.kbd-combis { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.kbd-combi { display: inline-flex; align-items: center; gap: 4px; }
+.kbd-plus { font-size: 11px; color: var(--text-faint); }
+.kbd-ou { margin: 0 4px; font-size: 11.5px; color: var(--text-faint); }
+.kbd-combis kbd {
+  min-width: 24px; padding: 3px 7px; border-radius: 7px; text-align: center;
+  font-family: var(--mono); font-size: 11.5px; color: var(--text-dim);
+  background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px;
+}
 
 .switch {
   flex: none; width: 42px; height: 24px; border-radius: 99px;

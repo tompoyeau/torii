@@ -99,7 +99,11 @@ async function save() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") closeAddGame();
+  // `preventDefault` : la touche a servi, `useRaccourcis` ne referme pas en plus la fiche dessous.
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeAddGame();
+  }
 }
 </script>
 

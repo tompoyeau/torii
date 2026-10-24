@@ -92,6 +92,7 @@ const visibles = computed(() => {
       <input
         v-if="shownGames.length"
         v-model="query"
+        data-recherche
         class="search"
         type="search"
         :placeholder="t('amis.bibliotheque.rechercher')"

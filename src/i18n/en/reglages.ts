@@ -12,6 +12,7 @@ const en: Forme<typeof fr> = {
 
   categories: {
     general: "General",
+    raccourcis: "Keyboard shortcuts",
     apropos: "About & maintenance",
     masques: "Hidden games",
     revendeurs: "Hidden sellers",
@@ -296,6 +297,47 @@ const en: Forme<typeof fr> = {
       enCours: "Deleting…",
       definitif: "Delete permanently",
       fait: "Your Torii account has been deleted.",
+    },
+  },
+
+  raccourcis: {
+    sous:
+      "Torii works from the keyboard too. Video shortcuts work once the player is " +
+      "selected, screenshot ones while a screenshot is enlarged.",
+    infobulle: "{action} ({touches})",
+    ou: "or",
+    groupes: {
+      navigation: "Getting around",
+      actions: "Actions",
+      medias: "Trailers and screenshots",
+    },
+    actions: {
+      precedent: "Go back to the previous screen",
+      suivant: "Go forward to the next screen",
+      fermer: "Close the open page or window",
+      bibliotheque: "Library",
+      boutique: "Store",
+      wishlist: "Wishlist",
+      amis: "Friends",
+      rechercher: "Jump to the search bar",
+      ajouter: "Add a game manually",
+      resynchroniser: "Sync the library again",
+      parametres: "Open settings",
+      raccourcis: "Show these shortcuts",
+      capture: "Previous or next screenshot",
+      lecture: "Play / pause",
+      avanceVideo: "Skip back or forward 5 seconds",
+      volume: "Turn the volume up or down",
+      muet: "Mute",
+      pleinEcran: "Full-screen video",
+    },
+    touches: {
+      ctrl: "Ctrl",
+      alt: "Alt",
+      echap: "Esc",
+      espace: "Space",
+      sourisRetour: "Mouse back button",
+      sourisAvant: "Mouse forward button",
     },
   },
 };
