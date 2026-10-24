@@ -347,16 +347,125 @@ cargo run --example community        # jeux possédés + famille (via session st
   - ⚠️ La v0.1.0 (sans updater) ne s'auto-met pas à jour : 1re install manuelle de la v0.2.0, puis automatique.
     Bumper la version dans les **3** fichiers (package.json, tauri.conf.json, Cargo.toml) à chaque release.
 
-## Filtre par catégorie / genre (fait)
+## Catégories = tags Steam (`metadata/categories.rs`, fait)
 
-- Filtrage par **genre**, qui se **combine** aux filtres sidebar (plateforme/favoris/…) + recherche + tri.
-  État `genre: string|null` dans `useUi` (`setGenre`, null = toutes). Menu déroulant dans l'en-tête de
-  `AppShell` (à côté des puces de tri), affiché seulement si des genres existent.
-- `availableGenres` (computed AppShell) : genres uniques des jeux non masqués, triés par nombre décroissant
-  (compteurs affichés). `shownGames` applique `g.genre === genre` après le filtre courant. Menu = bouton
-  `.genre-btn` (actif en accent si un genre est choisi) + popover `.genre-menu` avec « Toutes les catégories »
-  en tête. Ferme au clic-dehors (listener document).
-- La métadonnée descriptive est peuplée en masse par **IGDB** (voir ci-dessous), source unique tous launchers.
+Le filtre ne lisait que le **premier genre IGDB** de chaque jeu : 16 catégories pour une
+bibliothèque de 930 jeux, écrasées par « Tir » (285) et « Jeu de rôle » (199). Il lit
+désormais les **tags Steam** de chaque jeu (Roguelike, Survie, Coop, Monde ouvert…),
+plusieurs cochables à la fois. Le `genre` IGDB reste affiché sur la fiche et la vedette.
+
+- **Un seul vocabulaire, celui de Steam**, déjà traduit (`tagdata/populartags/<langue>`,
+  le cache des rayons de la Boutique) et le même que dans la Boutique. Trois chemins :
+  1. jeu Steam : les tags de son appid ;
+  2. jeu acheté ailleurs : l'appid Steam que lui connaît IGDB (`IgdbMeta::steam_appid`,
+     lu dans `external_games`) — Epic, GOG, Ubisoft rejoignent les mêmes catégories ;
+  3. jeu absent de Steam (Valorant, LoL, WoW) : genres, thèmes, modes et vues IGDB
+     convertis par des **tables fermées** (`tags_igdb`, vocabulaires relevés le 24/10/2026,
+     un test vérifie qu'aucun identifiant n'est oublié).
+- `IStoreBrowseService/GetItems`, `include_tag_count: 20` (le maximum, ce que montre la page
+  du jeu) : **200 appids par appel au plus** (300 = URL trop longue, 400). On en demande 150.
+  Cache `steam_game_tags_cache_v1.json` : un mois, une semaine pour un jeu sans fiche Steam
+  (`success` 15 : retiré de la vente). Écritures sous verrou.
+- **Tags jamais catégories** (`EXCLUS`) : contenus (Gore, Violence, Nudité, Contenu sexuel,
+  Hentai), appréciations (Super B.O., Addictif, Beau, Épopée, Culte, Mèmes), Accès anticipé.
+- **Transport** : `MetaUpdate.tags` dans l'événement `igdb-batch`. Les jeux Steam partent
+  d'abord, SEULS (une mise à jour qui ne porte que des tags), avant la passe IGDB qui peut
+  durer des minutes. ⚠️ Conséquence côté front (`fillIgdb`) : un champ absent ne doit rien
+  effacer — `coverAlt`/`heroAlt` étaient remis à `undefined` par une telle mise à jour.
+- **Front** : `useUi.categories: string[]` (ET logique), `CategoryFilter.vue`. Compteurs **à
+  facettes** : nombre de jeux qu'on obtiendrait en cochant la catégorie EN PLUS de la
+  sélection, calculé sur la liste déjà filtrée (plateforme, recherche, installés) ; les
+  catégories qui mèneraient à zéro ne sont pas proposées. Recherche sans accents, Entrée
+  coche la première trouvée, flèches pour parcourir, Échap rend le focus au bouton.
+- Mesuré le 24/10/2026 sur une vraie bibliothèque de 924 jeux : **97 % catégorisés** —
+  836 par leurs tags Steam (dont 314 jeux Epic, 30 Ubisoft, 27 GOG via leur appid), 60 par
+  la correspondance IGDB (Riot, Battle.net…), 28 sans rien (serveurs de test, bêtas,
+  éditions que personne ne référence). **367 catégories**, dont 315 avec au moins 3 jeux :
+  d'où le champ de recherche et les facettes plutôt qu'une simple liste.
+
+### Les mêmes catégories dans la Boutique (`vitrine::parcourir`)
+
+- Bouton « Catégories » collé à la recherche de la Boutique, même menu que la
+  bibliothèque (`MenuCategories.vue`, partagé). Cocher remplace l'accueil par les jeux du
+  catalogue Steam qui ont TOUS les tags cochés, triés par ventes (pays), notes ou
+  nouveautés populaires, par pages de 24 (« Charger plus »), prix du comparateur compris.
+- **`IStoreQueryService/Query`** avec `tagids_must_match` (un objet par tag = ET logique)
+  donne aussi `metadata.total_matching_records` : le total s'affiche sans appel de plus.
+  Mesuré le 24/10/2026 : Coop + Survie = 726 jeux, + Monde ouvert = 251 ; 0,5 à 1 s par
+  page, résolution d'ids et prix groupés compris.
+- ⚠️ **Valeurs de `sort` relevées à la main** (énumération non documentée) : 10 = ventes du
+  pays, 21 = mieux notés, 20 = nouveautés populaires. 40 = date de sortie seule, écarté :
+  il remonte des jeux sortis la veille, sans avis. 2 = date croissante, 1 = A→Z. Aucun
+  tri par prix (et le prix affiché est celui du comparateur, pas celui de Steam).
+- **Le menu** (`store_tags`) suit l'ordre de `tagdata/populartags` (les plus employés
+  d'abord) — d'où le champ `ordre` ajouté au cache des noms, redemandé s'il manque —, sans
+  les `EXCLUS` des catégories de la bibliothèque ni les tags de logiciels.
+- **Un titre OU des catégories** : Steam filtre par tags sans chercher de texte, le
+  comparateur cherche un titre sans connaître les tags. Cocher efface la recherche par
+  titre ; lancer une recherche par titre décoche tout.
+- **Raccourcis** : tags cliquables sous le titre de la fiche produit (`FicheSteam.etiquettes`,
+  nom et id ensemble : `tags` et `tag_ids` ne s'alignent pas), « Tout voir » sur le rayon
+  par genre. Les deux passent par `useStoreCategories.ouvrir`, qui referme les fiches.
+- **Historique** : les catégories cochées font partie de l'étape (`Etape.boutique`) ; le
+  retour depuis une catégorie ouverte par un tag ramène à la fiche, et le bouton dit
+  « Revenir à : Coop + Survie ».
+- Mémoire de 30 min côté front, par région, langue, tri et tags (quota du comparateur
+  partagé). Démo web : `tagsDeDemo` / `parcoursDeDemo` sur le relevé de `storeMock.ts`.
+- Exemple : `cargo run --example parcourir [tag tag…]` (défaut : Coop + Survie).
+- ⚠️ Une grille de résultats montre beaucoup de jeux possédés ET en promo : la pastille
+  « Dans ta bibliothèque » (`.coin`) recouvrait la remise (`.badge`) sur une jaquette de
+  172 px. Règle commune dans `style.css` (`.cover:has(> .coin) > .badge`) : la remise
+  passe dessous. Une jaquette en dégradé avec son titre, c'est une image encore en
+  chargement (600×900, `loading="lazy"`), pas une image manquante — vérifié sur PUBG et
+  Factorio, qu'on croyait sans visuel.
+
+### Partager un jeu, partager une page (`lib/partage.ts`, `igdb::lien_partage`)
+
+- **Bouton « Partager »** des fiches (bibliothèque : à côté de « Voir dans la boutique » ;
+  Boutique : icône seule à droite d'« Acheter chez… », ou au bout des badges sous le titre
+  quand aucune boutique ne vend le jeu). Copie la page du jeu à envoyer à un ami :
+  **Steam, sinon Epic, sinon GOG, sinon le site officiel**. Avec un appid Steam connu, le
+  lien se fait côté front ; sinon `lien_partage` relit la fiche IGDB (`igdb_id` en cache
+  pour un jeu de la bibliothèque, recherche par titre exact pour la Boutique) et demande
+  ses `external_games` (Steam = 1, GOG = 5, Epic = 26) et `websites` (officiel = 1,
+  Steam = 13, Epic = 16, GOG = 17). Relevé le 24/10/2026 : Fortnite, VALORANT, LoL et Alan
+  Wake 2 → Epic ; Overwatch 2 → Steam ; World of Warcraft → site officiel.
+- La page Epic perd sa langue (`/en-US/` enverrait un ami français sur la page anglaise) :
+  les trois formes d'adresse d'IGDB deviennent `store.epicgames.com/p/<slug>`.
+- **« Copier le lien »** dans la barre de la page web intégrée. 🔑 **Ces pages sont
+  connectées aux comptes de l'utilisateur** : à l'arrivée sur Epic, l'adresse est un
+  instant `epicgames.com/id/exchange?exchangeCode=…`, un code qui ouvre sa session à qui
+  l'utilise. `lienPartageable` partage alors la page visée (`redirectUrl`) ou rien, retire
+  ailleurs les paramètres de session connus (`code`, `token`, `sessionid`…) et refuse ce
+  qui n'est pas `http(s)`.
+- Pas de presse-papiers natif : `navigator.clipboard.writeText`, comme le code d'ami.
+
+### Le classement IGDB et la complétion du cache
+
+- `IgdbMeta` gagne `igdb_id`, `steam_appid` et `classement` (identifiants bruts de genres,
+  thèmes, modes, vues — quatre listes, car les identifiants se recouvrent d'une table à
+  l'autre : 31 = « Adventure » chez les genres, « Drama » chez les thèmes).
+- 🔑 **Pas de changement de nom du cache** (`igdb_meta_cache_v4.json`). Une fiche sans
+  `classement` est une fiche d'avant : `fill_metadata` l'émet tout de suite (rien ne
+  disparaît de l'écran) PUIS la redemande. Si IGDB ne la retrouve plus, elle est gardée,
+  marquée complète (`noter_absent`) — jamais jetée.
+- ⚠️ Le prix, une seule fois : les jeux hors Steam se recherchent par leur titre. Un par
+  un, c'était ~0,5 jeu/s (mesuré sur 470 jeux hors Steam : un quart d'heure). D'où
+  **`noms_exacts`** : la correspondance exacte de douze titres en UN appel (`name ~ "A" |
+  alternative_names.name ~ "A" | name ~ "B" | …`, `limit 500`), puis titre par titre
+  seulement pour le repli `search` des titres sans correspondance exacte. Même fiche que
+  titre par titre (vérifié sur douze titres pièges : alias, homonymes, capitales), et douze
+  fois moins d'appels au quota IGDB, partagé par tous les joueurs. Un lot en panne repasse
+  entier par le chemin titre par titre : un titre que l'Apicalypse refuserait ne doit pas
+  priver ses voisins. Profite aussi au premier lancement d'un nouveau joueur. Mesuré : la
+  complétion de 1 100 fiches (470 hors Steam) passe d'un quart d'heure à 3 min 20 s.
+- La passe **enregistre au fil de l'eau** (à chaque lot émis) : fermer Torii en cours de
+  route perdait tout. `igdb_id` est là pour que la prochaine évolution du cache se fasse
+  par lots de 500.
+- Exemple : `cargo run --example categories -- <COPIE du dossier de config>` (couverture
+  par plateforme, distribution, jeux sans catégorie). Il lit `library_cache_v1.json` au
+  lieu de rescanner : rescanner dans une copie ferait tourner les jetons GOG/Epic dans la
+  copie et invaliderait ceux de l'original.
 
 ## Métadonnée via IGDB + mini-proxy (fait) — SOURCE UNIQUE
 
@@ -1736,7 +1845,7 @@ stats et les liens (page Steam, site officiel, communauté).
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.
 2. Temps de jeu Steam local (`localconfig.vdf`).
-3. Peupler les genres plus largement sans saturer l'API (pour un filtre catégorie plus riche).
+3. ~~Peupler les genres plus largement~~ : fait, les catégories sont les tags Steam.
 
 ### Diffusion à grande échelle — lots restants
 

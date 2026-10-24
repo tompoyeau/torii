@@ -9,6 +9,7 @@ import { usePageWeb } from "../composables/usePageWeb";
 import { useScrollLock } from "../composables/useScrollLock";
 import { avecRaccourci } from "../composables/useRaccourcis";
 import { openExternal, pageAction, pageBornes, pageFermer, pageOuvrir, pageVisible, type BornesPage } from "../lib/tauri";
+import { copierLien, lienPartageable } from "../lib/partage";
 import { t } from "../i18n";
 
 /**
@@ -107,6 +108,8 @@ watch(statutMaj, () => void nextTick(recaler));
 // --- Barre ---------------------------------------------------------------------
 
 const adresse = computed(() => etat.url || pageWeb.value || "");
+/** L'adresse qu'on peut envoyer à quelqu'un : sans code de connexion (cf. `lienPartageable`). */
+const lienACopier = computed(() => lienPartageable(adresse.value));
 const domaine = computed(() => {
   try {
     return new URL(adresse.value).hostname.replace(/^www\./, "");
@@ -164,6 +167,15 @@ const titreFermer = computed(() =>
         <span v-if="etat.titre" class="titre">{{ etat.titre }}</span>
       </div>
 
+      <button
+        class="icon-btn"
+        :disabled="!lienACopier"
+        :title="t('commun.partage.copierLien')"
+        :aria-label="t('commun.partage.copierLien')"
+        @click="lienACopier && copierLien(lienACopier)"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L11.6 6" /><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.6-1.6" /></svg>
+      </button>
       <button class="texte" :disabled="!adresse" @click="openExternal(adresse)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
         <span>{{ t("page.navigateur") }}</span>

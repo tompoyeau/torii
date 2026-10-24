@@ -40,7 +40,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 const QUERY: &str = "https://api.steampowered.com/IStoreQueryService/Query/v1";
-const GET_ITEMS: &str = "https://api.steampowered.com/IStoreBrowseService/GetItems/v1";
+pub(super) const GET_ITEMS: &str = "https://api.steampowered.com/IStoreBrowseService/GetItems/v1";
 const TAGS: &str = "https://store.steampowered.com/tagdata/populartags";
 
 /// Nombre de jeux renvoyés par rayon.
@@ -253,7 +253,7 @@ fn similaires(app_id: u64, dlc: &[u64], tags: &[u64]) -> Vec<Value> {
 
 // --- Steam ---------------------------------------------------------------------
 
-fn contexte() -> Value {
+pub(super) fn contexte() -> Value {
     json!({ "language": locale::steam_langue(), "country_code": locale::region() })
 }
 
@@ -268,28 +268,40 @@ fn donnees_completes() -> Value {
 }
 
 /// Un appel à l'API de la boutique. `None` = panne ; une réponse sans jeu = liste vide.
-fn steam(url: &str, entree: &Value) -> Option<Vec<Value>> {
-    let racine: Value = ureq::get(url)
+pub(super) fn steam(url: &str, entree: &Value) -> Option<Vec<Value>> {
+    let reponse = steam_reponse(url, entree)?;
+    Some(reponse["store_items"].as_array().cloned().unwrap_or_default())
+}
+
+/// La réponse entière (`response`), métadonnées comprises.
+fn steam_reponse(url: &str, entree: &Value) -> Option<Value> {
+    let mut racine: Value = ureq::get(url)
         .query("input_json", &entree.to_string())
         .timeout(Duration::from_secs(15))
         .call()
         .ok()?
         .into_json()
         .ok()?;
-    let reponse = racine.get("response")?;
-    Some(reponse["store_items"].as_array().cloned().unwrap_or_default())
+    racine.get_mut("response").map(Value::take)
 }
 
 /// `Query` limité aux jeux, contenu adulte exclu.
-fn requete(tri: u32, nombre: u32, mut filtres: Value, donnees: Value) -> Option<Vec<Value>> {
+fn requete(tri: u32, nombre: u32, filtres: Value, donnees: Value) -> Option<Vec<Value>> {
+    requete_page(tri, 0, nombre, filtres, donnees).map(|(items, _)| items)
+}
+
+/// Comme `requete`, à partir du rang `debut`, avec le nombre total de jeux trouvés.
+fn requete_page(tri: u32, debut: u32, nombre: u32, mut filtres: Value, donnees: Value) -> Option<(Vec<Value>, u32)> {
     filtres["type_filters"] = json!({ "include_games": true });
     filtres["content_descriptors_excluded"] = json!(ADULTE);
     let entree = json!({
-        "query": { "start": 0, "count": nombre, "sort": tri, "filters": filtres },
+        "query": { "start": debut, "count": nombre, "sort": tri, "filters": filtres },
         "context": contexte(),
         "data_request": donnees,
     });
-    steam(QUERY, &entree)
+    let reponse = steam_reponse(QUERY, &entree)?;
+    let total = reponse["metadata"]["total_matching_records"].as_u64().unwrap_or(0) as u32;
+    Some((reponse["store_items"].as_array().cloned().unwrap_or_default(), total))
 }
 
 /// Les jeux bruts d'un rayon, tels que Steam les renvoie.
@@ -458,10 +470,15 @@ fn lire(item: &Value, noms: &HashMap<u64, String>, dlc: bool) -> Option<ShelfIte
 /// Les noms changent rarement : un mois de cache, par langue.
 const DUREE_TAGS: u64 = 30 * 86_400;
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 struct NomsTags {
     at: u64,
     noms: HashMap<u64, String>,
+    /// Les tags dans l'ordre où Steam les donne : du plus employé au moins employé. Vide
+    /// dans un cache d'avant le menu des catégories de la Boutique : il est alors
+    /// redemandé, comme s'il était périmé.
+    #[serde(default)]
+    ordre: Vec<u64>,
 }
 
 /// ⚠️ Le mot `cache` dans le nom n'est pas décoratif : « Vider le cache » (Paramètres)
@@ -473,6 +490,10 @@ fn fichier_tags(dir: &Path) -> PathBuf {
 /// Nom des tags Steam dans la langue de l'interface. Un cache périmé sert encore si
 /// Steam ne répond pas : des tags d'il y a deux mois valent mieux que pas de tags.
 pub(super) fn noms_tags(dir: &Path) -> HashMap<u64, String> {
+    charger_tags(dir).noms
+}
+
+fn charger_tags(dir: &Path) -> NomsTags {
     let langue = locale::steam_langue();
     let mut cache: HashMap<String, NomsTags> = std::fs::read_to_string(fichier_tags(dir))
         .ok()
@@ -480,35 +501,136 @@ pub(super) fn noms_tags(dir: &Path) -> HashMap<u64, String> {
         .unwrap_or_default();
     let t = maintenant() as u64;
     if let Some(c) = cache.get(langue) {
-        if t.saturating_sub(c.at) < DUREE_TAGS && !c.noms.is_empty() {
-            return c.noms.clone();
+        if t.saturating_sub(c.at) < DUREE_TAGS && !c.noms.is_empty() && !c.ordre.is_empty() {
+            return c.clone();
         }
     }
-    let frais: Option<HashMap<u64, String>> = ureq::get(&format!("{TAGS}/{langue}"))
+    let frais: Option<NomsTags> = ureq::get(&format!("{TAGS}/{langue}"))
         .timeout(Duration::from_secs(10))
         .call()
         .ok()
         .and_then(|r| r.into_json::<Value>().ok())
         .and_then(|v| {
-            let noms: HashMap<u64, String> = v
+            let liste: Vec<(u64, String)> = v
                 .as_array()?
                 .iter()
                 .filter_map(|t| Some((t["tagid"].as_u64()?, t["name"].as_str()?.to_string())))
                 .collect();
-            (!noms.is_empty()).then_some(noms)
+            let ordre = liste.iter().map(|(id, _)| *id).collect();
+            (!liste.is_empty()).then(|| NomsTags { at: t, noms: liste.into_iter().collect(), ordre })
         });
     match frais {
-        Some(noms) => {
-            cache.insert(langue.to_string(), NomsTags { at: t, noms: noms.clone() });
+        Some(frais) => {
+            cache.insert(langue.to_string(), frais.clone());
             if std::fs::create_dir_all(dir).is_ok() {
                 if let Ok(json) = serde_json::to_string(&cache) {
                     let _ = std::fs::write(fichier_tags(dir), json);
                 }
             }
-            noms
+            frais
         }
-        None => cache.remove(langue).map(|c| c.noms).unwrap_or_default(),
+        None => cache.remove(langue).unwrap_or_default(),
     }
+}
+
+// --- Parcourir par catégories ----------------------------------------------------
+
+/// Un tag proposé dans le menu « Catégories » de la Boutique.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TagBoutique {
+    pub id: u64,
+    pub nom: String,
+}
+
+/// Tags de logiciels, pas de jeux : la recherche est limitée aux jeux, ils ne ramèneraient
+/// presque rien. Conception et illustration (84), Utilitaires (87), Production vidéo (784),
+/// Retouche photo (809), Animation et modélisation (872), Production audio (1027),
+/// Logiciel d'apprentissage (1445), Test de performance (5407), Bande originale (7948),
+/// Logiciel (8013), Développement de jeux (13906).
+const TAGS_LOGICIELS: [u64; 11] = [84, 87, 784, 809, 872, 1027, 1445, 5407, 7948, 8013, 13906];
+
+/// Les tags du menu, dans l'ordre de Steam (les plus employés d'abord).
+///
+/// ⚠️ Les mêmes exclusions que les catégories de la bibliothèque (`categories::EXCLUS`) :
+/// une catégorie qu'on peut cocher d'un côté doit exister de l'autre.
+pub fn tags_boutique(dir: &Path) -> Vec<TagBoutique> {
+    let tags = charger_tags(dir);
+    tags.ordre
+        .iter()
+        .filter(|id| !super::categories::EXCLUS.contains(id) && !TAGS_LOGICIELS.contains(id))
+        .filter_map(|id| Some(TagBoutique { id: *id, nom: tags.noms.get(id)?.clone() }))
+        .collect()
+}
+
+/// L'ordre des résultats. Les valeurs de `sort` sont celles relevées le 24/10/2026
+/// (énumération non documentée de Steam, cf. le haut du fichier).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TriParcours {
+    /// 10 : ventes du moment dans le pays.
+    Ventes,
+    /// 21 : appréciation des joueurs (Terraria, Left 4 Dead 2, Satisfactory… à 97 %).
+    Notes,
+    /// 20 : sorties récentes qui marchent. Le tri par date seul (40) remonte surtout
+    /// des jeux sortis la veille, sans un seul avis.
+    Nouveautes,
+}
+
+impl TriParcours {
+    /// Nom employé par l'interface (`StoreBrowseSort` dans `types.ts`).
+    pub fn depuis(nom: &str) -> Option<TriParcours> {
+        Some(match nom {
+            "topSellers" => TriParcours::Ventes,
+            "rating" => TriParcours::Notes,
+            "trending" => TriParcours::Nouveautes,
+            _ => return None,
+        })
+    }
+
+    fn valeur(self) -> u32 {
+        match self {
+            TriParcours::Ventes => 10,
+            TriParcours::Notes => 21,
+            TriParcours::Nouveautes => 20,
+        }
+    }
+}
+
+/// Jeux par page de résultats.
+pub const PAR_PAGE: u32 = 24;
+
+/// Une page de résultats.
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Parcours {
+    /// Nombre total de jeux qui ont toutes les catégories (selon Steam).
+    pub total: u32,
+    pub jeux: Vec<ShelfItem>,
+}
+
+/// Les jeux qui portent TOUS ces tags, une page à la fois, prix compris. `None` = panne.
+///
+/// Un seul appel à Steam par page (le total vient avec), puis la résolution d'ids et un
+/// appel groupé au comparateur, comme pour un rayon.
+pub fn parcourir(
+    tags: &[u64],
+    tri: TriParcours,
+    page: u32,
+    dir: &Path,
+    excluded: &HashSet<String>,
+) -> Option<Parcours> {
+    if tags.is_empty() {
+        return Some(Parcours::default());
+    }
+    let filtres = json!({
+        "released_only": true,
+        "tagids_must_match": tags.iter().map(|t| json!({ "tagids": [t] })).collect::<Vec<_>>(),
+    });
+    let (items, total) = requete_page(tri.valeur(), page * PAR_PAGE, PAR_PAGE, filtres, donnees_completes())?;
+    let noms = noms_tags(dir);
+    let mut jeux: Vec<ShelfItem> = items.iter().filter_map(|i| lire_jeu(i, &noms)).collect();
+    completer(&mut jeux, dir, excluded);
+    Some(Parcours { total, jeux })
 }
 
 // --- Identifiants ITAD -----------------------------------------------------------
@@ -881,5 +1003,37 @@ mod tests {
         assert_eq!(Rayon::depuis("genre", Some(122)), Some(Rayon::Genre(122)));
         assert_eq!(Rayon::depuis("genre", None), None);
         assert_eq!(Rayon::depuis("autre", None), None);
+    }
+
+    #[test]
+    fn tris_du_parcours() {
+        assert_eq!(TriParcours::depuis("topSellers").map(TriParcours::valeur), Some(10));
+        assert_eq!(TriParcours::depuis("rating").map(TriParcours::valeur), Some(21));
+        assert_eq!(TriParcours::depuis("trending").map(TriParcours::valeur), Some(20));
+        assert_eq!(TriParcours::depuis("price"), None);
+    }
+
+    /// Le menu suit l'ordre de Steam et retire ce qui n'est pas une catégorie de jeu.
+    #[test]
+    fn le_menu_des_categories_garde_l_ordre_de_steam() {
+        let dir = std::env::temp_dir().join(format!("torii-tags-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Indépendant, Gore (exclu), Survie, Utilitaires (logiciel), Coop.
+        let ordre = vec![492, 4345, 1662, 87, 1685];
+        let noms: HashMap<u64, String> =
+            [(492, "Indépendant"), (4345, "Gore"), (1662, "Survie"), (87, "Utilitaires"), (1685, "Coop")]
+                .into_iter()
+                .map(|(id, n)| (id, n.to_string()))
+                .collect();
+        let entree = NomsTags { at: maintenant() as u64, noms, ordre };
+        // Les deux langues : la langue courante est un état global que d'autres tests modifient.
+        let cache: HashMap<&str, &NomsTags> = [("french", &entree), ("english", &entree)].into();
+        std::fs::write(fichier_tags(&dir), serde_json::to_string(&cache).unwrap()).unwrap();
+
+        let menu: Vec<u64> = tags_boutique(&dir).iter().map(|t| t.id).collect();
+        assert_eq!(menu, vec![492, 1662, 1685]);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

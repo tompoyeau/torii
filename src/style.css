@@ -231,6 +231,10 @@ button { font-family: inherit; cursor: pointer; }
   color: #fff; background: linear-gradient(135deg, #3ad07f, #1fa862);
   box-shadow: 0 3px 10px -3px rgba(31, 168, 98, 0.7);
 }
+/* Jeu déjà possédé ET en promo : la pastille « Dans ta bibliothèque » (`.coin`, en haut à
+   gauche) occupe presque toute la largeur d'une jaquette de 172 px et recouvrait la
+   remise. Celle-ci passe dessous, toujours à droite. */
+.cover-card .cover:has(> .coin) > .badge { top: 40px; }
 
 /* --- Boutique : pièces communes aux rayons -----------------------------------
    Vedette, carrousels, classements, jeux offerts et grille montrent les mêmes

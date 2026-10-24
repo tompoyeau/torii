@@ -71,11 +71,11 @@ export default {
       alpha: "A → Z",
       playtime: "Temps de jeu",
     },
-    toutesCategoriesCourt: "Toutes catégories",
-    toutesCategories: "Toutes les catégories",
     installesSeulement: "Installés uniquement",
     installesSeulementAide: "N'afficher que les jeux installés",
     aucun: "Aucun jeu ne correspond à ta recherche.",
+    aucunAvecCategories: "Aucun jeu n'a toutes ces catégories.",
+    effacerCategories: "Effacer les catégories",
   },
 
   carte: {

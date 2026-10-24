@@ -18,6 +18,20 @@ export default {
     recent: "Récents",
     rating: "Mieux notés",
   },
+  // Parcourir le catalogue par catégories (tags Steam).
+  categories: {
+    total: "{nombre} jeu | {nombre} jeux",
+    tris: {
+      topSellers: "Meilleures ventes",
+      rating: "Mieux notés",
+      trending: "Nouveautés populaires",
+    },
+    aucun: "Aucun jeu n'a toutes ces catégories.",
+    aucunAide: "Décoche une catégorie pour élargir la recherche.",
+    echec: "Steam ne répond pas pour l'instant.",
+    retirer: "Retirer « {nom} »",
+    voir: "Voir les jeux « {nom} » dans la Boutique",
+  },
   chargement: "Chargement de la boutique…",
   indisponible: "Le comparateur de prix ne répond pas pour l'instant.",
   indisponibleAide: "Réessaie dans une minute.",

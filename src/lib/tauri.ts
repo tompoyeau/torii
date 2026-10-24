@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, OwnedGameSheet, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreShelfItem, StoreShelfKind, StoreSuggestion, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, OwnedGameSheet, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreBrowse, StoreBrowseSort, StoreShelfItem, StoreShelfKind, StoreSuggestion, StoreTag, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 import { avatarFictif } from "./covers";
 import { t } from "../i18n";
 
@@ -289,6 +289,8 @@ export interface MetaUpdate {
   developer?: string | null;
   year?: number | null;
   screenshots: string[];
+  /** Catégories (tags Steam nommés). Vide = rien de neuf : garder celles qu'on a. */
+  tags?: string[];
 }
 
 /**
@@ -674,6 +676,25 @@ export async function storeHome(): Promise<StoreHome | null> {
 /** Boutique — un rayon chargé à la demande (`tag` : tag Steam, pour `genre`). `null` hors Tauri. */
 export async function storeShelf(kind: StoreShelfKind, tag?: number): Promise<StoreShelfItem[] | null> {
   return await call<StoreShelfItem[] | null>("store_shelf", { kind, tag: tag ?? null }, null);
+}
+
+/**
+ * La page à partager pour un jeu (Steam, sinon Epic, GOG, site officiel, d'après IGDB).
+ * `id` : un jeu de la bibliothèque ; `null` (fiche de la Boutique) : cherché par son titre.
+ * `null` hors Tauri ou si rien n'est connu.
+ */
+export async function lienPartage(id: string | null, titre: string): Promise<string | null> {
+  return await call<string | null>("lien_partage", { id, titre }, null);
+}
+
+/** Boutique — les tags du menu « Catégories », dans l'ordre de Steam. `null` hors Tauri ou en panne. */
+export async function storeTags(): Promise<StoreTag[] | null> {
+  return await call<StoreTag[] | null>("store_tags", undefined, null);
+}
+
+/** Boutique — une page de jeux qui ont tous ces tags. `null` hors Tauri ou si Steam ne répond pas. */
+export async function storeBrowse(tags: number[], sort: StoreBrowseSort, page: number): Promise<StoreBrowse | null> {
+  return await call<StoreBrowse | null>("store_browse", { tags, sort, page }, null);
 }
 
 /** Boutique — bas de la fiche produit : contenus additionnels et jeux similaires. `null` hors Tauri. */

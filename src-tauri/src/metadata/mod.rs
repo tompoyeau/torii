@@ -1,3 +1,4 @@
+pub mod categories;
 pub mod fiche;
 pub mod gog_store;
 pub mod igdb;

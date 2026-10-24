@@ -19,5 +19,20 @@ const en: Forme<typeof fr> = {
   retirer: "Remove",
   supprimer: "Delete",
   enCours: "…",
+  partage: {
+    partager: "Share",
+    aideJeu: "Copy a link to this game to send to a friend",
+    copierLien: "Copy page link",
+    copie: "Link copied — paste it anywhere.",
+    impossible: "Couldn't copy.",
+    aucun: "No page to share for this game.",
+  },
+  categories: {
+    bouton: "Categories",
+    chercher: "Search categories",
+    aucune: "No matching category.",
+    effacer: "Clear all",
+    toutes: "Games must have every checked category.",
+  },
 };
 export default en;

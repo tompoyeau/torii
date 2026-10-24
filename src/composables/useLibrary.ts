@@ -127,6 +127,7 @@ async function refreshInfo(id: string) {
       ...cur,
       title: cur.title.startsWith("App ") && meta.name ? meta.name : cur.title,
       genre: igdb?.genre ?? meta.genre ?? cur.genre,
+      tags: igdb?.tags?.length ? igdb.tags : cur.tags,
       description:
         (meta.localized ? meta.description : null) ?? igdb?.description ?? meta.description ?? cur.description,
       descriptionSource:
@@ -194,6 +195,11 @@ function load() {
  * description, captures, hero, studio, année et complète les jaquettes manquantes.
  * Fusion réactive au fil des lots, SANS écraser ce que le launcher a déjà fourni
  * (jaquette native prioritaire, IGDB en repli — décision utilisateur).
+ *
+ * Les catégories (tags) suivent la règle inverse : le backend en calcule la version la
+ * plus sûre, donc la dernière reçue gagne. ⚠️ Une mise à jour peut ne porter QUE des
+ * catégories (celles des jeux Steam partent avant IGDB) : un champ absent ne doit
+ * jamais effacer ce qu'on avait.
  */
 async function fillIgdb() {
   await enrichIgdb((updates) => {
@@ -205,6 +211,7 @@ async function fillIgdb() {
       return {
         ...g,
         genre: g.genre ?? u.genre ?? undefined,
+        tags: u.tags?.length ? u.tags : g.tags,
         description: g.description ?? u.description ?? undefined,
         descriptionSource: g.description ? g.descriptionSource : u.description ? "igdb" : undefined,
         developer: g.developer ?? u.developer ?? undefined,
@@ -212,8 +219,8 @@ async function fillIgdb() {
         // Jaquette/hero : launcher d'abord, IGDB en repli.
         coverUrl: g.coverUrl ?? u.coverUrl ?? undefined,
         heroUrl: g.heroUrl ?? u.heroUrl ?? undefined,
-        coverAlt: u.coverUrl ?? undefined,
-        heroAlt: u.heroUrl ?? undefined,
+        coverAlt: u.coverUrl ?? g.coverAlt,
+        heroAlt: u.heroUrl ?? g.heroAlt,
         screenshots: g.screenshots?.length
           ? g.screenshots
           : u.screenshots?.length

@@ -18,8 +18,9 @@ interface UiState {
   listView: boolean;
   /** Dans une vue de plateforme : n'afficher que les jeux installés. */
   installedOnly: boolean;
-  /** Catégorie (genre) sélectionnée, ou null pour toutes. Se combine aux autres filtres. */
-  genre: string | null;
+  /** Catégories (tags) cochées : un jeu doit les avoir TOUTES. Vide = toutes les
+      catégories. Se combine aux autres filtres. */
+  categories: string[];
   /** Pop-in Paramètres ouverte. */
   settingsOpen: boolean;
   /** Catégorie active de la pop-in Paramètres. */
@@ -53,7 +54,7 @@ const state = reactive<UiState>({
   sort: initialPrefs.defaultSort,
   listView: initialPrefs.listView,
   installedOnly: false,
-  genre: null,
+  categories: [],
   settingsOpen: false,
   settingsCategory: "general",
   addGameOpen: false,
@@ -122,7 +123,13 @@ export function useUi() {
     setSort: (sort: SortKey) => (state.sort = sort),
     toggleListView: () => (state.listView = !state.listView),
     toggleInstalledOnly: () => (state.installedOnly = !state.installedOnly),
-    setGenre: (genre: string | null) => (state.genre = genre),
+    /** Coche ou décoche une catégorie. */
+    toggleCategorie: (nom: string) => {
+      state.categories = state.categories.includes(nom)
+        ? state.categories.filter((c) => c !== nom)
+        : [...state.categories, nom];
+    },
+    clearCategories: () => (state.categories = []),
     /** Ouvre la pop-in Paramètres, éventuellement sur une catégorie précise. */
     openSettings: (category: SettingsCategory = "general") => {
       state.settingsCategory = category;

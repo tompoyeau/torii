@@ -1,6 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useUi, type MainSection, type SettingsCategory } from "./useUi";
 import { useStore } from "./useStore";
+import { useStoreCategories } from "./useStoreCategories";
 import { useLibrary } from "./useLibrary";
 import { useFriendList, type UnifiedFriend } from "./useFriendList";
 import { titreFiltre } from "../data/platforms";
@@ -43,6 +44,11 @@ interface Etape {
   jeu: string | null;
   /** Fiche Boutique, par-dessus la section ou par-dessus la fiche d'un jeu. */
   produit: string | null;
+  /**
+   * Catégories cochées dans la Boutique. Un tag cliqué dans une fiche ouvre la Boutique
+   * sur sa catégorie : le retour doit ramener à la fiche, puis aux catégories d'avant.
+   */
+  boutique: number[];
   parametres: boolean;
   categorie: SettingsCategory;
   /**
@@ -66,6 +72,7 @@ const LIMITE = 60;
 
 const ui = useUi();
 const store = useStore();
+const categoriesBoutique = useStoreCategories();
 
 function capturer(precedente?: Etape): Etape {
   const jeu = ui.selectedGameId.value;
@@ -77,6 +84,7 @@ function capturer(precedente?: Etape): Etape {
     friendLibraryId: ui.friendLibraryId.value,
     jeu,
     produit,
+    boutique: [...categoriesBoutique.choisis.value],
     parametres: ui.settingsOpen.value,
     categorie: ui.settingsCategory.value,
     page: ui.pageWeb.value,
@@ -95,7 +103,8 @@ function memeEtape(a: Etape, b: Etape): boolean {
   return (
     a.section === b.section && a.filter === b.filter &&
     a.friendProfileKey === b.friendProfileKey && a.friendLibraryId === b.friendLibraryId &&
-    a.jeu === b.jeu && a.produit === b.produit && a.parametres === b.parametres
+    a.jeu === b.jeu && a.produit === b.produit && a.parametres === b.parametres &&
+    a.boutique.join(",") === b.boutique.join(",")
   );
 }
 
@@ -111,7 +120,7 @@ watch(
   () => [
     ui.section.value, ui.filter.value, ui.friendProfileKey.value, ui.friendLibraryId.value,
     ui.selectedGameId.value, store.selectedGameId.value, ui.settingsOpen.value, ui.settingsCategory.value,
-    ui.pageWeb.value,
+    ui.pageWeb.value, categoriesBoutique.choisis.value,
   ],
   () => {
     if (restauration) return;
@@ -203,6 +212,9 @@ function appliquer(e: Etape) {
   ui.settingsOpen.value = e.parametres;
   ui.settingsCategory.value = e.categorie;
   ui.pageWeb.value = e.page;
+  if (e.boutique.join(",") !== categoriesBoutique.choisis.value.join(",")) {
+    categoriesBoutique.choisis.value = [...e.boutique];
+  }
   if (e.produit !== store.selectedGameId.value) {
     // Rouvrir la fiche, et pas seulement poser son identifiant : c'est `openProduct` qui
     // la charge (depuis le cache des fiches vues, la plupart du temps).
@@ -383,7 +395,11 @@ function libelle(e: Etape): string {
   if (e.jeu) return (bibliotheque ??= useLibrary()).byId(e.jeu)?.title ?? t("fiche.fiche");
   switch (e.section) {
     case "web": return e.page ? titresPages.get(e.page) ?? domaine(e.page) : t("page.titre");
-    case "store": return t("bibliotheque.laterale.boutique");
+    case "store":
+      // « Revenir à : Coop + Survie » plutôt qu'un « Boutique » qui ne dirait pas lesquelles.
+      return e.boutique.length
+        ? e.boutique.map((id) => categoriesBoutique.noms.get(id) ?? `#${id}`).join(" + ")
+        : t("bibliotheque.laterale.boutique");
     case "wishlist": return t("bibliotheque.laterale.wishlist");
     case "common": return t("bibliotheque.laterale.enCommun");
     case "friends": return t("amis.titre");

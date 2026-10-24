@@ -130,6 +130,12 @@ export interface Game {
   developer?: string;
   year?: number;
   genre?: string;
+  /**
+   * Catégories du jeu : ses tags Steam (ceux de sa version Steam pour un jeu acheté
+   * ailleurs, déduits d'IGDB pour un jeu absent de Steam), dans la langue de
+   * l'interface, du plus voté au moins voté. Alimente le filtre « Catégories ».
+   */
+  tags?: string[];
   description?: string;
   /**
    * D'où vient la description : `locale`, une source sûre interrogée dans la langue de
@@ -191,6 +197,22 @@ export interface StoreItem {
 
 /** Rayons de l'accueil chargés à la demande (`store_shelf`). */
 export type StoreShelfKind = "topSellers" | "newReleases" | "upcoming" | "genre" | "freeToPlay";
+
+/** Un tag Steam du menu « Catégories » de la Boutique (`store_tags`). */
+export interface StoreTag {
+  id: number;
+  nom: string;
+}
+
+/** Ordre des résultats d'une recherche par catégories (`store_browse`). */
+export type StoreBrowseSort = "topSellers" | "rating" | "trending";
+
+/** Une page de jeux qui ont toutes les catégories demandées (`store_browse`). */
+export interface StoreBrowse {
+  /** Nombre total de jeux trouvés par Steam. */
+  total: number;
+  jeux: StoreShelfItem[];
+}
 
 /**
  * Un jeu d'un rayon de l'accueil : choisi et décrit par Steam (visuels, tags, avis,
@@ -304,6 +326,8 @@ export interface StoreSteamSheet {
   reviewCount: number;
   tags: string[];
   tagIds: number[];
+  /** Tags cliquables : ouvrent la Boutique filtrée sur cette catégorie. */
+  etiquettes: StoreTag[];
   captures: { mini: string; grande: string }[];
   /** Bandes-annonces : flux HLS avec le son, et aperçu muet (mp4/webm) en repli. */
   bandesAnnonces: StoreTrailer[];

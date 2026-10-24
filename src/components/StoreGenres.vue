@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useQuandVisible } from "../composables/useQuandVisible";
+import { useStoreCategories } from "../composables/useStoreCategories";
 import { useStoreHome } from "../composables/useStoreHome";
 import { t, type Cle } from "../i18n";
 import StoreRow from "./StoreRow.vue";
@@ -72,6 +73,10 @@ function choisir(g: Genre) {
 }
 
 const nom = (g: Genre) => t(`boutique.accueil.genres.${g.cle}` as Cle);
+
+/** « Tout voir » : tous les jeux du genre, par la recherche par catégories (même tag Steam). */
+const { ouvrir } = useStoreCategories();
+const voirTout = () => ouvrir({ id: actif.value.tag, nom: nom(actif.value) });
 </script>
 
 <template>
@@ -81,6 +86,9 @@ const nom = (g: Genre) => t(`boutique.accueil.genres.${g.cle}` as Cle);
       :sous-titre="t('boutique.accueil.genres.sousTitre')"
       :nombre="etat.items.length"
     >
+      <template #actions>
+        <button class="lien" @click="voirTout">{{ t("boutique.accueil.toutVoir") }}</button>
+      </template>
       <template #avant>
         <div class="pastilles" role="group" :aria-label="t('boutique.accueil.genres.titre')">
           <button
@@ -109,6 +117,8 @@ const nom = (g: Genre) => t(`boutique.accueil.genres.${g.cle}` as Cle);
 
 <style scoped>
 .pastilles { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.lien { background: none; border: none; padding: 0 6px; color: var(--accent); font-size: 13px; font-weight: 600; }
+.lien:hover { text-decoration: underline; }
 .fantome { aspect-ratio: 3 / 4; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
 .echec { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-faint); }
 </style>

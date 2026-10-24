@@ -833,7 +833,7 @@ fn disconnect_battlenet(app: tauri::AppHandle) -> Result<Settings, String> {
 }
 
 /// Métadonnée IGDB résolue pour un jeu (renvoyée au front pour fusion réactive).
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 struct MetaUpdate {
     id: String,
@@ -844,10 +844,13 @@ struct MetaUpdate {
     developer: Option<String>,
     year: Option<i64>,
     screenshots: Vec<String>,
+    /// Catégories du jeu (tags Steam, nommés dans la langue de l'interface), cf.
+    /// `metadata::categories`. Vide = rien de neuf, le front garde ce qu'il a.
+    tags: Vec<String>,
 }
 
 impl MetaUpdate {
-    fn new(id: String, m: metadata::igdb::IgdbMeta) -> Self {
+    fn new(id: String, m: metadata::igdb::IgdbMeta, tags: Vec<String>) -> Self {
         MetaUpdate {
             id,
             genre: m.genre,
@@ -857,6 +860,7 @@ impl MetaUpdate {
             developer: m.developer,
             year: m.year,
             screenshots: m.screenshots,
+            tags,
         }
     }
 }
@@ -866,6 +870,11 @@ impl MetaUpdate {
 /// par appid Steam en masse + par nom pour les autres launchers. Les résultats
 /// arrivent par lots (événement `igdb-batch`) pour un affichage progressif ; la
 /// valeur de retour est l'ensemble complet. Cache disque (1er remplissage seulement).
+///
+/// Les catégories (tags Steam) voyagent avec : celles des jeux Steam partent d'abord,
+/// seules, avant IGDB (un appel à Steam pour 150 jeux, puis un mois de cache) ; celles
+/// des autres suivent leur fiche IGDB, qui donne leur appid Steam ou, à défaut, leur
+/// classement.
 #[tauri::command]
 async fn enrich_igdb(app: tauri::AppHandle) -> Result<Vec<MetaUpdate>, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
@@ -879,26 +888,43 @@ async fn enrich_igdb(app: tauri::AppHandle) -> Result<Vec<MetaUpdate>, String> {
         .map(|g| g.clone())
         .unwrap_or_default();
     let emitter = app.clone();
-    let updates = tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let games = if scanned.is_empty() {
             platforms::scan_all(Some(&dir))
         } else {
             scanned
         };
-        metadata::igdb::fill_metadata(&games, &dir, |batch| {
-            let ups: Vec<MetaUpdate> = batch
-                .iter()
-                .map(|(id, m)| MetaUpdate::new(id.clone(), m.clone()))
-                .collect();
-            let _ = emitter.emit("igdb-batch", ups);
-        })
+
+        let ids: Vec<&str> = games.iter().map(|g| g.id.as_str()).collect();
+        let categories = std::cell::RefCell::new(metadata::categories::Categories::charger(&ids, &dir));
+        // Les jeux Steam ont leurs catégories sans attendre IGDB : sur une grosse
+        // bibliothèque hors Steam, sa passe dure plusieurs minutes.
+        let d_abord: Vec<MetaUpdate> = games
+            .iter()
+            .filter(|g| g.id.starts_with("steam:"))
+            .map(|g| MetaUpdate { id: g.id.clone(), tags: categories.borrow().du_jeu(&g.id, None), ..Default::default() })
+            .filter(|u| !u.tags.is_empty())
+            .collect();
+        if !d_abord.is_empty() {
+            let _ = emitter.emit("igdb-batch", d_abord);
+        }
+
+        let avec_tags = |lot: &[(String, metadata::igdb::IgdbMeta)]| -> Vec<MetaUpdate> {
+            categories
+                .borrow_mut()
+                .completer(lot.iter().filter_map(|(id, m)| metadata::categories::appid(id, Some(m))));
+            let cats = categories.borrow();
+            lot.iter()
+                .map(|(id, m)| MetaUpdate::new(id.clone(), m.clone(), cats.du_jeu(id, Some(m))))
+                .collect()
+        };
+        let tout = metadata::igdb::fill_metadata(&games, &dir, |lot| {
+            let _ = emitter.emit("igdb-batch", avec_tags(lot));
+        });
+        avec_tags(&tout)
     })
     .await
-    .map_err(|e| e.to_string())?;
-    Ok(updates
-        .into_iter()
-        .map(|(id, m)| MetaUpdate::new(id, m))
-        .collect())
+    .map_err(|e| e.to_string())
 }
 
 /// Revendeurs masqués par l'utilisateur (vide si le dossier de config est illisible).
@@ -952,6 +978,47 @@ async fn store_shelf(
     tauri::async_runtime::spawn_blocking(move || metadata::vitrine::shelf(rayon, &dir, &excluded))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Bouton « Partager » d'une fiche : la page du jeu à envoyer à quelqu'un — Steam, sinon
+/// Epic, GOG ou le site officiel (IGDB). `id` : un jeu de la bibliothèque ; sans lui (fiche
+/// de la Boutique), le jeu est cherché par son titre. `None` : rien à partager.
+#[tauri::command]
+async fn lien_partage(app: tauri::AppHandle, id: Option<String>, titre: String) -> Result<Option<String>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || metadata::igdb::lien_partage(id.as_deref(), &titre, &dir))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Boutique — les tags du menu « Catégories », dans l'ordre de Steam.
+#[tauri::command]
+async fn store_tags(app: tauri::AppHandle) -> Result<Vec<metadata::vitrine::TagBoutique>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || metadata::vitrine::tags_boutique(&dir))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Boutique — les jeux qui ont TOUS ces tags, une page (`page` à partir de 0) triée par
+/// `sort` : `topSellers`, `rating` ou `trending`. Une panne de Steam est une erreur : le
+/// front affiche « Réessayer » au lieu d'une liste vide qui ferait croire à zéro jeu.
+#[tauri::command]
+async fn store_browse(
+    app: tauri::AppHandle,
+    tags: Vec<u64>,
+    sort: String,
+    page: u32,
+) -> Result<metadata::vitrine::Parcours, String> {
+    let tri = metadata::vitrine::TriParcours::depuis(&sort).ok_or_else(|| format!("tri inconnu : {sort}"))?;
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let excluded = excluded_stores(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        metadata::vitrine::parcourir(&tags, tri, page, &dir, &excluded)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| "Steam ne répond pas".to_string())
 }
 
 /// Boutique — bas de la fiche produit : contenus additionnels (`dlc`, appids Steam) et
@@ -1380,7 +1447,18 @@ async fn refresh_game_info(
         let igdb = metadata::igdb::fill_metadata(std::slice::from_ref(&game), &dir, |_| {})
             .into_iter()
             .next()
-            .map(|(id, m)| MetaUpdate::new(id, m));
+            .map(|(id, m)| {
+                // Les tags se redemandent aussi : c'est le seul moyen de rattraper un jeu
+                // dont Steam n'avait pas de fiche, sans attendre la semaine du cache.
+                let appid = metadata::categories::appid(&id, Some(&m));
+                if let Some(a) = appid {
+                    metadata::categories::oublier(&dir, a);
+                }
+                let mut cats = metadata::categories::Categories::charger(&[], &dir);
+                cats.completer(appid);
+                let tags = cats.du_jeu(&id, Some(&m));
+                MetaUpdate::new(id, m, tags)
+            });
         let mut art = [game.clone()];
         if appid.is_some() {
             metadata::steam_art::appliquer(&mut art, &dir);
@@ -2092,6 +2170,9 @@ pub fn run() {
             store_deals,
             store_home,
             store_shelf,
+            store_tags,
+            lien_partage,
+            store_browse,
             store_game_extras,
             store_id_for_steam,
             store_search,

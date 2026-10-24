@@ -2,13 +2,15 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useStore, type StoreSort } from "../composables/useStore";
 import { useStoreHome } from "../composables/useStoreHome";
+import { useStoreCategories } from "../composables/useStoreCategories";
 import { usePossession } from "../composables/usePossession";
 import { useQuandVisible } from "../composables/useQuandVisible";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
-import { t, type Cle } from "../i18n";
-import type { StoreItem, StoreSuggestion } from "../types";
+import { etiquetteIntl, t, type Cle } from "../i18n";
+import type { StoreBrowseSort, StoreItem, StoreSuggestion } from "../types";
+import MenuCategories, { type OptionCategorie } from "./MenuCategories.vue";
 import StoreDealCard from "./StoreDealCard.vue";
 import StoreGenres from "./StoreGenres.vue";
 import StoreGiveaways from "./StoreGiveaways.vue";
@@ -26,11 +28,38 @@ const {
 const { home, homeEtat, chargerAccueil, chargerRayon, rayon } = useStoreHome();
 const { possession } = usePossession();
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
+const cats = useStoreCategories();
 
 onMounted(() => {
   void chargerAccueil();
   ensureDeals();
+  void cats.chargerTags();
 });
+
+// --- Catégories ---
+
+/** Des catégories cochées : leurs résultats remplacent l'accueil, comme une recherche. */
+const enCategories = computed(() => cats.choisis.value.length > 0);
+
+/** Le menu : les catégories cochées en tête, puis l'ordre de Steam (les plus employées d'abord). */
+const optionsCategories = computed<OptionCategorie[]>(() => {
+  const choisis = cats.choisis.value;
+  const cochees = choisis.map((id) => ({ cle: id, nom: cats.noms.get(id) ?? `#${id}`, on: true }));
+  const autres = cats.tags.value.filter((tag) => !choisis.includes(tag.id)).map((tag) => ({ cle: tag.id, nom: tag.nom, on: false }));
+  return [...cochees, ...autres];
+});
+
+const libelleCategories = computed(() => {
+  const choisis = cats.choisis.value;
+  if (!choisis.length) return t("commun.categories.bouton");
+  const premier = cats.noms.get(choisis[0]) ?? `#${choisis[0]}`;
+  return choisis.length === 1 ? premier : `${premier} +${choisis.length - 1}`;
+});
+
+const TRIS_CATEGORIES: StoreBrowseSort[] = ["topSellers", "rating", "trending"];
+const totalCategories = computed(() =>
+  t("boutique.categories.total", { n: cats.total.value, nombre: cats.total.value.toLocaleString(etiquetteIntl.value) }),
+);
 
 const SORTS = computed<{ key: StoreSort; label: string }[]>(() => [
   { key: "featured", label: t("boutique.tris.featured") },
@@ -89,9 +118,11 @@ function pick(s: StoreSuggestion) {
   openProduct(s.gameId);
 }
 
-/** Lance la recherche complète (grille) et ferme le menu. */
+/** Lance la recherche complète (grille) et ferme le menu. Un titre et des catégories ne
+    se combinent pas : la recherche par titre décoche tout. */
 function submitSearch() {
   suggestOpen.value = false;
+  if (query.value.trim()) cats.effacer();
   runSearch();
 }
 
@@ -160,51 +191,118 @@ function onCoverError(url: string | null) {
         <h1>{{ t("boutique.titre") }}</h1>
         <p class="sub">{{ t("boutique.sousTitre") }}</p>
       </div>
-      <div class="store-search-wrap">
-        <div class="store-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input
-            v-model="query"
-            data-recherche
-            type="text"
-            :placeholder="t('boutique.rechercher')"
-            :aria-label="t('boutique.rechercher')"
-            autocomplete="off"
-            role="combobox"
-            aria-autocomplete="list"
-            :aria-expanded="suggestOpen && suggestions.length > 0"
-            @input="onInput"
-            @keydown="onSearchKey"
-            @focus="query && (suggestOpen = true)"
-          />
-          <button v-if="query" class="clear" :aria-label="t('boutique.effacer')" @click="clearSearch">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
-          </button>
-          <button class="go" @click="submitSearch">{{ t("boutique.lancerRecherche") }}</button>
-        </div>
+      <div class="store-outils">
+        <div class="store-search-wrap">
+          <div class="store-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+            <input
+              v-model="query"
+              data-recherche
+              type="text"
+              :placeholder="t('boutique.rechercher')"
+              :aria-label="t('boutique.rechercher')"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              :aria-expanded="suggestOpen && suggestions.length > 0"
+              @input="onInput"
+              @keydown="onSearchKey"
+              @focus="query && (suggestOpen = true)"
+            />
+            <button v-if="query" class="clear" :aria-label="t('boutique.effacer')" @click="clearSearch">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+            <button class="go" @click="submitSearch">{{ t("boutique.lancerRecherche") }}</button>
+          </div>
 
-        <ul v-if="suggestOpen && suggestions.length" class="suggest" role="listbox">
-          <li
-            v-for="(s, i) in suggestions"
-            :key="s.gameId"
-            class="suggest-item"
-            :class="{ active: i === activeIndex }"
-            role="option"
-            :aria-selected="i === activeIndex"
-            @mousedown.prevent="pick(s)"
-            @mouseenter="activeIndex = i"
-          >
-            <span class="suggest-cover">
-              <img v-if="s.coverUrl" :src="s.coverUrl" alt="" loading="lazy" />
-            </span>
-            <span class="suggest-title">{{ s.title }}</span>
-            <svg class="suggest-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-          </li>
-        </ul>
+          <ul v-if="suggestOpen && suggestions.length" class="suggest" role="listbox">
+            <li
+              v-for="(s, i) in suggestions"
+              :key="s.gameId"
+              class="suggest-item"
+              :class="{ active: i === activeIndex }"
+              role="option"
+              :aria-selected="i === activeIndex"
+              @mousedown.prevent="pick(s)"
+              @mouseenter="activeIndex = i"
+            >
+              <span class="suggest-cover">
+                <img v-if="s.coverUrl" :src="s.coverUrl" alt="" loading="lazy" />
+              </span>
+              <span class="suggest-title">{{ s.title }}</span>
+              <svg class="suggest-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </li>
+          </ul>
+        </div>
+        <MenuCategories
+          class="store-cats"
+          :options="optionsCategories"
+          :libelle="libelleCategories"
+          :actif="enCategories"
+          :titre="cats.choisis.value.length > 1 ? cats.libelle.value : undefined"
+          @basculer="(cle) => cats.basculer(Number(cle))"
+          @effacer="cats.effacer()"
+        />
       </div>
     </div>
 
-    <div class="accueil">
+    <section v-if="enCategories" class="parcours" :aria-label="cats.libelle.value">
+      <div class="bar">
+        <div class="choisies">
+          <button
+            v-for="id in cats.choisis.value"
+            :key="id"
+            class="chip choisie"
+            :title="t('boutique.categories.retirer', { nom: cats.noms.get(id) ?? '' })"
+            :aria-label="t('boutique.categories.retirer', { nom: cats.noms.get(id) ?? '' })"
+            @click="cats.basculer(id)"
+          >
+            {{ cats.noms.get(id) ?? `#${id}` }}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 7l10 10M17 7L7 17" /></svg>
+          </button>
+          <span v-if="cats.etat.value === 'pret'" class="n">{{ totalCategories }}</span>
+        </div>
+        <span class="spacer" />
+        <button
+          v-for="tri in TRIS_CATEGORIES"
+          :key="tri"
+          class="chip"
+          :class="{ active: cats.tri.value === tri }"
+          :aria-pressed="cats.tri.value === tri"
+          @click="cats.tri.value = tri"
+        >
+          {{ t(`boutique.categories.tris.${tri}`) }}
+        </button>
+      </div>
+
+      <div v-if="cats.etat.value === 'chargement' && !cats.jeux.value.length" class="empty">
+        <span class="spin" />
+        <p>{{ t("boutique.chargement") }}</p>
+      </div>
+      <div v-else-if="cats.etat.value === 'echec'" class="empty">
+        <p>{{ t("boutique.categories.echec") }}</p>
+        <button class="chip" @click="cats.charger()">{{ t("boutique.accueil.reessayer") }}</button>
+      </div>
+      <div v-else-if="cats.etat.value === 'pret' && !cats.jeux.value.length" class="empty">
+        <p>{{ t("boutique.categories.aucun") }}</p>
+        <p class="dim">{{ t("boutique.categories.aucunAide") }}</p>
+      </div>
+      <div v-else class="grid" :class="{ dim: cats.etat.value === 'chargement' }">
+        <StoreShelfCard v-for="j in cats.jeux.value" :key="j.appId" :jeu="j" />
+      </div>
+
+      <button
+        v-if="cats.etat.value === 'pret' && cats.jeux.value.length < cats.total.value"
+        class="plus"
+        :disabled="cats.chargementSuite.value"
+        @click="cats.chargerPlus()"
+      >
+        <span v-if="cats.chargementSuite.value" class="spin petit" />
+        {{ t("boutique.accueil.toutes.chargerPlus") }}
+      </button>
+    </section>
+
+    <div v-else class="accueil">
       <template v-if="!activeQuery">
         <nav class="raccourcis" :aria-label="t('boutique.accueil.rayons')">
           <button v-for="n in NAV" :key="n.cle" class="chip" @click="allerA(n.cible)">
@@ -366,7 +464,22 @@ function onCoverError(url: string | null) {
 .store-head { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
 .store-title h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
 .store-title .sub { margin: 4px 0 0; font-size: 13.5px; color: var(--text-faint); }
-.store-search-wrap { position: relative; margin-left: auto; flex: 1; min-width: 320px; max-width: 520px; }
+/* Recherche par titre et catégories : côte à côte, jamais l'une sous l'autre. */
+.store-outils { display: flex; gap: 8px; margin-left: auto; flex: 1; min-width: 320px; max-width: 660px; }
+.store-search-wrap { position: relative; flex: 1; min-width: 0; }
+/* Le bouton des catégories, à la hauteur de la barre de recherche. */
+.store-cats { align-self: stretch; display: flex; flex: none; }
+.store-cats :deep(.cat-btn) { height: 100%; padding: 0 14px; border-radius: 12px; }
+
+/* Résultats d'une recherche par catégories. */
+.choisies { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.chip.choisie {
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 600;
+  background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.chip.choisie svg { width: 12px; height: 12px; opacity: 0.8; }
+.choisies .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .store-search {
   display: flex; align-items: center; gap: 8px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px 4px 4px 12px;
@@ -461,6 +574,6 @@ function onCoverError(url: string | null) {
 }
 @media (max-width: 620px) {
   .store-head { flex-direction: column; align-items: stretch; }
-  .store-search-wrap { margin-left: 0; max-width: none; min-width: 0; }
+  .store-outils { margin-left: 0; max-width: none; min-width: 0; }
 }
 </style>

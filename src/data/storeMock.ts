@@ -1,5 +1,5 @@
 import { t, type Cle } from "../i18n";
-import type { StoreHome, StoreItem, StoreShelfItem, StoreShelfKind } from "../types";
+import type { StoreBrowse, StoreBrowseSort, StoreHome, StoreItem, StoreShelfItem, StoreShelfKind, StoreTag } from "../types";
 
 /**
  * Données de démonstration de l'accueil de la Boutique (démo web, hors Tauri).
@@ -173,4 +173,19 @@ export function rayonDeDemo(kind: StoreShelfKind, tag?: number): StoreShelfItem[
       return JEUX.filter((l) => l[8] !== null && !l[12] && genre && l[13].includes(genre)).map(versJeu);
     }
   }
+}
+
+/** Le menu « Catégories » de la démo : les genres du relevé, sous leur vrai tag Steam. */
+export function tagsDeDemo(): StoreTag[] {
+  return Object.entries(TAG_GENRE).map(([id, g]) => ({ id: Number(id), nom: t(`boutique.accueil.genres.${g}` as Cle) }));
+}
+
+/** Recherche par catégories de la démo, sur les jeux du relevé (déjà sortis), par pages de 24. */
+export function parcoursDeDemo(tags: number[], tri: StoreBrowseSort, page: number): StoreBrowse {
+  const genres = tags.map((id) => TAG_GENRE[id]);
+  const lignes = JEUX.filter((l) => !l[12] && genres.every((g) => g && l[13].includes(g)));
+  if (tri === "rating") lignes.sort((a, b) => b[7] - a[7]);
+  if (tri === "trending") lignes.sort((a, b) => b[5].localeCompare(a[5]));
+  const jeux = lignes.map(versJeu);
+  return { total: jeux.length, jeux: jeux.slice(page * 24, page * 24 + 24) };
 }

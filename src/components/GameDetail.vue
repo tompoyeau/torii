@@ -9,6 +9,7 @@ import { useModaleDeNavigation, useNavigation } from "../composables/useNavigati
 import { avecRaccourci } from "../composables/useRaccourcis";
 import { useTorii } from "../composables/useTorii";
 import { ouvrirPage } from "../composables/usePageWeb";
+import { partagerJeu } from "../lib/partage";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { estHorsLauncher, platformName } from "../data/platforms";
@@ -538,6 +539,14 @@ function retour() {
             </button>
             <button class="btn-ghost solid" :title="t('fiche.voirBoutique')" :aria-label="t('fiche.voirBoutique')" @click.stop="viewInStore">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 13.3 12.8 21a1.5 1.5 0 0 1-2.1 0l-7-7a1.4 1.4 0 0 1-.4-1V4.6A1.5 1.5 0 0 1 4.6 3h8.4a1.4 1.4 0 0 1 1 .4l6.5 6.5a2 2 0 0 1 0 2.8Z" /><circle cx="7.8" cy="7.8" r="1.4" fill="currentColor" stroke="none" /></svg>
+            </button>
+            <button
+              class="btn-ghost solid"
+              :title="t('commun.partage.aideJeu')"
+              :aria-label="t('commun.partage.aideJeu')"
+              @click.stop="partagerJeu({ appId: appIdSteam, id: game.id, titre: game.title })"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" /></svg>
             </button>
             <!-- Visible pour tous les jeux : « Actualiser les infos » concerne aussi les
                  jeux non installés. Les options d'installation restent réservées aux autres. -->

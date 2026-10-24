@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { usePossession } from "../composables/usePossession";
 import { useStore } from "../composables/useStore";
+import { useStoreCategories } from "../composables/useStoreCategories";
+import { partagerJeu } from "../lib/partage";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
@@ -138,14 +140,18 @@ function ouvrirSteam() {
 const note = (source: string): StoreReview | null => product.value?.reviews?.find((r) => r.source === source) ?? null;
 const tonNote = (score: number) => (score >= 75 ? "pos" : score >= 50 ? "mixte" : "neg");
 
-/** Ligne sous le titre : studio, sortie, genres. */
+/** Ligne sous le titre : studio, sortie, et les genres quand Steam n'a pas de tags à cliquer. */
 const faits = computed(() => {
   const p = product.value;
   if (!p) return [];
   const annee = p.releaseDate ? p.releaseDate.slice(0, 4) : p.year ? String(p.year) : "";
-  const genres = p.steam?.tags.length ? p.steam.tags.slice(0, 3) : p.genre ? [p.genre] : [];
+  const genres = etiquettes.value.length ? [] : p.steam?.tags.length ? p.steam.tags.slice(0, 3) : p.genre ? [p.genre] : [];
   return [p.developers?.[0] ?? p.developer ?? "", annee, ...genres].filter(Boolean);
 });
+
+/** Les tags de Steam, cliquables : chacun ouvre la Boutique sur sa catégorie. */
+const etiquettes = computed(() => product.value?.steam?.etiquettes ?? []);
+const { ouvrir: ouvrirCategorie } = useStoreCategories();
 
 /** Ce qu'il faut savoir d'une offre : activation, fin, code promo. */
 const detailOffre = (p: StorePrice) =>
@@ -180,6 +186,17 @@ const detailOffre = (p: StorePrice) =>
           <span class="sd-tag">{{ t("boutique.titre") }}</span>
           <h1 class="sd-title">{{ product?.title ?? (productIndisponible ? t("boutique.produit.fiche") : t("boutique.produit.chargement")) }}</h1>
           <div v-if="faits.length" class="sd-facts">{{ faits.join(" · ") }}</div>
+          <div v-if="etiquettes.length" class="sd-cats">
+            <button
+              v-for="e in etiquettes"
+              :key="e.id"
+              class="sd-cat"
+              :title="t('boutique.categories.voir', { nom: e.nom })"
+              @click="ouvrirCategorie(e)"
+            >
+              {{ e.nom }}
+            </button>
+          </div>
           <div v-if="product" class="sd-badges">
             <button
               v-if="product.steam?.reviewScore"
@@ -207,6 +224,17 @@ const detailOffre = (p: StorePrice) =>
               <StorePossede :etat="possede" />
               <button class="badge-note lien" @click="voirBibliotheque">{{ t("boutique.produit.voirBibliotheque") }} →</button>
             </template>
+            <!-- Sans offre, pas de bouton « Acheter » à côté duquel partager : le jeu reste
+                 partageable d'ici. -->
+            <button
+              v-if="!best"
+              class="badge-note"
+              :title="t('commun.partage.aideJeu')"
+              @click="partagerJeu({ appId: product.appId, titre: product.title })"
+            >
+              <svg class="partage" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" /></svg>
+              {{ t("commun.partage.partager") }}
+            </button>
           </div>
         </div>
       </div>
@@ -262,10 +290,21 @@ const detailOffre = (p: StorePrice) =>
             </div>
             <div class="best-price">{{ price(best.price, best) }}</div>
             <div v-if="best.savings > 0" class="best-was">{{ t("boutique.produit.auLieuDe", { prix: price(best.retailPrice, best) }) }}</div>
-            <button class="buy big" @click="buy(best.buyUrl)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z" /><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M6 6 5 3H2" /></svg>
-              {{ t("boutique.produit.acheterChez", { boutique: best.storeName }) }}
-            </button>
+            <div class="achat">
+              <button class="buy big" @click="buy(best.buyUrl)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z" /><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M6 6 5 3H2" /></svg>
+                {{ t("boutique.produit.acheterChez", { boutique: best.storeName }) }}
+              </button>
+              <button
+                v-if="product"
+                class="partager"
+                :title="t('commun.partage.aideJeu')"
+                :aria-label="t('commun.partage.aideJeu')"
+                @click="partagerJeu({ appId: product.appId, titre: product.title })"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" /></svg>
+              </button>
+            </div>
             <button
               v-if="product"
               class="wish"
@@ -397,6 +436,14 @@ const detailOffre = (p: StorePrice) =>
 }
 .sd-title { font-size: clamp(30px, 4.5vw, 52px); font-weight: 800; letter-spacing: -0.035em; margin: 0; color: #fff; line-height: 1; text-shadow: 0 3px 24px rgba(0, 0, 0, 0.4); }
 .sd-facts { margin-top: 12px; font-family: var(--mono); font-size: 13px; color: rgba(255, 255, 255, 0.85); display: flex; gap: 6px; }
+/* Tags cliquables (sur la bannière : clair sur sombre, comme les badges). */
+/* ⚠️ `.sd-cat` et pas `.sd-tag` : ce nom-là est déjà pris par la pastille « Boutique » au-dessus du titre. */
+.sd-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.sd-cat {
+  padding: 4px 11px; border-radius: 99px; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff;
+}
+.sd-cat:hover, .sd-cat:focus-visible { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); outline: none; }
 
 .sd-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; padding: 34px 56px 70px; align-items: start; }
 .sd-main { min-width: 0; }
@@ -416,6 +463,7 @@ const detailOffre = (p: StorePrice) =>
 }
 .badge-note:hover:not(:disabled):not(.fixe) { border-color: rgba(255, 255, 255, 0.35); }
 .badge-note.fixe, .badge-note:disabled { cursor: default; }
+.badge-note .partage { width: 14px; height: 14px; }
 .badge-note .avis { color: #fff; }
 .badge-note.lien { color: #ffd9c9; font-weight: 600; }
 .score { font-family: var(--mono); }
@@ -436,6 +484,15 @@ const detailOffre = (p: StorePrice) =>
 .buy { margin-top: 16px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 12px; border-radius: 12px; font-size: 14.5px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border: none; }
 .buy:hover { background: var(--accent-hover); }
 .buy svg { width: 17px; height: 17px; }
+/* « Acheter chez… » et, à sa droite, l'icône de partage. */
+.achat { display: flex; gap: 8px; margin-top: 16px; }
+.achat .buy { margin-top: 0; flex: 1; min-width: 0; }
+.partager {
+  flex: none; width: 46px; display: grid; place-items: center; border-radius: 12px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+}
+.partager:hover { border-color: var(--border-strong); background: var(--surface-3); }
+.partager svg { width: 18px; height: 18px; }
 .wish {
   margin-top: 8px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 10px; border-radius: 11px; font-size: 13px; font-weight: 600; cursor: pointer;

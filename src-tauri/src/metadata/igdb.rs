@@ -32,6 +32,7 @@ const NONSTEAM_BATCH: usize = 12; // taille des lots émis au front
 
 /// Champs IGDB récupérés pour chaque jeu (partagés entre les deux chemins).
 const FIELDS: &str = "fields id, name, alternative_names.name, parent_game, genres.name, \
+themes, game_modes, player_perspectives, external_games.uid, external_games.external_game_source, \
 summary, cover.image_id, artworks.image_id, screenshots.image_id, \
 involved_companies.company.name, involved_companies.developer, first_release_date;";
 
@@ -47,6 +48,41 @@ pub struct IgdbMeta {
     pub year: Option<i64>,
     #[serde(default)]
     pub screenshots: Vec<String>,
+    /// Identifiant de la fiche IGDB. Une prochaine évolution du cache pourra redemander
+    /// les fiches par lots de 500 (`where id = (…)`) au lieu de rechercher à nouveau
+    /// chaque titre hors Steam, un par un — c'est ce qu'a coûté l'arrivée de `classement`.
+    #[serde(default)]
+    pub igdb_id: Option<u64>,
+    /// Appid Steam du jeu d'après IGDB (`external_games`), y compris pour un jeu acheté
+    /// ailleurs : c'est par lui qu'un jeu Epic ou GOG reçoit ses tags Steam.
+    #[serde(default)]
+    pub steam_appid: Option<u64>,
+    /// Genres, thèmes, modes et vues d'IGDB, en identifiants bruts.
+    ///
+    /// 🔑 `None` = fiche d'avant les catégories, à compléter : `fill_metadata` l'affiche
+    /// tout de suite PUIS la redemande. Une fiche complète a toujours `Some`, même vide.
+    /// C'est ce marqueur qui évite de changer le nom du cache — le changer aurait vidé
+    /// l'écran de tout le monde le temps de tout retélécharger.
+    #[serde(default)]
+    pub classement: Option<Classement>,
+}
+
+/// Le classement d'un jeu chez IGDB, tel quel. Converti en tags Steam à la sortie
+/// (`categories::tags_igdb`) et pas à l'écriture : corriger la table de correspondance ne
+/// coûtera pas un retéléchargement, comme pour la traduction des genres.
+///
+/// ⚠️ Quatre listes et pas une : les identifiants se recouvrent d'une table à l'autre
+/// (31 = « Adventure » chez les genres, « Drama » chez les thèmes).
+#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
+pub struct Classement {
+    #[serde(default)]
+    pub genres: Vec<u64>,
+    #[serde(default)]
+    pub themes: Vec<u64>,
+    #[serde(default)]
+    pub modes: Vec<u64>,
+    #[serde(default)]
+    pub vues: Vec<u64>,
 }
 
 /// id du jeu → métadonnées (None = cherché mais introuvable dans IGDB, pour ne pas re-chercher).
@@ -218,6 +254,89 @@ pub fn steam_appid(id: &str, titre: &str, dir: &Path) -> Option<u64> {
     liens.insert(id.to_string(), Lien { appid, t });
     save_liens(dir, &liens);
     appid
+}
+
+/// Les pages d'un jeu qu'on peut envoyer à quelqu'un, d'après IGDB.
+#[derive(Default, Debug, PartialEq)]
+pub struct Pages {
+    pub steam: Option<String>,
+    pub epic: Option<String>,
+    pub gog: Option<String>,
+    pub site: Option<String>,
+}
+
+/// Source `external_games` : Epic Games Store (Steam = `STEAM_SOURCE`, GOG = 5).
+const EPIC_SOURCE: u64 = 26;
+const GOG_SOURCE: u64 = 5;
+/// Types de `websites` : site officiel, Steam, Epic, GOG.
+const SITE_OFFICIEL: u64 = 1;
+const SITE_STEAM: u64 = 13;
+const SITE_EPIC: u64 = 16;
+const SITE_GOG: u64 = 17;
+
+/// Le lien à partager pour un jeu (bouton « Partager » des fiches) : sa page Steam, sinon
+/// Epic, sinon GOG, sinon son site officiel. `None` si IGDB ne connaît rien de lui.
+///
+/// Le jeu est retrouvé par sa fiche en cache (jeu de la bibliothèque, `id`), sinon par son
+/// titre, avec la même exigence de nom exact que l'enrichissement (`name_meta`).
+pub fn lien_partage(id: Option<&str>, titre: &str, dir: &Path) -> Option<String> {
+    let en_cache = id.and_then(|id| load_cache(dir).get(id).cloned().flatten()).and_then(|m| m.igdb_id);
+    let igdb_id = match en_cache {
+        Some(i) => i,
+        None => match name_meta(titre, false) {
+            Issue::Trouve(meta) => meta.igdb_id?,
+            _ => return None,
+        },
+    };
+    let body = format!(
+        "fields websites.url, websites.type, external_games.url, external_games.uid, \
+         external_games.external_game_source; where id = {igdb_id};"
+    );
+    let Reponse::Corps(Value::Array(jeux)) = query("games", &body) else { return None };
+    let pages = lire_pages(jeux.first()?);
+    pages.steam.or(pages.epic).or(pages.gog).or(pages.site)
+}
+
+fn lire_pages(g: &Value) -> Pages {
+    let mut p = Pages::default();
+    let liens = g["external_games"].as_array().into_iter().flatten();
+    for e in liens {
+        let source = e["external_game_source"].as_u64();
+        if source == Some(STEAM_SOURCE as u64) && p.steam.is_none() {
+            p.steam = e["uid"].as_str().and_then(|u| u.parse::<u64>().ok()).map(page_steam);
+        } else if source == Some(EPIC_SOURCE) && p.epic.is_none() {
+            p.epic = e["url"].as_str().and_then(page_epic);
+        } else if source == Some(GOG_SOURCE) && p.gog.is_none() {
+            p.gog = e["url"].as_str().filter(|u| u.contains("gog.com/")).map(String::from);
+        }
+    }
+    for w in g["websites"].as_array().into_iter().flatten() {
+        let Some(url) = w["url"].as_str() else { continue };
+        match w["type"].as_u64() {
+            Some(SITE_STEAM) if p.steam.is_none() => p.steam = Some(url.to_string()),
+            Some(SITE_EPIC) if p.epic.is_none() => p.epic = page_epic(url),
+            Some(SITE_GOG) if p.gog.is_none() => p.gog = Some(url.to_string()),
+            Some(SITE_OFFICIEL) if p.site.is_none() => p.site = Some(url.to_string()),
+            _ => {}
+        }
+    }
+    p
+}
+
+fn page_steam(appid: u64) -> String {
+    format!("https://store.steampowered.com/app/{appid}/")
+}
+
+/// La page Epic d'un jeu, sans la langue : Epic redirige chacun vers la sienne, et un lien
+/// en `/en-US/` enverrait un ami français sur la page anglaise. IGDB connaît trois formes :
+/// `store.epicgames.com/en-US/p/<slug>`, `www.epicgames.com/store/p/<slug>` et l'ancienne
+/// `www.epicgames.com/store/en-US/product/<slug>/home`.
+fn page_epic(url: &str) -> Option<String> {
+    let (_, chemin) = url.split_once("epicgames.com")?;
+    let segments: Vec<&str> = chemin.split(['/', '?', '#']).filter(|s| !s.is_empty()).collect();
+    let i = segments.iter().position(|s| *s == "p" || *s == "product")?;
+    let slug = segments.get(i + 1)?;
+    Some(format!("https://store.epicgames.com/p/{slug}"))
 }
 
 /// `None` : panne. `Some(None)` : IGDB a répondu, pas de lien sûr.
@@ -520,6 +639,21 @@ fn parse_meta(g: &Value) -> IgdbMeta {
         })
         .unwrap_or_default();
 
+    // Les genres arrivent développés (`genres.name` → `{id, name}`), le reste en
+    // identifiants nus : on lit les deux formes.
+    let ids = |cle: &str| -> Vec<u64> {
+        g[cle]
+            .as_array()
+            .map(|a| a.iter().filter_map(|x| x.as_u64().or_else(|| x["id"].as_u64())).collect())
+            .unwrap_or_default()
+    };
+    let classement = Classement {
+        genres: ids("genres"),
+        themes: ids("themes"),
+        modes: ids("game_modes"),
+        vues: ids("player_perspectives"),
+    };
+
     IgdbMeta {
         genre,
         description,
@@ -528,7 +662,23 @@ fn parse_meta(g: &Value) -> IgdbMeta {
         developer,
         year,
         screenshots,
+        igdb_id: g["id"].as_u64(),
+        steam_appid: appid_de_la_fiche(g),
+        classement: Some(classement),
     }
+}
+
+/// Appid Steam d'une fiche IGDB : le premier de ses liens vers Steam.
+///
+/// Contrairement à `appid_unique`, plusieurs appids ne sont pas une ambiguïté : la fiche
+/// est déjà choisie, et ses entrées Steam multiples sont des éditions du même jeu (plus
+/// rarement une démo), qui portent les mêmes tags à peu de chose près.
+fn appid_de_la_fiche(g: &Value) -> Option<u64> {
+    g["external_games"]
+        .as_array()?
+        .iter()
+        .filter(|e| e["external_game_source"].as_u64() == Some(STEAM_SOURCE as u64))
+        .find_map(|e| e["uid"].as_str()?.parse().ok())
 }
 
 /// Ce que rapporte la passe Steam.
@@ -681,8 +831,65 @@ enum Issue {
     Limite,
 }
 
+/// Titres hors Steam cherchés ensemble par `noms_exacts`.
+const NOMS_PAR_APPEL: usize = 12;
+
+/// Ce que donne une recherche exacte groupée.
+enum Groupe {
+    /// IGDB a répondu : id du jeu → fiche, pour les titres qui ont une correspondance exacte.
+    Trouves(HashMap<String, IgdbMeta>),
+    Panne,
+    Limite,
+}
+
+/// La correspondance exacte de `name_meta` (son premier appel), pour plusieurs titres en
+/// UN appel : `name ~ "A" | alternative_names.name ~ "A" | name ~ "B" | …`.
+///
+/// 🔑 Même fiche que titre par titre : pour chaque titre, la première de la réponse qui
+/// lui correspond, et l'ordre des réponses ne dépend pas du nombre de titres demandés.
+/// Vérifié le 24/10/2026 sur douze titres pièges (Overwatch 2 par son alias, Doom et
+/// Tetris aux dizaines d'homonymes, VALORANT en capitales) : aucun écart. 4 s pour douze
+/// titres contre 18 un par un, et un appel au quota d'IGDB — partagé par tous les
+/// joueurs — au lieu de douze.
+fn noms_exacts(jeux: &[&GameDto]) -> Groupe {
+    let cibles: Vec<(&GameDto, String, String)> = jeux
+        .iter()
+        .filter_map(|g| {
+            let clean = clean_title(&g.title);
+            (!clean.is_empty()).then(|| (*g, norm(&clean), clean))
+        })
+        .collect();
+    if cibles.is_empty() {
+        return Groupe::Trouves(HashMap::new());
+    }
+    let conditions = cibles
+        .iter()
+        .map(|(_, _, clean)| format!("name ~ \"{clean}\" | alternative_names.name ~ \"{clean}\""))
+        .collect::<Vec<_>>()
+        .join(" | ");
+    match query("games", &format!("{FIELDS} where {conditions}; limit 500;")) {
+        Reponse::Corps(Value::Array(fiches)) => {
+            std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+            let trouves = cibles
+                .iter()
+                .filter_map(|(g, cible, _)| {
+                    let fiche = fiches.iter().find(|f| nom_correspond(f, cible))?;
+                    Some((g.id.clone(), parse_meta(fiche)))
+                })
+                .collect();
+            Groupe::Trouves(trouves)
+        }
+        Reponse::Corps(_) => Groupe::Trouves(HashMap::new()),
+        Reponse::Panne => Groupe::Panne,
+        Reponse::Limite => Groupe::Limite,
+    }
+}
+
 /// Métadonnées d'un jeu non-Steam par son titre : match exact puis repli `search`.
-fn name_meta(title: &str) -> Issue {
+///
+/// `exact_fait` : la correspondance exacte a déjà été demandée (`noms_exacts`) et n'a rien
+/// donné — inutile de la redemander, on passe directement au repli.
+fn name_meta(title: &str, exact_fait: bool) -> Issue {
     let clean = clean_title(title);
     if clean.is_empty() {
         return Issue::Absent;
@@ -699,24 +906,26 @@ fn name_meta(title: &str) -> Issue {
     // ⚠️ `~` est un égal insensible à la casse, PAS un « contient » : « overwatch » ne
     // ramène que les entrées nommées ainsi, aucun bundle. Vérifié aussi — c'est ce qui
     // permet d'élargir la recherche sans rouvrir la porte aux DLC.
-    let body = format!(
-        "{FIELDS} where name ~ \"{clean}\" | alternative_names.name ~ \"{clean}\"; limit 5;"
-    );
-    match query("games", &body) {
-        Reponse::Corps(Value::Array(arr)) => {
-            std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
-            for g in &arr {
-                if nom_correspond(g, &target) {
-                    return Issue::Trouve(parse_meta(g));
+    if !exact_fait {
+        let body = format!(
+            "{FIELDS} where name ~ \"{clean}\" | alternative_names.name ~ \"{clean}\"; limit 5;"
+        );
+        match query("games", &body) {
+            Reponse::Corps(Value::Array(arr)) => {
+                std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+                for g in &arr {
+                    if nom_correspond(g, &target) {
+                        return Issue::Trouve(parse_meta(g));
+                    }
                 }
             }
+            Reponse::Corps(_) => {}
+            Reponse::Limite => return Issue::Limite,
+            // 🔑 On ne tente pas le repli `search` : sans réponse au premier appel, un
+            // « rien trouvé » au second ne prouverait rien de plus, et le jeu serait quand
+            // même mémorisé comme absent alors que la panne est la seule chose établie.
+            Reponse::Panne => return Issue::Panne,
         }
-        Reponse::Corps(_) => {}
-        Reponse::Limite => return Issue::Limite,
-        // 🔑 On ne tente pas le repli `search` : sans réponse au premier appel, un
-        // « rien trouvé » au second ne prouverait rien de plus, et le jeu serait quand
-        // même mémorisé comme absent alors que la panne est la seule chose établie.
-        Reponse::Panne => return Issue::Panne,
     }
 
     // 2) Repli `search` (tolérant à la casse), on ne garde qu'un nom normalisé identique.
@@ -756,12 +965,17 @@ pub fn fill_metadata(
     let mut cached_batch: Vec<(String, IgdbMeta)> = Vec::new();
     let mut steam_todo: Vec<(String, String)> = Vec::new(); // (id jeu, appid)
     let mut other_todo: Vec<&GameDto> = Vec::new();
+    // Fiches d'avant les catégories : affichées tout de suite, redemandées quand même.
+    let mut a_completer: HashSet<String> = HashSet::new();
 
     for g in games {
         match cache.get(&g.id) {
             Some(Some(meta)) => {
                 cached_batch.push((g.id.clone(), meta.clone()));
-                continue;
+                if meta.classement.is_some() {
+                    continue;
+                }
+                a_completer.insert(g.id.clone());
             }
             // Introuvable récemment : inutile de redemander. Une absence sans date
             // (d'avant `Absences`) est retentée une fois, puis datée.
@@ -809,8 +1023,7 @@ pub fn fill_metadata(
                 }
                 // Interrogé, rien trouvé : IGDB ne connaît pas cet appid, on le note.
                 None if passe.interroges.contains(appid) => {
-                    cache.insert(gid.clone(), None);
-                    absences.insert(gid.clone(), t);
+                    noter_absent(&mut cache, &mut absences, &a_completer, gid, t);
                     dirty = true;
                 }
                 // Lot en panne : on ne sait pas, donc on ne dit rien. Retenté au prochain scan.
@@ -824,18 +1037,63 @@ pub fn fill_metadata(
         }
     }
 
-    // Non-Steam, un par un (throttlé), émis par petits lots.
+    // Non-Steam, d'abord par groupes de titres exacts (un appel pour douze).
+    // `(jeu, exact déjà demandé)` : ce qui reste pour le passage un par un.
+    let mut un_par_un: Vec<(&GameDto, bool)> = Vec::new();
+    let mut limite = false;
+    for lot in other_todo.chunks(NOMS_PAR_APPEL) {
+        if limite {
+            break;
+        }
+        match noms_exacts(lot) {
+            Groupe::Trouves(mut trouves) => {
+                let mut batch = Vec::new();
+                for g in lot {
+                    match trouves.remove(&g.id) {
+                        Some(meta) => {
+                            cache.insert(g.id.clone(), Some(meta.clone()));
+                            dirty = true;
+                            batch.push((g.id.clone(), meta));
+                        }
+                        None => un_par_un.push((g, true)),
+                    }
+                }
+                if !batch.is_empty() {
+                    traduire_lot(&mut batch);
+                    emit(&batch);
+                    out.extend(batch);
+                    // 🔑 Enregistré au fil de l'eau : une grosse bibliothèque hors Steam
+                    // prend plusieurs minutes, et fermer Torii en cours de route perdait
+                    // tout ce qui avait été trouvé jusque-là.
+                    save_cache(config_dir, &cache);
+                    save_absences(config_dir, &absences);
+                }
+            }
+            // ⚠️ Le lot repasse ENTIER par le chemin titre par titre : un titre qui fait
+            // échouer la requête groupée (caractère que l'Apicalypse refuse) ne doit pas
+            // priver ses onze voisins de fiche à chaque lancement.
+            Groupe::Panne => un_par_un.extend(lot.iter().map(|g| (*g, false))),
+            Groupe::Limite => {
+                interrompue = true;
+                limite = true;
+            }
+        }
+    }
+
+    // Puis un par un (throttlé) : repli `search` pour ceux sans correspondance exacte.
     let mut batch = Vec::new();
-    for g in other_todo {
-        match name_meta(&g.title) {
+    for (g, exact_fait) in un_par_un {
+        if limite {
+            break;
+        }
+        match name_meta(&g.title, exact_fait) {
             Issue::Trouve(meta) => {
                 cache.insert(g.id.clone(), Some(meta.clone()));
                 dirty = true;
                 batch.push((g.id.clone(), meta));
             }
             Issue::Absent => {
-                cache.insert(g.id.clone(), None);
-                absences.insert(g.id.clone(), t);
+                noter_absent(&mut cache, &mut absences, &a_completer, &g.id, t);
                 dirty = true;
             }
             Issue::Panne => interrompue = true,
@@ -850,6 +1108,10 @@ pub fn fill_metadata(
             traduire_lot(&mut batch);
             emit(&batch);
             out.extend(batch.drain(..));
+            if dirty {
+                save_cache(config_dir, &cache);
+                save_absences(config_dir, &absences);
+            }
         }
     }
     if !batch.is_empty() {
@@ -876,7 +1138,38 @@ pub fn fill_metadata(
         save_cache(config_dir, &cache);
         save_absences(config_dir, &absences);
     }
+    // Une fiche complétée est sortie deux fois : son ancienne forme, émise d'entrée, puis
+    // la nouvelle. On ne rend que la dernière.
+    if !a_completer.is_empty() {
+        let mut vus = HashSet::new();
+        out.reverse();
+        out.retain(|(id, _)| vus.insert(id.clone()));
+        out.reverse();
+    }
     out
+}
+
+/// Note qu'IGDB ne trouve pas un jeu.
+///
+/// ⚠️ Pour une fiche ancienne qu'on cherchait seulement à compléter, ce n'est PAS une
+/// absence : elle a été trouvée autrefois, et la jeter ôterait jaquette et description à
+/// un jeu qui les avait. On la garde, marquée complète (classement vide) pour ne pas la
+/// redemander à chaque lancement.
+fn noter_absent(
+    cache: &mut MetaCache,
+    absences: &mut Absences,
+    a_completer: &HashSet<String>,
+    id: &str,
+    t: u64,
+) {
+    if a_completer.contains(id) {
+        if let Some(Some(meta)) = cache.get_mut(id) {
+            meta.classement = Some(Classement::default());
+            return;
+        }
+    }
+    cache.insert(id.to_string(), None);
+    absences.insert(id.to_string(), t);
 }
 
 #[cfg(test)]
@@ -1035,5 +1328,106 @@ mod tests {
         assert_eq!(load_cache(&dir).len(), 1);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Genres développés, thèmes/modes/vues en identifiants nus, liens externes : tout ce
+    /// qui fait les catégories doit être lu.
+    #[test]
+    fn la_fiche_donne_son_classement_et_son_appid_steam() {
+        let g = serde_json::json!({
+            "id": 1942,
+            "name": "The Witcher 3: Wild Hunt",
+            "genres": [ { "id": 12, "name": "Role-playing (RPG)" }, { "id": 31, "name": "Adventure" } ],
+            "themes": [1, 17, 38],
+            "game_modes": [1],
+            "player_perspectives": [2],
+            "external_games": [
+                { "id": 1, "uid": "1207664643", "external_game_source": 5 },
+                { "id": 2, "uid": "292030", "external_game_source": 1 },
+                { "id": 3, "uid": "499450", "external_game_source": 1 }
+            ]
+        });
+        let meta = parse_meta(&g);
+        assert_eq!(meta.igdb_id, Some(1942));
+        assert_eq!(meta.genre.as_deref(), Some("RPG"));
+        // Le premier lien Steam, pas celui de GOG (source 5) ni l'édition suivante.
+        assert_eq!(meta.steam_appid, Some(292030));
+        assert_eq!(
+            meta.classement,
+            Some(Classement { genres: vec![12, 31], themes: vec![1, 17, 38], modes: vec![1], vues: vec![2] })
+        );
+    }
+
+    /// Une fiche écrite avant les catégories se relit telle quelle, marquée à compléter.
+    #[test]
+    fn une_fiche_d_avant_les_categories_est_a_completer() {
+        let ancien = r#"{"steam:1":{"genre":"RPG","description":"d","screenshots":[]},"steam:2":null}"#;
+        let cache: MetaCache = serde_json::from_str(ancien).unwrap();
+        let meta = cache["steam:1"].as_ref().unwrap();
+        assert_eq!(meta.genre.as_deref(), Some("RPG"));
+        assert!(meta.classement.is_none());
+        assert!(cache["steam:2"].is_none());
+    }
+
+    /// Les trois formes d'adresse Epic qu'IGDB connaît donnent la même page, sans langue.
+    #[test]
+    fn la_page_epic_perd_sa_langue() {
+        for url in [
+            "https://store.epicgames.com/en-US/p/alan-wake-2",
+            "https://www.epicgames.com/store/p/alan-wake-2",
+            "https://www.epicgames.com/store/en-US/product/alan-wake-2/home",
+        ] {
+            assert_eq!(page_epic(url).as_deref(), Some("https://store.epicgames.com/p/alan-wake-2"), "{url}");
+        }
+        assert_eq!(page_epic("https://www.epicgames.com/fortnite"), None);
+    }
+
+    /// Relevé IGDB de VALORANT (24/10/2026) : pas de Steam, une page Epic, un site officiel.
+    #[test]
+    fn les_pages_d_un_jeu_hors_steam() {
+        let g = serde_json::json!({
+            "websites": [
+                { "type": 1, "url": "https://playvalorant.com/" },
+                { "type": 16, "url": "https://www.epicgames.com/store/en-US/p/valorant" }
+            ],
+            "external_games": [
+                { "external_game_source": 3, "url": "https://www.giantbomb.com/games/3030-77445/" },
+                { "external_game_source": 26, "url": "https://store.epicgames.com/en-US/p/valorant" }
+            ]
+        });
+        let p = lire_pages(&g);
+        assert_eq!(p.steam, None);
+        assert_eq!(p.epic.as_deref(), Some("https://store.epicgames.com/p/valorant"));
+        assert_eq!(p.site.as_deref(), Some("https://playvalorant.com/"));
+    }
+
+    /// Le lien Steam vient de l'appid (une adresse propre), pas d'une URL recopiée.
+    #[test]
+    fn la_page_steam_vient_de_l_appid() {
+        let g = serde_json::json!({
+            "external_games": [ { "external_game_source": 1, "uid": "2357570", "url": "https://store.steampowered.com/app/2357570" } ]
+        });
+        assert_eq!(lire_pages(&g).steam.as_deref(), Some("https://store.steampowered.com/app/2357570/"));
+    }
+
+    /// Une fiche qu'on cherchait seulement à compléter n'est jamais jetée : IGDB ne la
+    /// retrouve plus, mais elle avait sa jaquette et sa description.
+    #[test]
+    fn completer_une_fiche_ne_la_jette_jamais() {
+        let mut cache = MetaCache::new();
+        cache.insert("epic:a".into(), Some(IgdbMeta { genre: Some("RPG".into()), ..Default::default() }));
+        let mut absences = Absences::new();
+        let a_completer: HashSet<String> = ["epic:a".to_string()].into();
+
+        noter_absent(&mut cache, &mut absences, &a_completer, "epic:a", 10);
+        let meta = cache["epic:a"].as_ref().expect("la fiche est gardée");
+        assert_eq!(meta.genre.as_deref(), Some("RPG"));
+        assert_eq!(meta.classement, Some(Classement::default()), "complète : plus redemandée");
+        assert!(absences.is_empty());
+
+        // Un jeu nouveau, lui, est bien noté absent.
+        noter_absent(&mut cache, &mut absences, &a_completer, "epic:b", 10);
+        assert!(cache["epic:b"].is_none());
+        assert_eq!(absences.get("epic:b"), Some(&10));
     }
 }

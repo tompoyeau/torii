@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { useStore } from "../composables/useStore";
 import { PLATFORMS, titreFiltre } from "../data/platforms";
 import type { Game, SortKey } from "../types";
 import { etiquetteIntl, t } from "../i18n";
+import CategoryFilter from "./CategoryFilter.vue";
 import Sidebar from "./Sidebar.vue";
 import TopBar from "./TopBar.vue";
 import HeroFeatured from "./HeroFeatured.vue";
@@ -19,7 +20,7 @@ import WishlistView from "./WishlistView.vue";
 import PageWeb from "./PageWeb.vue";
 
 const { filtered, games } = useLibrary();
-const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, genre, setGenre, openGame, selectedGameId } = useUi();
+const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, categories, clearCategories, openGame, selectedGameId } = useUi();
 const { selectedGameId: produitOuvert } = useStore();
 
 /**
@@ -33,50 +34,6 @@ const contenuRecouvert = computed(
 
 /** Le filtre courant vise-t-il une plateforme précise (vs « Tous », « Favoris »…) ? */
 const isPlatformView = computed(() => filter.value in PLATFORMS);
-
-/**
- * Catégories (genres) disponibles dans la bibliothèque visible, triées par
- * nombre de jeux décroissant. Alimente le menu déroulant de filtrage.
- */
-const availableGenres = computed(() => {
-  const counts = new Map<string, number>();
-  for (const g of games.value) {
-    if (g.hidden || !g.genre) continue;
-    counts.set(g.genre, (counts.get(g.genre) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, etiquetteIntl.value));
-});
-
-// Menu déroulant des catégories.
-const genreMenuOpen = ref(false);
-function pickGenre(g: string | null) {
-  setGenre(g);
-  genreMenuOpen.value = false;
-}
-function onDocClick(e: MouseEvent) {
-  if (!(e.target as HTMLElement).closest(".genre-wrap")) genreMenuOpen.value = false;
-}
-/**
- * Échap ferme le menu. Il ne se fermait qu'au clic à côté — un geste que le clavier n'a
- * pas : une fois ouvert, on ne pouvait en sortir qu'en choisissant une catégorie.
- * Le focus retourne au bouton, sinon Échap laisse le clavier nulle part.
- */
-const genreBtn = ref<HTMLElement | null>(null);
-function onDocKey(e: KeyboardEvent) {
-  if (e.key !== "Escape" || !genreMenuOpen.value) return;
-  genreMenuOpen.value = false;
-  genreBtn.value?.focus();
-}
-onMounted(() => {
-  document.addEventListener("click", onDocClick);
-  document.addEventListener("keydown", onDocKey);
-});
-onBeforeUnmount(() => {
-  document.removeEventListener("click", onDocClick);
-  document.removeEventListener("keydown", onDocKey);
-});
 
 /** Tri de la liste selon la puce active. */
 function sortGames(list: Game[], key: SortKey): Game[] {
@@ -92,12 +49,19 @@ function sortGames(list: Game[], key: SortKey): Game[] {
   }
 }
 
-const shownGames = computed(() => {
-  let list = filtered(filter.value, query.value);
+/** La liste avant le filtre des catégories : c'est sur elle qu'il compte ses jeux. */
+const avantCategories = computed(() => {
+  const list = filtered(filter.value, query.value);
   // Dans une vue de plateforme, le toggle « Installés uniquement » restreint la liste.
-  if (isPlatformView.value && installedOnly.value) list = list.filter((g) => g.installed);
-  // Filtre catégorie (genre), combiné aux autres filtres.
-  if (genre.value) list = list.filter((g) => g.genre === genre.value);
+  return isPlatformView.value && installedOnly.value ? list.filter((g) => g.installed) : list;
+});
+
+const shownGames = computed(() => {
+  let list = avantCategories.value;
+  // Catégories cochées : un jeu doit les avoir toutes.
+  if (categories.value.length) {
+    list = list.filter((g) => categories.value.every((c) => g.tags?.includes(c)));
+  }
   return sortGames(list, sort.value);
 });
 
@@ -128,36 +92,7 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
         <h2>{{ titreFiltre(filter) }}</h2>
         <span class="n">{{ t("bibliotheque.jeux", { n: shownGames.length }) }}</span>
         <span class="spacer" />
-        <div v-if="availableGenres.length" class="genre-wrap">
-          <button
-            ref="genreBtn"
-            class="chip genre-btn"
-            :class="{ active: !!genre }"
-            aria-haspopup="true"
-            :aria-expanded="genreMenuOpen"
-            @click.stop="genreMenuOpen = !genreMenuOpen"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-            {{ genre ?? t("bibliotheque.grille.toutesCategoriesCourt") }}
-            <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6" /></svg>
-          </button>
-          <div v-if="genreMenuOpen" class="genre-menu" @click.stop>
-            <button class="genre-opt" :class="{ on: !genre }" @click="pickGenre(null)">
-              <span>{{ t("bibliotheque.grille.toutesCategories") }}</span>
-            </button>
-            <div class="genre-sep" />
-            <button
-              v-for="g in availableGenres"
-              :key="g.name"
-              class="genre-opt"
-              :class="{ on: genre === g.name }"
-              @click="pickGenre(g.name)"
-            >
-              <span class="genre-name">{{ g.name }}</span>
-              <span class="genre-count">{{ g.count }}</span>
-            </button>
-          </div>
-        </div>
+        <CategoryFilter :games="avantCategories" />
         <button
           v-if="isPlatformView"
           class="chip toggle"
@@ -183,7 +118,11 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
       <div class="grid" :class="{ list: listView }">
         <GameCard v-for="g in shownGames" :key="g.id" :game="g" @open="openGame(g.id)" />
       </div>
-      <div v-if="!shownGames.length" class="empty">{{ t("bibliotheque.grille.aucun") }}</div>
+      <div v-if="!shownGames.length && categories.length && avantCategories.length" class="empty">
+        <p>{{ t("bibliotheque.grille.aucunAvecCategories") }}</p>
+        <button class="chip" @click="clearCategories()">{{ t("bibliotheque.grille.effacerCategories") }}</button>
+      </div>
+      <div v-else-if="!shownGames.length" class="empty">{{ t("bibliotheque.grille.aucun") }}</div>
       </template>
     </main>
   </div>
@@ -202,34 +141,6 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 .chip.toggle { display: inline-flex; align-items: center; gap: 6px; }
 .chip.toggle svg { width: 14px; height: 14px; }
 
-/* Filtre catégorie (genre) : bouton + menu déroulant. */
-.genre-wrap { position: relative; }
-.genre-btn { display: inline-flex; align-items: center; gap: 6px; }
-.genre-btn svg { width: 14px; height: 14px; }
-.genre-btn .caret { width: 13px; height: 13px; margin-left: -1px; opacity: 0.7; }
-.genre-btn.active {
-  background: var(--accent-soft); color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 600;
-}
-.genre-menu {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; min-width: 210px;
-  max-height: 320px; overflow-y: auto;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
-  box-shadow: var(--shadow-hero); padding: 6px; display: flex; flex-direction: column; gap: 1px;
-}
-.genre-sep { height: 1px; background: var(--border); margin: 4px 6px; }
-.genre-opt {
-  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px;
-  background: none; border: none; color: var(--text); font-size: 13px; text-align: left;
-  width: 100%; cursor: pointer;
-}
-.genre-opt:hover { background: var(--surface-2); }
-.genre-opt.on { color: var(--accent); font-weight: 600; }
-.genre-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.genre-count {
-  font-family: var(--mono); font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums;
-}
-.genre-opt.on .genre-count { color: var(--accent); }
 /* Toggle « Installés » actif : couleur d'accent (se distingue des puces de tri). */
 .chip.toggle.active {
   background: var(--accent-soft); color: var(--accent);
@@ -251,6 +162,7 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 .grid.list :deep(.card-name) { font-size: 14.5px; }
 
 .empty { padding: 60px 0; text-align: center; color: var(--text-faint); font-size: 14px; }
+.empty p { margin: 0 0 14px; }
 
 @media (max-width: 820px) {
   .shell { grid-template-columns: 1fr; }

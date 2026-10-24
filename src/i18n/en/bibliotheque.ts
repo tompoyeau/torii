@@ -67,11 +67,11 @@ const en: Forme<typeof fr> = {
       alpha: "A → Z",
       playtime: "Playtime",
     },
-    toutesCategoriesCourt: "All categories",
-    toutesCategories: "All categories",
     installesSeulement: "Installed only",
     installesSeulementAide: "Show installed games only",
     aucun: "No games match your search.",
+    aucunAvecCategories: "No game has all of these categories.",
+    effacerCategories: "Clear categories",
   },
 
   carte: {

@@ -41,6 +41,10 @@ pub struct FicheSteam {
     pub tags: Vec<String>,
     /// Les mêmes, en identifiants : ils servent à chercher les jeux similaires.
     pub tag_ids: Vec<u64>,
+    /// Les tags cliquables de la fiche (ouvrent la Boutique sur cette catégorie) : nom et
+    /// identifiant ENSEMBLE. `tags` et `tag_ids` ne s'alignent pas — un tag que Steam ne
+    /// nomme pas manque au premier et pas au second.
+    pub etiquettes: Vec<super::vitrine::TagBoutique>,
     pub captures: Vec<Capture>,
     /// Bandes-annonces, dans l'ordre de Steam (8 au plus).
     pub bandes_annonces: Vec<BandeAnnonce>,
@@ -216,6 +220,13 @@ fn lire_item(f: &mut FicheSteam, item: &Value, noms: &HashMap<u64, String>) {
         .unwrap_or_default();
     f.tag_ids = ids.iter().copied().filter(|id| !TAGS_ECARTES.contains(id)).take(6).collect();
     f.tags = f.tag_ids.iter().filter_map(|id| noms.get(id).cloned()).take(4).collect();
+    f.etiquettes = f
+        .tag_ids
+        .iter()
+        .filter(|id| !super::categories::EXCLUS.contains(id))
+        .filter_map(|id| Some(super::vitrine::TagBoutique { id: *id, nom: noms.get(id)?.clone() }))
+        .take(5)
+        .collect();
 
     f.captures = item["screenshots"]["all_ages_screenshots"]
         .as_array()
@@ -806,6 +817,8 @@ mod tests {
         lire_item(&mut f, &item, &noms);
         assert_eq!(f.tag_ids, vec![4115, 1695, 122]);
         assert_eq!(f.tags, vec!["Cyberpunk", "Monde ouvert", "RPG"]);
+        let cliquables: Vec<(u64, &str)> = f.etiquettes.iter().map(|e| (e.id, e.nom.as_str())).collect();
+        assert_eq!(cliquables, vec![(4115, "Cyberpunk"), (1695, "Monde ouvert"), (122, "RPG")]);
         assert_eq!(f.captures.len(), 1);
         assert!(f.captures[0].mini.ends_with("ss_a.600x338.jpg?t=1"));
         // La seconde entrée n'a rien à lire : écartée.
