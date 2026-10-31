@@ -1765,15 +1765,17 @@ fin et son code promo.
 
 ### Note Steam sur les jaquettes (fait)
 
-- Pastille « 👍 87 % » en haut à droite des jaquettes des rayons Steam (`StoreShelfCard`,
+- Pastille « 👍 87 % » en haut à **gauche** des jaquettes des rayons Steam (`StoreShelfCard`,
   format portrait : genres, catégories, jeux similaires), appréciation et nombre
   d'évaluations au survol. Déjà dans `ShelfItem` (`review_score`, `review_percent`) : zéro
   appel. Rien tant que Steam ne note pas le jeu (`review_score` à 0, trop peu d'avis).
-- Empilée avec la remise dans `.pile` (la remise seule garde son placement de `style.css`) ;
-  la pile descend sous « Dans ta bibliothèque » (`.sous-coin`, une classe plutôt qu'un
-  `:has()` dans un style scoped). Fond sombre et teintes claires codées en dur : elle est
-  sur l'image dans les deux thèmes, et les teintes `--manual`/`--riot` du thème clair y
-  seraient illisibles.
+- 🔑 **Pas de note sur un jeu possédé ou prêté par la famille** : elle n'aide plus à choisir,
+  et le coin gauche est à « Dans ta bibliothèque ». La place est comptée sur une jaquette
+  de 172 px : un coin, une information.
+- `.haut-gauche` = note puis cœur de la wishlist (visible au survol ou une fois coché) en
+  ligne ; la remise garde le coin droit seule, avec son placement de `style.css`. Fond
+  sombre et teintes claires codées en dur : la pastille est sur l'image dans les deux
+  thèmes, et les teintes `--manual`/`--riot` du thème clair y seraient illisibles.
 - Les cartes paysage, les classements et la vedette affichaient déjà la note en texte.
 - ⚠️ Les jaquettes du **comparateur** (recherche, « Toutes les offres », promos) n'ont pas la
   note : ITAD ne donne pas d'appid dans ses listes. Il faudrait `lookup/shop/61/id/v1`

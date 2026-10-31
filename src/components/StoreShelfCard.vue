@@ -25,11 +25,13 @@ const etat = computed(() => possession(props.jeu.title, props.jeu.appId));
 const enPromo = computed(() => props.jeu.price != null && props.jeu.savings > 0);
 /**
  * Note Steam sur la jaquette : la part d'évaluations positives, l'appréciation et leur
- * nombre au survol. Rien tant que Steam lui-même ne note pas le jeu (trop peu d'avis).
+ * nombre au survol. Rien tant que Steam lui-même ne note pas le jeu (trop peu d'avis), ni
+ * pour un jeu qu'on a déjà (bibliothèque ou famille) : sa note n'aide plus à choisir, et
+ * la place va à la pastille qui le dit.
  */
 const note = computed(() => {
   const j = props.jeu;
-  if (!j.reviewScore || j.reviewPercent == null) return null;
+  if (etat.value || !j.reviewScore || j.reviewPercent == null) return null;
   return {
     ton: tonAvis(j.reviewScore),
     aide: `${libelleAvis(j.reviewScore)} · ${t("boutique.accueil.carte.avisAide", { n: j.reviewCount })}`,
@@ -60,25 +62,25 @@ function basculerWishlist() {
   <button v-if="format === 'portrait'" class="cover-card carte" @click="ouvrir">
     <div class="cover" :style="{ background: gradientFor(String(jeu.appId)) }">
       <img v-if="src" :key="src" class="cover-img" :src="src" alt="" loading="lazy" @error="onError" />
-      <span v-if="enPromo || note" class="pile" :class="{ 'sous-coin': etat }">
-        <span v-if="enPromo" class="badge">-{{ jeu.savings }}%</span>
+      <span v-if="enPromo" class="badge">-{{ jeu.savings }}%</span>
+      <span v-if="etat" class="coin"><StorePossede :etat="etat" /></span>
+      <span v-else-if="note || jeu.gameId" class="haut-gauche">
         <span v-if="note" class="note" :class="note.ton" :title="note.aide">
           <svg v-if="note.ton === 'neg'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M17 14V2M9 18.1 10 14H4.2a2 2 0 0 1-1.9-2.5l2.3-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.8a2 2 0 0 0-1.8 1.1L12 22a3.1 3.1 0 0 1-3-3.9Z" /></svg>
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 10v12M15 5.9 14 10h5.8a2 2 0 0 1 1.9 2.5l-2.3 8a2 2 0 0 1-1.9 1.5H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.8a2 2 0 0 0 1.8-1.1L12 2a3.1 3.1 0 0 1 3 3.9Z" /></svg>
           {{ jeu.reviewPercent }} %
         </span>
-      </span>
-      <span v-if="etat" class="coin"><StorePossede :etat="etat" /></span>
-      <span
-        v-else-if="jeu.gameId"
-        class="wish-dot"
-        :class="{ on: isWishlisted(jeu.gameId) }"
-        role="button"
-        :aria-label="isWishlisted(jeu.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
-        :title="isWishlisted(jeu.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
-        @click.stop="basculerWishlist"
-      >
-        <svg viewBox="0 0 24 24" :fill="isWishlisted(jeu.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
+        <span
+          v-if="jeu.gameId"
+          class="wish-dot"
+          :class="{ on: isWishlisted(jeu.gameId) }"
+          role="button"
+          :aria-label="isWishlisted(jeu.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
+          :title="isWishlisted(jeu.gameId) ? t('boutique.retirerWishlist') : t('boutique.ajouterWishlist')"
+          @click.stop="basculerWishlist"
+        >
+          <svg viewBox="0 0 24 24" :fill="isWishlisted(jeu.gameId) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
+        </span>
       </span>
       <span class="cover-scrim" />
       <span class="cover-title">{{ jeu.title }}</span>
@@ -124,16 +126,11 @@ function basculerWishlist() {
 .ligne { font-size: 12px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pied .demo-dispo { align-self: flex-start; }
 
-/* Remise et note Steam, empilées en haut à droite de la jaquette. Seule, la remise s'y
-   place d'elle-même (`.cover-card .badge`, style.css) ; dans la pile, c'est la pile qui se
-   place. Sous la pastille « Dans ta bibliothèque », qui prend presque toute la largeur
-   d'une jaquette, elle descend d'un cran — même règle que la remise seule. */
-.pile {
-  position: absolute; top: 10px; right: 10px; z-index: 2;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
-}
-.pile.sous-coin { top: 40px; }
-.pile .badge { position: static; }
+/* En haut à gauche d'un jeu qu'on n'a pas : la note Steam, puis le cœur de la wishlist
+   (qui n'apparaît qu'au survol, ou une fois coché). Un jeu possédé y montre « Dans ta
+   bibliothèque » à la place. La remise garde le coin droit pour elle seule. */
+.haut-gauche { position: absolute; top: 8px; left: 8px; z-index: 3; display: flex; align-items: center; gap: 6px; }
+.haut-gauche .wish-dot { position: static; }
 /* Posée sur l'image dans les deux thèmes : fond sombre, et les teintes claires des notes
    (celles du thème sombre), lisibles dessus. */
 .note {
