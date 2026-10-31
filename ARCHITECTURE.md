@@ -1763,6 +1763,23 @@ fin et son code promo.
   fiche Boutique par-dessus (`openForTitle` avec l'appid, comme « Voir dans la boutique »).
 - Démos **Steam seulement** : GOG, Epic et le comparateur n'en exposent pas de façon fiable.
 
+### Note Steam sur les jaquettes (fait)
+
+- Pastille « 👍 87 % » en haut à droite des jaquettes des rayons Steam (`StoreShelfCard`,
+  format portrait : genres, catégories, jeux similaires), appréciation et nombre
+  d'évaluations au survol. Déjà dans `ShelfItem` (`review_score`, `review_percent`) : zéro
+  appel. Rien tant que Steam ne note pas le jeu (`review_score` à 0, trop peu d'avis).
+- Empilée avec la remise dans `.pile` (la remise seule garde son placement de `style.css`) ;
+  la pile descend sous « Dans ta bibliothèque » (`.sous-coin`, une classe plutôt qu'un
+  `:has()` dans un style scoped). Fond sombre et teintes claires codées en dur : elle est
+  sur l'image dans les deux thèmes, et les teintes `--manual`/`--riot` du thème clair y
+  seraient illisibles.
+- Les cartes paysage, les classements et la vedette affichaient déjà la note en texte.
+- ⚠️ Les jaquettes du **comparateur** (recherche, « Toutes les offres », promos) n'ont pas la
+  note : ITAD ne donne pas d'appid dans ses listes. Il faudrait `lookup/shop/61/id/v1`
+  (absent de la liste blanche du proxy, donc un déploiement) + `GetItems` : écarté pour
+  l'instant (31/10/2026), à reproposer seulement si on le demande.
+
 ## Fiche d'un jeu de la bibliothèque (`metadata/possede.rs`, `GameDetail.vue`)
 
 Sous le titre, un **bandeau** (temps de jeu et sa source, dernière session, taille,

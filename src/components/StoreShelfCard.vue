@@ -23,6 +23,18 @@ const { isWishlisted, toggle } = useToriiWishlist();
 
 const etat = computed(() => possession(props.jeu.title, props.jeu.appId));
 const enPromo = computed(() => props.jeu.price != null && props.jeu.savings > 0);
+/**
+ * Note Steam sur la jaquette : la part d'évaluations positives, l'appréciation et leur
+ * nombre au survol. Rien tant que Steam lui-même ne note pas le jeu (trop peu d'avis).
+ */
+const note = computed(() => {
+  const j = props.jeu;
+  if (!j.reviewScore || j.reviewPercent == null) return null;
+  return {
+    ton: tonAvis(j.reviewScore),
+    aide: `${libelleAvis(j.reviewScore)} · ${t("boutique.accueil.carte.avisAide", { n: j.reviewCount })}`,
+  };
+});
 /** Démo gratuite sur Steam — sans intérêt pour un jeu qu'on a déjà. */
 const aUneDemo = computed(() => props.jeu.hasDemo && !etat.value);
 const prix = (montant: number) => formatPrix(montant, props.jeu.currency);
@@ -48,7 +60,14 @@ function basculerWishlist() {
   <button v-if="format === 'portrait'" class="cover-card carte" @click="ouvrir">
     <div class="cover" :style="{ background: gradientFor(String(jeu.appId)) }">
       <img v-if="src" :key="src" class="cover-img" :src="src" alt="" loading="lazy" @error="onError" />
-      <span v-if="enPromo" class="badge">-{{ jeu.savings }}%</span>
+      <span v-if="enPromo || note" class="pile" :class="{ 'sous-coin': etat }">
+        <span v-if="enPromo" class="badge">-{{ jeu.savings }}%</span>
+        <span v-if="note" class="note" :class="note.ton" :title="note.aide">
+          <svg v-if="note.ton === 'neg'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M17 14V2M9 18.1 10 14H4.2a2 2 0 0 1-1.9-2.5l2.3-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.8a2 2 0 0 0-1.8 1.1L12 22a3.1 3.1 0 0 1-3-3.9Z" /></svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7 10v12M15 5.9 14 10h5.8a2 2 0 0 1 1.9 2.5l-2.3 8a2 2 0 0 1-1.9 1.5H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.8a2 2 0 0 0 1.8-1.1L12 2a3.1 3.1 0 0 1 3 3.9Z" /></svg>
+          {{ jeu.reviewPercent }} %
+        </span>
+      </span>
       <span v-if="etat" class="coin"><StorePossede :etat="etat" /></span>
       <span
         v-else-if="jeu.gameId"
@@ -104,6 +123,28 @@ function basculerWishlist() {
 .pied { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; min-width: 0; }
 .ligne { font-size: 12px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pied .demo-dispo { align-self: flex-start; }
+
+/* Remise et note Steam, empilées en haut à droite de la jaquette. Seule, la remise s'y
+   place d'elle-même (`.cover-card .badge`, style.css) ; dans la pile, c'est la pile qui se
+   place. Sous la pastille « Dans ta bibliothèque », qui prend presque toute la largeur
+   d'une jaquette, elle descend d'un cran — même règle que la remise seule. */
+.pile {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+}
+.pile.sous-coin { top: 40px; }
+.pile .badge { position: static; }
+/* Posée sur l'image dans les deux thèmes : fond sombre, et les teintes claires des notes
+   (celles du thème sombre), lisibles dessus. */
+.note {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 8px;
+  font-family: var(--mono); font-weight: 700; font-size: 12px; color: #fff;
+  background: rgba(14, 10, 20, 0.62); border: 1px solid rgba(255, 255, 255, 0.18); backdrop-filter: blur(6px);
+}
+.note svg { width: 13px; height: 13px; flex: none; }
+.note.pos svg { color: #56d6a6; }
+.note.mixte svg { color: #f0b73f; }
+.note.neg svg { color: #ff4655; }
 
 .carte-paysage {
   display: flex; flex-direction: column; gap: 8px; min-width: 0; width: 100%;
