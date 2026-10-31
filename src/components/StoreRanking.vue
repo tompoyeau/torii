@@ -105,6 +105,7 @@ const detail = (j: StoreShelfItem) =>
                 {{ libelleAvis(j.reviewScore) }}<template v-if="j.reviewPercent != null"> · {{ j.reviewPercent }} %</template>
               </span>
               <span v-if="detail(j)" class="detail">{{ detail(j) }}</span>
+              <span v-if="j.hasDemo && !possession(j.title, j.appId)" class="demo-dispo" :title="t('boutique.accueil.carte.demoAide')">{{ t("boutique.accueil.carte.demo") }}</span>
             </span>
           </span>
           <span v-if="possession(j.title, j.appId)" class="etat"><StorePossede :etat="possession(j.title, j.appId)!" /></span>

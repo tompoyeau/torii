@@ -240,6 +240,8 @@ export interface StoreShelfItem {
   releaseText?: string | null;
   comingSoon: boolean;
   isFree: boolean;
+  /** Le jeu a une démo gratuite sur Steam. */
+  hasDemo: boolean;
   /** Meilleure offre actuelle ; absente si aucune boutique ne le vend. */
   price?: number | null;
   normalPrice?: number | null;
@@ -350,6 +352,10 @@ export interface StoreSteamSheet {
   /** Le résumé de la page Steam, en texte simple. */
   resume?: string | null;
   description: StoreBloc[];
+  /** Démos gratuites du jeu sur Steam (appids). */
+  demos: number[];
+  /** Pour une démo : le jeu complet qu'elle fait essayer. */
+  jeuComplet?: { appId: number; titre: string } | null;
 }
 
 /** Une annonce officielle de l'éditeur sur Steam (`metadata/possede.rs`). */

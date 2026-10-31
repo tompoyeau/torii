@@ -883,7 +883,13 @@ demander en ligne.
   compte** (`SocialPrefs::last_library_sync`) : sinon, changer de compte laisserait le
   nouveau vide pour toujours. Un `BTreeMap` + tri des plateformes rendent l'empreinte
   indépendante de l'ordre du scan — sinon on renverrait tout à chaque fois.
-- Déclenchée **après chaque `scan_library`**, dans un fil détaché : un scan ne doit jamais
+  🔑 **Et `partageables` parcourt les jeux dans l'ordre de leurs ids.** Pour un jeu sur
+  plusieurs launchers, titre et jaquette sont ceux de la première copie vue ; le scan sort
+  d'une table de hachage dont l'ordre change à chaque fois (à titre égal). Jusqu'au
+  31/10/2026, l'empreinte changeait donc presque à chaque scan (51 jeux sur 941 concernés)
+  et la bibliothèque repartait au serveur pour rien — ce que les relevés automatiques de
+  `libwatch` auraient multiplié. Test `meme_titre_et_jaquette_quel_que_soit_l_ordre`.
+- Déclenchée **après chaque relevé de la bibliothèque** (`libwatch::publier`), dans un fil détaché : un scan ne doit jamais
   attendre le réseau. `sync()` ne renvoie une erreur que si l'envoi échoue vraiment —
   « éteint » et « pas connecté » sont des situations normales (`skipped`).
 - Commandes : `library_sync(force)`, `library_index`, `library_of`, `library_forget_device`,
@@ -1735,6 +1741,27 @@ fin et son code promo.
   par `store_id_for_steam` (`vitrine::id_itad`, le même cache que les rayons) ; sinon,
   titre identique après `normaliserTitre` (un titre qui se réduit à rien, japonais par
   exemple, ne correspond à rien) ; sinon, la grille de résultats, pour choisir soi-même.
+
+### Démos (fait)
+
+- 🔑 **Aucun appel de plus.** Steam donne les démos d'office dans `related_items.demo_appid`
+  de chaque item de `GetItems` et de `Query` (pas besoin d'un `data_request`) : la fiche
+  (`FicheSteam::demos`, repli sur `demos` d'`appdetails`) et les rayons
+  (`ShelfItem::has_demo`) les ont donc gratuitement. Une démo, elle, porte son jeu complet
+  dans `appdetails.fullgame` (appid **en texte**) → `FicheSteam::jeu_complet`.
+- **Fiche Boutique** : encadré « Démo gratuite » en tête de la colonne d'achat, **même sans
+  offre** (jeu « Prochainement », cas fréquent des démos), bouton secondaire — acheter reste
+  l'action principale. Le bouton suit la bibliothèque : « Télécharger la démo »
+  (`steam://install/<appid>`, Steam ajoute la démo gratuite et l'installe), « Installer »
+  si elle y est sans être installée, « Jouer » sinon. Après un téléchargement, la veille
+  de la bibliothèque fait passer le bouton à « Jouer » toute seule.
+- **Mention « ▶ Démo gratuite »** (`.demo-dispo`, dans `style.css` car partagée) : cartes
+  des rayons Steam, classements, vedette. Masquée pour un jeu déjà possédé. Absente des
+  rayons du comparateur (promos, jeux offerts), qui n'ont pas l'info.
+- **Bibliothèque** : la fiche d'une démo affiche « Démo de X · Voir le jeu complet → »
+  sous le titre : la carte du jeu complet s'il est possédé (`idBibliotheque`), sinon sa
+  fiche Boutique par-dessus (`openForTitle` avec l'appid, comme « Voir dans la boutique »).
+- Démos **Steam seulement** : GOG, Epic et le comparateur n'en exposent pas de façon fiable.
 
 ## Fiche d'un jeu de la bibliothèque (`metadata/possede.rs`, `GameDetail.vue`)
 

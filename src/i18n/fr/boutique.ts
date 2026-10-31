@@ -121,6 +121,8 @@ export default {
       sortiLe: "Sorti le {date}",
       trimestre: "T{n} {annee}",
       pasDOffre: "Pas encore en vente",
+      demo: "Démo gratuite",
+      demoAide: "Ce jeu a une démo gratuite sur Steam",
       avisAide: "{n} évaluation sur Steam | {n} évaluations sur Steam",
     },
     /** Appréciation Steam, de 1 à 9. */
@@ -158,6 +160,14 @@ export default {
     medias: "Médias",
     bandeAnnonce: "Bande-annonce sur Steam",
     bandeAnnonceN: "Bande-annonce {n}",
+    demo: {
+      titre: "Démo gratuite",
+      aide: "Essaie le jeu avant de l'acheter.",
+      telecharger: "Télécharger la démo",
+      installer: "Installer la démo",
+      jouer: "Jouer à la démo",
+      steamOuvert: "Steam s'ouvre pour la télécharger. Elle apparaîtra dans ta bibliothèque une fois installée.",
+    },
     lireBandeAnnonce: "Lire la bande-annonce « {nom} »",
     lectureImpossible: "Lecture complète impossible ici : aperçu muet à la place.",
     lecteur: {

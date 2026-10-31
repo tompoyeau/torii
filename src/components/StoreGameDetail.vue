@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useLibrary } from "../composables/useLibrary";
 import { usePossession } from "../composables/usePossession";
 import { useStore } from "../composables/useStore";
 import { useStoreCategories } from "../composables/useStoreCategories";
@@ -11,6 +12,7 @@ import { useUi } from "../composables/useUi";
 import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
 import { avecRaccourci } from "../composables/useRaccourcis";
 import { ouvrirPage } from "../composables/usePageWeb";
+import { installSource } from "../lib/tauri";
 import { activation, dateLongue, descripteur, libelleAvis, libelleFin, pageSteam, tonAvis } from "../lib/boutique";
 import { formatPrix } from "../lib/format";
 import { t } from "../i18n";
@@ -28,6 +30,7 @@ const { product, productLoading, productIndisponible, selectedGameId, closeProdu
   useStore();
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 const { possession, idBibliotheque } = usePossession();
+const { byId, launchOrInstall } = useLibrary();
 const { openGame } = useUi();
 
 const open = computed(() => selectedGameId.value != null);
@@ -130,6 +133,34 @@ function voirBibliotheque() {
   if (!id) return;
   closeProduct();
   openGame(id);
+}
+
+/**
+ * Démo gratuite sur Steam, en tête de la colonne d'achat — même quand le jeu n'est pas
+ * encore en vente : c'est souvent là qu'il en a une. Son bouton suit la bibliothèque
+ * (télécharger, installer, jouer) ; la veille de la bibliothèque fait passer de l'un à
+ * l'autre dès que Steam a fini, sans rien recharger.
+ */
+const demo = computed(() => product.value?.steam?.demos?.[0] ?? null);
+const demoBiblio = computed(() => (demo.value ? byId(`steam:${demo.value}`) : null));
+/** Démo dont on vient de demander le téléchargement : on dit que Steam a pris le relais. */
+const demoDemandee = ref<number | null>(null);
+const libelleDemo = computed(() =>
+  demoBiblio.value?.installed
+    ? t("boutique.produit.demo.jouer")
+    : demoBiblio.value
+      ? t("boutique.produit.demo.installer")
+      : t("boutique.produit.demo.telecharger"),
+);
+function actionDemo() {
+  const id = demo.value;
+  if (!id) return;
+  if (demoBiblio.value) {
+    launchOrInstall(demoBiblio.value);
+    return;
+  }
+  demoDemandee.value = id;
+  void installSource("steam", String(id));
 }
 
 function ouvrirSteam() {
@@ -283,6 +314,18 @@ const detailOffre = (p: StorePrice) =>
         </div>
 
         <aside class="sd-prices">
+          <div v-if="demo" class="demo">
+            <span class="best-label">{{ t("boutique.produit.demo.titre") }}</span>
+            <p class="demo-aide">{{ t("boutique.produit.demo.aide") }}</p>
+            <button class="demo-btn" @click="actionDemo">
+              <svg v-if="demoBiblio?.installed" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z" /></svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
+              {{ libelleDemo }}
+            </button>
+            <p v-if="demoDemandee === demo && !demoBiblio?.installed" class="demo-aide" role="status">
+              {{ t("boutique.produit.demo.steamOuvert") }}
+            </p>
+          </div>
           <div v-if="best" class="best">
             <div class="best-top">
               <span class="best-label">{{ t("boutique.produit.meilleurPrix") }}</span>
@@ -501,6 +544,17 @@ const detailOffre = (p: StorePrice) =>
 .wish:hover { color: var(--text); border-color: var(--border-strong); }
 .wish.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
 .wish svg { width: 16px; height: 16px; }
+/* Démo : au-dessus de l'achat comme sur Steam, mais en bouton secondaire — acheter reste
+   l'action principale de la fiche. */
+.demo { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px 20px; }
+.demo-aide { font-size: 13px; line-height: 1.45; color: var(--text-dim); margin: 6px 0 0; }
+.demo-btn {
+  margin-top: 12px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;
+  background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.demo-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.demo-btn svg { width: 17px; height: 17px; }
 
 .compare { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px; }
 .compare-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); font-weight: 700; padding: 4px 0 10px; }

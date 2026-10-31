@@ -120,6 +120,7 @@ function quitterFocus(e: FocusEvent) {
         >
           {{ libelleAvis(jeu.reviewScore) }}<template v-if="jeu.reviewPercent != null"> · {{ jeu.reviewPercent }} %</template>
         </span>
+        <span v-if="jeu.hasDemo" class="demo-dispo sur-image" :title="t('boutique.accueil.carte.demoAide')">{{ t("boutique.accueil.carte.demo") }}</span>
       </div>
       <div v-if="jeu.price != null" class="offre">
         <span v-if="jeu.savings > 0" class="remise grande">-{{ jeu.savings }}%</span>
@@ -202,6 +203,7 @@ function quitterFocus(e: FocusEvent) {
 .maintenant { font-family: var(--mono); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chez { font-size: 13px; color: rgba(255, 255, 255, 0.75); }
 .record.sur-image { color: #ffb4a6; }
+.demo-dispo.sur-image { color: #ffb4a6; margin-left: 4px; }
 .boutons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 
 .navigation {

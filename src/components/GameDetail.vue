@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
 import { useFichePossede } from "../composables/useFichePossede";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
+import { usePossession } from "../composables/usePossession";
 import { useStore } from "../composables/useStore";
 import { useUi } from "../composables/useUi";
 import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
@@ -32,7 +33,8 @@ const { charger: chargerFiche, entree: entreeFiche } = useFichePossede();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
 const { connected: toriiConnected, isMuted, setMuted } = useTorii();
-const { selectedGameId, closeGame, showStore, openEditGame } = useUi();
+const { selectedGameId, closeGame, showStore, openEditGame, openGame } = useUi();
+const { idBibliotheque } = usePossession();
 
 /**
  * Ouvre le comparatif de prix de ce jeu **par-dessus** sa fiche, sans quitter la
@@ -271,6 +273,29 @@ const fiche = computed(() => entreeFiche(game.value?.id).fiche);
 const steam = computed(() => fiche.value?.steam ?? null);
 /** L'appid de la page Steam du jeu, s'il en a une sûre. */
 const appIdSteam = computed(() => fiche.value?.appId ?? (steamAppid.value ? Number(steamAppid.value) : null));
+
+/**
+ * Une démo mène à son jeu complet : à sa carte s'il est déjà dans la bibliothèque,
+ * sinon à sa fiche Boutique (l'acheter, le suivre), ouverte par-dessus celle-ci comme
+ * « Voir dans la boutique ».
+ */
+const jeuComplet = computed(() => fiche.value?.steam?.jeuComplet ?? null);
+const idJeuComplet = computed(() =>
+  jeuComplet.value ? idBibliotheque(jeuComplet.value.titre, jeuComplet.value.appId) : null,
+);
+async function voirJeuComplet() {
+  const j = jeuComplet.value;
+  if (!j) return;
+  if (idJeuComplet.value) {
+    openGame(idJeuComplet.value);
+    return;
+  }
+  const opened = await openForTitle(j.titre, j.appId);
+  if (!opened) {
+    closeGame();
+    showStore();
+  }
+}
 function ouvrirSteam() {
   if (appIdSteam.value) ouvrirPage(pageSteam(appIdSteam.value));
 }
@@ -505,6 +530,10 @@ function retour() {
           <div class="detail-title-wrap">
             <span class="detail-plat"><PlatformIcon :platform="game.platform" />{{ platformName(game.platform) }}</span>
             <h1 class="detail-title">{{ game.title }}</h1>
+            <button v-if="jeuComplet" class="demo-de" @click.stop="voirJeuComplet">
+              <span>{{ t("fiche.demo.de", { titre: jeuComplet.titre }) }}</span>
+              <span class="demo-de-lien">{{ idJeuComplet ? t("fiche.demo.ouvrirJeu") : t("fiche.demo.voirJeu") }} →</span>
+            </button>
           </div>
           <div class="detail-actions">
             <div class="play-wrap">
@@ -857,6 +886,15 @@ function retour() {
   line-height: 1; text-shadow: 0 3px 24px rgba(0, 0, 0, 0.4); text-wrap: balance;
 }
 :root[data-theme="light"] .detail-title { color: var(--text); text-shadow: none; }
+/* Démo : le jeu complet, sous le titre. Même pastille sombre que la plateforme, lisible
+   sur n'importe quelle image et dans les deux thèmes. */
+.demo-de {
+  display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; cursor: pointer;
+  padding: 6px 14px; border-radius: 99px; font-size: 13.5px; color: rgba(255, 255, 255, 0.9);
+  background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(6px); border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.demo-de:hover { background: rgba(12, 8, 18, 0.7); border-color: rgba(255, 255, 255, 0.3); }
+.demo-de-lien { font-weight: 700; color: #fff; }
 .detail-actions { grid-column: 2; grid-row: 1; display: flex; gap: 10px; padding-bottom: 6px; z-index: 10; }
 .play-wrap { position: relative; }
 .btn-play.big .caret { width: 17px; height: 17px; margin-left: 2px; }

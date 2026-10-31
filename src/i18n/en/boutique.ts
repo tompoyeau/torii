@@ -121,6 +121,8 @@ const en: Forme<typeof fr> = {
       sortiLe: "Released {date}",
       trimestre: "Q{n} {annee}",
       pasDOffre: "Not on sale yet",
+      demo: "Free demo",
+      demoAide: "This game has a free demo on Steam",
       avisAide: "{n} review on Steam | {n} reviews on Steam",
     },
     avis: {
@@ -157,6 +159,14 @@ const en: Forme<typeof fr> = {
     medias: "Media",
     bandeAnnonce: "Trailer on Steam",
     bandeAnnonceN: "Trailer {n}",
+    demo: {
+      titre: "Free demo",
+      aide: "Try the game before you buy it.",
+      telecharger: "Download the demo",
+      installer: "Install the demo",
+      jouer: "Play the demo",
+      steamOuvert: "Steam is opening to download it. It will show up in your library once installed.",
+    },
     lireBandeAnnonce: "Play the trailer “{nom}”",
     lectureImpossible: "Full playback isn't available here: muted preview instead.",
     lecteur: {

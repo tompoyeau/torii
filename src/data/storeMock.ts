@@ -66,6 +66,7 @@ function versJeu(l: Ligne): StoreShelfItem {
     releaseDisplay: "date_full",
     comingSoon: aVenir,
     isFree: gratuit,
+    hasDemo: false,
     price: prix,
     normalPrice: gratuit ? null : normal,
     savings: remise,

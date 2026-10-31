@@ -65,6 +65,29 @@ pub struct FicheSteam {
     /// Le résumé de la page Steam (deux ou trois phrases, en texte simple).
     pub resume: Option<String>,
     pub description: Vec<Bloc>,
+    /// Démos gratuites du jeu sur Steam (appids), dans l'ordre de Steam. Vide pour la
+    /// plupart des jeux.
+    pub demos: Vec<u64>,
+    /// Pour une démo : le jeu complet qu'elle fait essayer.
+    pub jeu_complet: Option<JeuComplet>,
+}
+
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct JeuComplet {
+    pub app_id: u64,
+    pub titre: String,
+}
+
+/// Les démos d'un jeu, d'après un item de l'API de la boutique (`GetItems`, `Query`).
+///
+/// Steam les donne d'office dans `related_items`, sans rien demander de plus : la fiche
+/// et les rayons les ont donc sans un appel de plus.
+pub(super) fn demos(item: &Value) -> Vec<u64> {
+    item["related_items"]["demo_appid"]
+        .as_array()
+        .map(|ids| ids.iter().filter_map(Value::as_u64).collect())
+        .unwrap_or_default()
 }
 
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
@@ -207,6 +230,7 @@ fn appdetails(appid: u64) -> Option<Value> {
 const TAGS_ECARTES: [u64; 11] = [6650, 12095, 4345, 4667, 113, 4182, 3859, 1756, 4166, 4191, 3871];
 
 fn lire_item(f: &mut FicheSteam, item: &Value, noms: &HashMap<u64, String>) {
+    f.demos = demos(item);
     let avis = &item["reviews"]["summary_filtered"];
     f.review_count = avis["review_count"].as_u64().unwrap_or(0) as u32;
     if f.review_count > 0 {
@@ -384,6 +408,21 @@ fn lire_details(f: &mut FicheSteam, d: &Value, region: &str) {
     f.classification = classification(&d["ratings"], region);
     f.configuration = configuration(&d["pc_requirements"]);
     f.description = blocs(d["about_the_game"].as_str().unwrap_or_default());
+    // `appdetails` donne aussi les démos : le repli quand `GetItems` n'a pas répondu.
+    if f.demos.is_empty() {
+        f.demos = d["demos"]
+            .as_array()
+            .map(|l| l.iter().filter_map(|demo| demo["appid"].as_u64()).collect())
+            .unwrap_or_default();
+    }
+    f.jeu_complet = jeu_complet(&d["fullgame"]);
+}
+
+/// Le jeu complet d'une démo. Steam donne son appid en texte (`"3642910"`).
+fn jeu_complet(v: &Value) -> Option<JeuComplet> {
+    let app_id = v["appid"].as_u64().or_else(|| v["appid"].as_str()?.parse().ok())?;
+    let titre = v["name"].as_str().map(str::trim).filter(|t| !t.is_empty())?;
+    Some(JeuComplet { app_id, titre: titre.to_string() })
 }
 
 /// La classification d'âge de la région : PEGI en Europe, USK en Allemagne, ESRB en
@@ -847,5 +886,23 @@ mod tests {
         assert_eq!((us.systeme.as_str(), us.note.as_str()), ("ESRB", "M"));
         // Pas d'USK fourni : l'Allemagne retombe sur PEGI.
         assert_eq!(classification(&notes, "DE").unwrap().systeme, "PEGI");
+    }
+
+    /// Réponses réelles du 31/10/2026 : Wyldheart (`GetItems`, `appdetails`) et sa démo.
+    #[test]
+    fn demo_et_jeu_complet() {
+        let jeu = json!({ "appid": 3642910, "related_items": { "demo_appid": [4475270],
+            "demos": [{ "appid": 4475270, "show_above_purchase": true }] } });
+        assert_eq!(demos(&jeu), vec![4475270]);
+        let demo = json!({ "appid": 4475270, "type": 1, "related_items": { "parent_appid": 3642910 } });
+        assert!(demos(&demo).is_empty());
+        assert!(demos(&json!({ "appid": 1091500 })).is_empty());
+
+        let mut f = FicheSteam::default();
+        lire_details(&mut f, &json!({ "type": "demo", "fullgame": { "appid": "3642910", "name": "Wyldheart" } }), "FR");
+        assert_eq!(f.jeu_complet, Some(JeuComplet { app_id: 3642910, titre: "Wyldheart".into() }));
+        // Sans `GetItems`, les démos viennent d'`appdetails`.
+        lire_details(&mut f, &json!({ "type": "game", "demos": [{ "appid": 4475270, "description": "" }] }), "FR");
+        assert_eq!((f.demos.clone(), f.jeu_complet.clone()), (vec![4475270], None));
     }
 }

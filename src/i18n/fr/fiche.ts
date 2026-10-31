@@ -5,6 +5,11 @@ export default {
   jouerDepuis: "Jouer depuis…",
   installerDepuis: "Installer depuis…",
   voirBoutique: "Voir dans la boutique",
+  demo: {
+    de: "Démo de {titre}",
+    voirJeu: "Voir le jeu complet",
+    ouvrirJeu: "Ouvrir le jeu complet",
+  },
   options: "Options du jeu",
   optionsTitre: "Options",
   actualiserInfos: "Actualiser les infos",

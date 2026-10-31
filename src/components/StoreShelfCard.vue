@@ -23,6 +23,8 @@ const { isWishlisted, toggle } = useToriiWishlist();
 
 const etat = computed(() => possession(props.jeu.title, props.jeu.appId));
 const enPromo = computed(() => props.jeu.price != null && props.jeu.savings > 0);
+/** Démo gratuite sur Steam — sans intérêt pour un jeu qu'on a déjà. */
+const aUneDemo = computed(() => props.jeu.hasDemo && !etat.value);
 const prix = (montant: number) => formatPrix(montant, props.jeu.currency);
 
 const { src, onError } = useImageCascade(() =>
@@ -72,6 +74,7 @@ function basculerWishlist() {
       <span v-else class="ligne">{{ t("boutique.accueil.carte.pasDOffre") }}</span>
       <span v-if="jeu.comingSoon" class="ligne">{{ libelleSortie(jeu) }}</span>
       <span v-else-if="jeu.record" class="record">{{ t("boutique.accueil.carte.record") }}</span>
+      <span v-if="aUneDemo" class="demo-dispo" :title="t('boutique.accueil.carte.demoAide')">{{ t("boutique.accueil.carte.demo") }}</span>
     </div>
   </button>
 
@@ -87,6 +90,7 @@ function basculerWishlist() {
         <span v-if="enPromo" class="remise">-{{ jeu.savings }}%</span>
         <span class="now" :class="{ hot: enPromo }">{{ prix(jeu.price) }}</span>
       </span>
+      <span v-if="aUneDemo" class="demo-dispo" :title="t('boutique.accueil.carte.demoAide')">{{ t("boutique.accueil.carte.demo") }}</span>
       <span v-if="jeu.reviewScore" class="avis" :class="tonAvis(jeu.reviewScore)" :title="t('boutique.accueil.carte.avisAide', { n: jeu.reviewCount })">
         {{ libelleAvis(jeu.reviewScore) }}<template v-if="jeu.reviewPercent != null"> · {{ jeu.reviewPercent }} %</template>
       </span>
@@ -99,6 +103,7 @@ function basculerWishlist() {
 .coin { position: absolute; top: 9px; left: 9px; z-index: 3; }
 .pied { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; min-width: 0; }
 .ligne { font-size: 12px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pied .demo-dispo { align-self: flex-start; }
 
 .carte-paysage {
   display: flex; flex-direction: column; gap: 8px; min-width: 0; width: 100%;

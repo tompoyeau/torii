@@ -99,6 +99,8 @@ pub struct ShelfItem {
     pub release_text: Option<String>,
     pub coming_soon: bool,
     pub is_free: bool,
+    /// Le jeu a une démo gratuite sur Steam.
+    pub has_demo: bool,
     /// Meilleure offre actuelle (ITAD), dans la devise `currency` ; absente si aucune.
     pub price: Option<f64>,
     pub normal_price: Option<f64>,
@@ -461,6 +463,7 @@ fn lire(item: &Value, noms: &HashMap<u64, String>, dlc: bool) -> Option<ShelfIte
         release_text: sortie["custom_release_date_message"].as_str().map(String::from),
         coming_soon: sortie["is_coming_soon"].as_bool().unwrap_or(false),
         is_free: item["is_free"].as_bool().unwrap_or(false),
+        has_demo: !super::fiche::demos(item).is_empty(),
         ..Default::default()
     })
 }
