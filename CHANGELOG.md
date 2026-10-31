@@ -5,6 +5,14 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.26.0
+- **Ta bibliothèque se met à jour toute seule.** Un jeu que tu installes, désinstalles ou finis de télécharger apparaît ou change d'état en quelques secondes, sans appuyer sur F5. Un jeu acheté arrive quand tu reviens sur Torii, quand tu refermes une page web ouverte dans Torii, ou au plus tard une demi-heure après.
+- **Un jeu Steam en cours de téléchargement n'est plus marqué installé** : son bouton reste sur « Installer » jusqu'à la fin, au lieu de proposer de jouer dès le premier octet.
+- **Les démos dans la Boutique.** La fiche d'un jeu qui a une démo gratuite sur Steam l'annonce en tête de la colonne d'achat, même s'il n'est pas encore en vente : « Télécharger la démo » ouvre Steam pour l'installer, puis le bouton devient « Jouer à la démo ». Les jaquettes, les classements et la vedette signalent « Démo gratuite ».
+- **La page d'une démo mène au jeu complet** : dans ta bibliothèque, « Démo de … · Voir le jeu complet » ouvre sa fiche Boutique, ou sa carte si tu l'as déjà.
+- **La note Steam sur les jaquettes de la Boutique**, en haut à gauche : la part d'avis positifs, et l'appréciation au survol. Elle laisse la place à « Dans ta bibliothèque » pour un jeu que tu as déjà.
+- **Ta bibliothèque n'est plus renvoyée à tes amis Torii quand rien n'a changé.** Avec un même jeu sur plusieurs launchers, Torii croyait souvent qu'elle avait bougé et la renvoyait à chaque démarrage.
+
 ## 0.25.0
 - **Des catégories qui disent vraiment à quoi tu joues.** Le filtre de la bibliothèque utilise maintenant les tags que les joueurs posent sur Steam : Roguelike, Survie, Coop, Monde ouvert, Metroidvania… Des centaines de catégories au lieu d'une quinzaine, y compris pour tes jeux Epic, GOG, Ubisoft ou EA, et même pour ceux qui ne sont pas sur Steam.
 - **Plusieurs catégories à la fois.** Coche « Coop » et « Survie » pour ne garder que les jeux qui ont les deux. Le menu se cherche au clavier, et chaque catégorie dit combien de jeux il resterait : impossible de tomber sur une grille vide par hasard.

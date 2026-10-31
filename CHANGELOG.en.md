@@ -5,6 +5,14 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.26.0
+- **Your library updates itself.** A game you install, uninstall or finish downloading shows up or changes state within seconds, without pressing F5. A game you buy arrives when you come back to Torii, when you close a web page opened in Torii, or at the latest half an hour later.
+- **A Steam game that is still downloading is no longer marked as installed**: its button stays on “Install” until the download finishes, instead of offering to play from the first byte.
+- **Demos in the Store.** The page of a game with a free demo on Steam shows it at the top of the purchase column, even before the game is on sale: “Download the demo” opens Steam to install it, then the button becomes “Play the demo”. Covers, rankings and the featured banner show “Free demo”.
+- **A demo's page leads to the full game**: in your library, “Demo of … · View the full game” opens its Store page, or its card if you already own it.
+- **The Steam rating on Store covers**, at the top left: the share of positive reviews, with the overall verdict on hover. It makes way for “In your library” on games you already own.
+- **Your library is no longer sent again to your Torii friends when nothing changed.** With the same game on several launchers, Torii often thought it had changed and sent it again at every launch.
+
 ## 0.25.0
 - **Categories that really say what you play.** The library filter now uses the tags players put on Steam: Roguelike, Survival, Co-op, Open World, Metroidvania… Hundreds of categories instead of about fifteen, including for your Epic, GOG, Ubisoft or EA games, and even for games that aren't on Steam.
 - **Several categories at once.** Check “Co-op” and “Survival” to keep only the games that have both. The menu can be searched from the keyboard, and each category shows how many games would remain: no more landing on an empty grid by chance.
