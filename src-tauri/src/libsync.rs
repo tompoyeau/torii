@@ -116,7 +116,16 @@ pub fn partageables(games: &[GameDto], muets: &HashSet<String>) -> Vec<LibGame> 
     // identiques donnent la même empreinte — sans quoi on réenverrait tout à chaque fois.
     let mut par_cle: BTreeMap<String, LibGame> = BTreeMap::new();
 
-    for game in games {
+    // 🔑 Dans l'ordre des ids, pas dans celui du scan. Pour un jeu présent sur plusieurs
+    // launchers, le titre et la jaquette retenus sont ceux de la première copie vue ; or le
+    // scan sort d'une table de hachage, et à titre égal son ordre change d'une fois sur
+    // l'autre. L'empreinte changeait donc presque à chaque scan et la bibliothèque repartait
+    // au serveur sans que rien n'ait bougé (51 jeux sur 941 relevés le 31/10/2026) — ce que
+    // la veille de la bibliothèque, qui relève toutes les 30 min, aurait multiplié.
+    let mut dans_l_ordre: Vec<&GameDto> = games.iter().collect();
+    dans_l_ordre.sort_by(|a, b| a.id.cmp(&b.id));
+
+    for game in dans_l_ordre {
         if game.hidden || muets.contains(&game.id) {
             continue;
         }
@@ -354,6 +363,19 @@ mod tests {
             platform: plateforme.into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn meme_titre_et_jaquette_quel_que_soit_l_ordre() {
+        let mut steam = jeu("steam:208650", "Batman™: Arkham Knight", "steam");
+        steam.cover_url = Some("https://cdn.steam/208650.jpg".into());
+        let mut epic = jeu("epic:Cowbird", "Batman™ Arkham Knight", "epic");
+        epic.cover_url = Some("https://cdn.epic/cowbird.jpg".into());
+        let a = partageables(&[steam.clone(), epic.clone()], &HashSet::new());
+        let b = partageables(&[epic, steam], &HashSet::new());
+        assert_eq!(a.len(), 1);
+        assert_eq!((&a[0].title, &a[0].cover), (&b[0].title, &b[0].cover));
+        assert_eq!(empreinte(&a), empreinte(&b));
     }
 
     #[test]
