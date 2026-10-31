@@ -14,6 +14,7 @@ use crate::models::GameDto;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
+use std::sync::Mutex;
 
 /// Chemin comparable : minuscules, séparateurs Windows, sans `\` final.
 pub(crate) fn normalize(path: &str) -> String {
@@ -51,24 +52,69 @@ pub fn scan_installed() -> Vec<GameDto> {
         .collect()
 }
 
+/// Ce que cette machine dit de la bibliothèque, relu **sans aucun appel réseau** : les
+/// jeux installés, et les possédés que l'on garde sur le disque — cache d'Ubisoft
+/// Connect, instantanés EA et Battle.net pris à la connexion (croisés avec ce qui est
+/// installé).
+///
+/// 🔑 C'est tout ce que la veille de la bibliothèque relit toutes les 10 s
+/// (`libwatch`) : un jeu installé, désinstallé ou téléchargé y change forcément
+/// quelque chose, sans qu'on redemande quoi que ce soit à Steam, GOG ou Epic.
+pub struct ReleveLocal {
+    installes: Vec<GameDto>,
+    possedes: Vec<GameDto>,
+}
+
+/// Résumé d'un [`ReleveLocal`] : quels jeux, installés ou non, et où. Deux relevés de
+/// même empreinte donnent la même bibliothèque.
+pub type Empreinte = Vec<(String, bool, String)>;
+
+impl ReleveLocal {
+    pub fn lire(config_dir: Option<&Path>) -> Self {
+        let mut possedes = ubisoft::owned();
+        if let Some(dir) = config_dir {
+            possedes.extend(crate::accounts::owned_local(dir));
+        }
+        Self { installes: scan_installed(), possedes }
+    }
+
+    pub fn empreinte(&self) -> Empreinte {
+        let mut e: Empreinte = self
+            .installes
+            .iter()
+            .chain(&self.possedes)
+            .map(|g| (g.id.clone(), g.installed, g.install_dir.as_deref().map(normalize).unwrap_or_default()))
+            .collect();
+        e.sort();
+        e
+    }
+}
+
 /// Agrège les jeux de toutes les plateformes : d'abord les jeux **installés**
 /// (fichiers locaux), puis les jeux **possédés** en ligne (comptes) et manuels.
 pub fn scan_all(config_dir: Option<&Path>) -> Vec<GameDto> {
+    let en_ligne = config_dir.map(crate::accounts::owned_online).unwrap_or_default();
+    assembler(ReleveLocal::lire(config_dir), &en_ligne, config_dir)
+}
+
+/// Compose la bibliothèque à partir d'un relevé local et des possédés **déjà**
+/// rapportés par les comptes en ligne (Steam, GOG, Epic).
+///
+/// 🔑 Aucun appel réseau ici. C'est ce qui permet de la recomposer à chaque jeu installé
+/// ou désinstallé en réutilisant le dernier relevé en ligne, au lieu de rejouer la
+/// séquence des comptes — dont le refresh GOG qui fait tourner son jeton.
+pub fn assembler(local: ReleveLocal, en_ligne: &[GameDto], config_dir: Option<&Path>) -> Vec<GameDto> {
     // 1. Jeux installés, indexés par id.
     let mut map: HashMap<String, GameDto> =
-        scan_installed().into_iter().map(|g| (g.id.clone(), g)).collect();
+        local.installes.into_iter().map(|g| (g.id.clone(), g)).collect();
 
-    // Bibliothèque possédée Ubisoft (cache local, sans login ni API) : complète les
-    // installés (et leur donne une jaquette, absente du scan registre).
-    for owned in ubisoft::owned() {
+    // 2. Jeux possédés : complètent la liste sans écraser l'installé. Le cache Ubisoft
+    //    donne en plus leur jaquette aux jeux Ubisoft installés, absente du registre.
+    for owned in local.possedes.into_iter().chain(en_ligne.iter().cloned()) {
         merge_owned(&mut map, owned);
     }
 
     if let Some(dir) = config_dir {
-        // 2. Jeux possédés (comptes) : complètent la liste sans écraser l'installé.
-        for owned in crate::accounts::owned_games(dir) {
-            merge_owned(&mut map, owned);
-        }
         // 3. Jeux ajoutés manuellement.
         for game in manual::scan(dir) {
             map.insert(game.id.clone(), game);
@@ -507,6 +553,35 @@ fn launch_executable(exe: &str) -> Result<(), String> {
 }
 
 /// Taille totale d'un dossier (métadonnées uniquement, récursif).
+/// Mémoire de [`taille_dossier`], vidée par [`oublier_tailles`].
+static TAILLES: Mutex<Option<HashMap<String, u64>>> = Mutex::new(None);
+
+/// Taille d'un dossier de jeu, gardée en mémoire jusqu'au prochain relevé en ligne.
+///
+/// 🔑 Additionner un dossier, c'est en parcourir chaque fichier : mesuré à ~0,5 s pour six
+/// jeux GOG, Riot et Ubisoft, soit presque tout le coût de [`scan_installed`]. Supportable
+/// pour un scan de temps en temps, pas pour la veille qui relit les jeux installés toutes
+/// les 10 s. Chaque relevé en ligne (démarrage, F5, retour sur la fenêtre…) oublie ces
+/// tailles : celle d'un jeu mis à jour finit donc par suivre.
+pub(crate) fn taille_dossier(path: &Path) -> u64 {
+    let cle = normalize(&path.to_string_lossy());
+    if let Some(octets) = TAILLES.lock().ok().and_then(|t| t.as_ref()?.get(&cle).copied()) {
+        return octets;
+    }
+    let octets = dir_size(path);
+    if let Ok(mut t) = TAILLES.lock() {
+        t.get_or_insert_with(HashMap::new).insert(cle, octets);
+    }
+    octets
+}
+
+/// Oublie les tailles mémorisées par [`taille_dossier`] : le prochain relevé les remesure.
+pub(crate) fn oublier_tailles() {
+    if let Ok(mut t) = TAILLES.lock() {
+        *t = None;
+    }
+}
+
 pub(crate) fn dir_size(path: &Path) -> u64 {
     let mut total = 0;
     if let Ok(entries) = std::fs::read_dir(path) {

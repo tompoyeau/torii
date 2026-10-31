@@ -162,7 +162,7 @@ pub fn load_library(config_dir: &Path) -> Vec<GameDto> {
     for game in &mut games {
         if let Some(path) = installed.get(&game.launch_target) {
             game.installed = true;
-            game.size_gb = GameDto::bytes_to_gb(crate::platforms::dir_size(Path::new(path)));
+            game.size_gb = GameDto::bytes_to_gb(crate::platforms::taille_dossier(Path::new(path)));
             game.install_dir = Some(path.clone());
         }
     }

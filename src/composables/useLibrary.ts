@@ -202,6 +202,29 @@ function load() {
  * jamais effacer ce qu'on avait.
  */
 async function fillIgdb() {
+  // Une passe à la fois : la première peut durer des minutes sur une grosse bibliothèque
+  // hors Steam, et ses lots arrivent par un événement global que deux passes
+  // simultanées recevraient chacune en double. Une demande pendant une passe en relance
+  // une seule à la fin, sur la bibliothèque du moment.
+  if (igdbEnCours) {
+    igdbARelancer = true;
+    return;
+  }
+  igdbEnCours = true;
+  try {
+    do {
+      igdbARelancer = false;
+      await passeIgdb();
+    } while (igdbARelancer);
+  } finally {
+    igdbEnCours = false;
+  }
+}
+
+let igdbEnCours = false;
+let igdbARelancer = false;
+
+async function passeIgdb() {
   await enrichIgdb((updates) => {
     if (!updates.length) return;
     const byId = new Map(updates.map((u) => [u.id, u]));
@@ -231,6 +254,57 @@ async function fillIgdb() {
   });
 }
 
+/**
+ * Bibliothèque recalculée par la veille du backend (jeu installé, désinstallé, acheté) :
+ * remplace la liste SANS écran de chargement ni nouvel enrichissement de tout.
+ *
+ * 🔑 Le relevé ne porte que ce que disent les launchers. Ce qu'IGDB et les fiches ont
+ * apporté depuis (genre, description, captures, visuels de réserve…) est repris de la
+ * carte d'avant, sinon toutes les cartes retomberaient sur leur état brut. Une carte
+ * fusionnée peut changer d'id (sa copie principale est l'installée) : on la retrouve
+ * donc par n'importe laquelle de ses copies.
+ */
+function applyUpdate(dtos: GameDto[]) {
+  const avant = new Map<string, Game>();
+  for (const g of games.value) {
+    avant.set(g.id, g);
+    for (const s of g.sources ?? []) if (s.id) avant.set(s.id, g);
+  }
+  let nouveaux = false;
+  games.value = mergeDuplicates(dtos.map(fromDto)).map((g) => {
+    const old =
+      avant.get(g.id) ?? g.sources?.map((s) => (s.id ? avant.get(s.id) : undefined)).find((x) => x);
+    if (!old) {
+      nouveaux = true;
+      return g;
+    }
+    return {
+      ...g,
+      // Titre provisoire « App <id> » déjà résolu par la fiche.
+      title: g.title.startsWith("App ") && !old.title.startsWith("App ") ? old.title : g.title,
+      genre: g.genre ?? old.genre,
+      tags: g.tags?.length ? g.tags : old.tags,
+      description: g.description ?? old.description,
+      descriptionSource: g.description ? g.descriptionSource : old.descriptionSource,
+      developer: g.developer ?? old.developer,
+      year: g.year ?? old.year,
+      coverUrl: g.coverUrl ?? old.coverUrl,
+      heroUrl: g.heroUrl ?? old.heroUrl,
+      coverAlt: g.coverAlt ?? old.coverAlt,
+      heroAlt: g.heroAlt ?? old.heroAlt,
+      screenshots: g.screenshots?.length ? g.screenshots : old.screenshots,
+      achievements: g.achievements ?? old.achievements,
+      // Taille de téléchargement complétée par la fiche : valable tant que le jeu n'a
+      // été ni installé ni désinstallé entre-temps.
+      sizeGb: g.sizeGb || g.installed !== old.installed ? g.sizeGb : old.sizeGb,
+    };
+  });
+  freshLoaded = true;
+  booted.value = true;
+  // Un jeu jamais vu (acheté, installé hors compte) : IGDB le complète, le reste vient du cache.
+  if (nouveaux) void fillIgdb();
+}
+
 /** Force un nouveau scan (ex: après connexion d'un compte). */
 function reload() {
   started = false;
@@ -243,8 +317,14 @@ function reload() {
 export function useLibrary() {
   load();
 
+  /** Une carte par son id, ou par celui de l'une de ses copies : une fiche ouverte reste
+   *  ouverte quand sa carte fusionnée change de copie principale. */
   const byId = (id: string | null) =>
-    id ? games.value.find((g) => g.id === id) ?? null : null;
+    id
+      ? games.value.find((g) => g.id === id) ??
+        games.value.find((g) => g.sources?.some((s) => s.id === id)) ??
+        null
+      : null;
 
   /** Jeux mis en avant : les récents en priorité, complétés par le reste, triés du
    *  dernier joué au plus ancien (le 1er = le vrai dernier jeu joué). */
@@ -420,6 +500,7 @@ export function useLibrary() {
     matches,
     filtered,
     reload,
+    applyUpdate,
     ensureEnriched,
     refreshInfo,
     setHidden,

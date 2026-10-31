@@ -183,8 +183,15 @@ pub fn steam_owned_appids(config_dir: &Path) -> Option<HashSet<u64>> {
     Some(ids)
 }
 
-/// Récupère les jeux possédés via les comptes connectés (Steam, GOG et Epic).
+/// Récupère les jeux possédés via tous les comptes connectés.
 pub fn owned_games(config_dir: &Path) -> Vec<GameDto> {
+    let mut games = owned_online(config_dir);
+    games.extend(owned_local(config_dir));
+    games
+}
+
+/// Possédés qu'il faut demander en ligne : Steam, GOG et Epic.
+pub fn owned_online(config_dir: &Path) -> Vec<GameDto> {
     let creds = secrets::load(config_dir);
     let mut games = Vec::new();
 
@@ -224,8 +231,14 @@ pub fn owned_games(config_dir: &Path) -> Vec<GameDto> {
         games.extend(epic::owned_games(config_dir, rt));
     }
 
+    games
+}
+
+/// Possédés relus sur cette machine, sans réseau : les instantanés EA et Battle.net
+/// pris à la connexion, dont le statut « installé » est relevé à l'instant.
+pub fn owned_local(config_dir: &Path) -> Vec<GameDto> {
     // EA : snapshot de la bibliothèque pris à la connexion (API Juno) et mis en cache.
-    games.extend(ea::load_library(config_dir));
+    let mut games = ea::load_library(config_dir);
 
     // Battle.net : snapshot pris à la connexion (API games-and-subs) et mis en cache.
     games.extend(battlenet::load_library(config_dir));

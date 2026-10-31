@@ -30,7 +30,7 @@ pub fn scan() -> Vec<GameDto> {
                 let size_gb = if path.is_empty() {
                     0.0
                 } else {
-                    GameDto::bytes_to_gb(super::dir_size(std::path::Path::new(&path)))
+                    GameDto::bytes_to_gb(super::taille_dossier(std::path::Path::new(&path)))
                 };
 
                 games.push(GameDto {

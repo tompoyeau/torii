@@ -223,6 +223,19 @@ export async function onGameDetected(cb: (game: GameDto) => void): Promise<() =>
   }
 }
 
+/**
+ * S'abonne aux bibliothèques recalculées par Torii lui-même (veille `libwatch`) : un jeu
+ * installé, désinstallé, téléchargé ou acheté arrive sans resynchronisation.
+ */
+export async function onLibraryUpdated(cb: (games: GameDto[]) => void): Promise<() => void> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<GameDto[]>("library-updated", (e) => cb(e.payload));
+  } catch {
+    return () => {};
+  }
+}
+
 export async function onGameExited(cb: (gameId: string) => void): Promise<() => void> {
   try {
     const { listen } = await import("@tauri-apps/api/event");

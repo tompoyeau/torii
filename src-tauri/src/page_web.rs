@@ -305,7 +305,11 @@ pub fn page_fermer(app: AppHandle) -> Result<(), String> {
     // Oubliée d'abord : une réouverture immédiate en créera une neuve quoi qu'il arrive.
     let nom = PAGE.lock().unwrap_or_else(|p| p.into_inner()).take();
     match nom.and_then(|n| app.get_webview(&n)) {
-        Some(page) => page.close().map_err(erreur),
+        Some(page) => {
+            // Un achat a pu s'y conclure : le jeu doit arriver dans la bibliothèque.
+            crate::libwatch::apres_page_web(&app);
+            page.close().map_err(erreur)
+        }
         None => Ok(()),
     }
 }

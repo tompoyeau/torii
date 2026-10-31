@@ -54,7 +54,7 @@ pub fn scan() -> Vec<GameDto> {
             title: title.into(),
             platform: "riot".into(),
             installed: true,
-            size_gb: GameDto::bytes_to_gb(super::dir_size(Path::new(dir))),
+            size_gb: GameDto::bytes_to_gb(super::taille_dossier(Path::new(dir))),
             install_dir: Some(dir.clone()),
             launch_target: product.into(),
             ..Default::default()

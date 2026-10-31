@@ -92,6 +92,13 @@ fn parse_manifest(file: &Path, apps_dir: &Path) -> Option<GameDto> {
     if is_tool(&name) {
         return None;
     }
+    // Téléchargement en cours : Steam écrit le manifeste dès le début, mais le jeu ne se
+    // lance qu'une fois le bit « FullyInstalled » (4) posé. Une mise à jour le laisse en
+    // place. Sans ce test, un jeu passait sur « Jouer » au premier octet téléchargé.
+    let state = vdf_first(&text, "StateFlags").and_then(|s| s.parse::<u32>().ok());
+    if state.is_some_and(|flags| flags & 4 == 0) {
+        return None;
+    }
     let installdir = vdf_first(&text, "installdir");
     let size_bytes = vdf_first(&text, "SizeOnDisk")
         .and_then(|s| s.parse::<u64>().ok())

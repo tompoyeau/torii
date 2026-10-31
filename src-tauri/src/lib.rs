@@ -3,6 +3,7 @@ pub mod metadata;
 pub mod journal;
 pub mod locale;
 pub mod libsync;
+pub mod libwatch;
 pub mod models;
 pub mod procwatch;
 pub mod social;
@@ -1318,43 +1319,18 @@ fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
 /// **thread principal** (cf. `body_blocking` de `tauri-macros`), donc tout le scan
 /// (registre + réseau des comptes) y bloquerait la boucle d'événements — fenêtre figée,
 /// tray inerte. Même piège que `connect_steam`.
+///
+/// Passe par la veille de la bibliothèque (`libwatch`) : un seul relevé à la fois, et le
+/// résultat devient la base qu'elle recompose quand un jeu est installé ou désinstallé.
+/// Elle le rend aussi au cache disque, à `LastScan`, au surveillant de process et à la
+/// synchronisation.
 #[tauri::command]
 async fn scan_library(app: tauri::AppHandle) -> Vec<GameDto> {
-    let config_dir = app.path().app_config_dir().ok();
-    let games = tauri::async_runtime::spawn_blocking(move || {
-        let games = platforms::scan_all(config_dir.as_deref());
-        // Mémorisé sur disque : le prochain démarrage affiche cette liste tout de
-        // suite, sans attendre le réseau des comptes (cf. `cached_library`).
-        if let Some(dir) = config_dir.as_deref() {
-            platforms::library_cache::save(dir, &games);
-        }
-        games
+    tauri::async_runtime::spawn_blocking(move || {
+        libwatch::relever_en_ligne(&app, libwatch::Origine::Demande).unwrap_or_default()
     })
     .await
-    .unwrap_or_default();
-    // Mémorisé pour `enrich_igdb` (évite un second scan complet, cf. LastScan).
-    if let Ok(mut slot) = app.state::<LastScan>().0.lock() {
-        *slot = games.clone();
-    }
-    // Un jeu installé depuis le dernier scan devient détectable immédiatement.
-    procwatch::set_targets(&app, &games);
-
-    // La bibliothèque vient d'être recalculée : si la synchronisation est active et que
-    // quelque chose a bougé, on la dépose. En tâche de fond et sans jamais faire échouer
-    // le scan — personne n'a demandé un aller-retour réseau en ouvrant l'application, et
-    // `sync` ne renvoie une erreur que si l'envoi lui-même a échoué (éteint ou déconnecté
-    // sont des situations normales, pas des pannes).
-    if let Ok(dir) = app.path().app_config_dir() {
-        let a_deposer = games.clone();
-        std::thread::spawn(move || match libsync::sync(&dir, &a_deposer, false) {
-            Ok(r) if r.uploaded => {
-                journal::write(&dir, "INFO", &format!("bibliothèque synchronisée ({} jeux)", r.game_count));
-            }
-            Err(e) => journal::write(&dir, "ERREUR", &format!("synchronisation de la bibliothèque : {e}")),
-            _ => {}
-        });
-    }
-    games
+    .unwrap_or_default()
 }
 
 /// Bibliothèque du dernier scan, relue du disque : instantanée, sans aucun accès
@@ -2092,6 +2068,8 @@ pub fn run() {
             // Détection des parties (y compris lancées hors de Torii) : un seul fil,
             // qui dort la plupart du temps. Voir `procwatch` pour le coût mesuré.
             procwatch::spawn(app.handle().clone());
+            // Jeux installés, désinstallés ou achetés : la bibliothèque suit sans F5.
+            libwatch::spawn(app.handle().clone());
             // Présence : ne publie rien tant qu'aucun compte n'est connecté ET que le
             // partage n'a pas été activé explicitement (cf. `social::SocialPrefs`).
             social::spawn_heartbeat(app.handle().clone());
@@ -2117,6 +2095,11 @@ pub fn run() {
             // pour chaque nouvelle installation. Signalé en production.
             if window.label() != "main" {
                 return;
+            }
+            // On revient sur Torii, souvent depuis Steam ou le navigateur où l'on vient
+            // peut-être d'acheter un jeu : la veille relève les comptes en ligne.
+            if let tauri::WindowEvent::Focused(true) = event {
+                libwatch::au_retour(window.app_handle());
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if load_window_prefs(&window.app_handle().clone()).close_to_tray {

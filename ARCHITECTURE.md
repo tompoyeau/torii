@@ -108,7 +108,8 @@ cargo run --example community        # jeux possédés + famille (via session st
 - **Un scan n'est pas une lecture locale.** `platforms::scan_all` rejoue toute la séquence
   réseau des comptes, dont un refresh GOG qui **fait tourner** le refresh token. Ne jamais
   l'appeler pour « savoir quels jeux existent » : `scan_library` mémorise son résultat dans
-  l'état `LastScan`, que `enrich_igdb` réutilise. Deux scans concurrents = token GOG grillé.
+  l'état `LastScan`, que `enrich_igdb` réutilise. Deux scans concurrents = token GOG grillé :
+  tout relevé passe par `libwatch` (verrou `RELEVE`), voir « Veille de la bibliothèque ».
 - **`@tauri-apps/api` s'importe sans erreur dans un navigateur nu** : c'est `invoke` qui échoue
   (il lit `window.__TAURI_INTERNALS__`). Le pont `lib/tauri.ts` teste donc ce global
   (`hasTauriRuntime`) pour distinguer « hors Tauri » (repli silencieux) d'une commande qui a
@@ -755,6 +756,52 @@ des genres anglais. Sans le bump, personne ne verrait le changement.
   chaque point de lancement (GameDetail onPlay/playFrom, ContextMenu, HeroFeatured). Le jeu remonte aussitôt
   dans « Récemment joué ». ⚠️ Limite assumée : lancement HORS Torii = non capté (le user était OK). Piste future :
   surveiller le process du jeu pour le vrai temps de jeu (plus fragile).
+
+## Veille de la bibliothèque — `libwatch.rs` (fait)
+
+Désinstaller, acheter ou télécharger un jeu obligeait à appuyer sur F5. La bibliothèque
+suit désormais toute seule, en séparant ce qui se lit sur la machine de ce qu'il faut
+demander en ligne.
+
+- 🔑 **Deux moitiés de scan.** `platforms::ReleveLocal` = installés + possédés gardés sur le
+  disque (cache Ubisoft, instantanés EA et Battle.net, dont le statut installé est relevé à
+  l'instant : `accounts::owned_local`). `accounts::owned_online` = Steam, GOG, Epic, le
+  seul morceau réseau. `platforms::assembler(local, &en_ligne, dir)` compose la
+  bibliothèque **sans réseau** ; `scan_all` n'est plus que les deux mis bout à bout.
+- **Veille locale, toutes les 10 s** : relit `ReleveLocal`, compare son `empreinte()`
+  (id, installé, dossier) à celle de la bibliothèque publiée et, si elle diffère,
+  recompose avec les possédés du **dernier relevé en ligne**. Un jeu installé, désinstallé
+  ou dont le téléchargement finit apparaît en ≤ 10 s, sans aucun appel réseau. Rien ne se
+  passe tant que le premier relevé en ligne (celui du démarrage) n'a pas eu lieu.
+- **Relevé en ligne** (`relever_en_ligne`) : `Demande` = `scan_library` (démarrage, F5,
+  connexion/déconnexion d'un compte) ; `Auto` = retour sur la fenêtre (`Focused(true)`,
+  si le dernier date de ≥ 2 min), page web intégrée refermée (≥ 20 s), toutes les 30 min.
+  C'est ce qui fait apparaître un jeu **acheté**. Un relevé `Auto` publie par l'événement
+  `library-updated` et laisse une ligne au journal (raison, nombre de jeux, durée).
+- 🔑 **Un seul relevé à la fois, local compris** (`RELEVE`). `Demande` attend son tour ;
+  `Auto` et la veille locale renoncent si un relevé tourne. Deux relevés en ligne
+  simultanés grillent le jeton GOG ; un relevé local qui finirait après un relevé en
+  ligne republierait les possédés d'avant.
+- 🔑 **Un compte muet ne vide pas l'écran** (`garder_les_muets`, testé) : en relevé `Auto`,
+  une plateforme qui rendait des jeux et n'en rend plus aucun (réseau coupé au réveil du
+  PC, session expirée) garde sa liste précédente. ⚠️ Jamais en `Demande` : c'est par F5 ou
+  la déconnexion qu'un compte perd ses jeux.
+- **Tailles mémorisées** (`platforms::taille_dossier`) : additionner un dossier, c'est en
+  parcourir chaque fichier — mesuré à ~0,5 s pour six jeux GOG/Riot/Ubisoft, presque tout
+  le coût de `scan_installed`. Mémoire vidée à chaque relevé en ligne (`oublier_tailles`).
+  Epic garde sa propre mémoire, par installation **et version**.
+- **Steam : installé = bit 4 de `StateFlags`** (FullyInstalled, comme Playnite). Steam écrit
+  le manifeste dès le début d'un téléchargement : sans ce test, la carte passait sur
+  « Jouer » au premier octet. Une mise à jour laisse le bit en place.
+- `publier()` rend chaque nouvelle bibliothèque à tous : cache disque, `LastScan`,
+  `procwatch::set_targets`, `libsync` — et au front si elle vient d'un relevé `Auto`.
+- Front : `useLibrary.applyUpdate` remplace la liste **sans** écran de chargement et
+  reprend de la carte d'avant tout ce que les enrichissements avaient apporté (genre,
+  description, captures, visuels de réserve, titre « App <id> » résolu…) ; IGDB ne
+  repasse que s'il y a un jeu jamais vu. `byId` retrouve aussi une carte par l'id de l'une
+  de ses copies : une carte fusionnée change d'id quand sa copie installée change, et sa
+  fiche ouverte doit rester ouverte. `fillIgdb` ne fait qu'une passe à la fois (une
+  demande pendant une passe en relance une seule à la fin).
 
 ## Service social — `server/` (côté serveur fait, client à brancher)
 

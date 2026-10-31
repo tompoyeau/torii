@@ -4,7 +4,7 @@ import { useUi } from "./composables/useUi";
 import { useLibrary } from "./composables/useLibrary";
 import { useNavigation } from "./composables/useNavigation";
 import { installerRaccourcis } from "./composables/useRaccourcis";
-import { onGameDetected, onGameExited, onGameLaunched } from "./lib/tauri";
+import { onGameDetected, onGameExited, onGameLaunched, onLibraryUpdated } from "./lib/tauri";
 import { startWishlistNotifier } from "./composables/useWishlistNotifier";
 import AppShell from "./components/AppShell.vue";
 import GameDetail from "./components/GameDetail.vue";
@@ -19,7 +19,7 @@ import SplashScreen from "./components/SplashScreen.vue";
 import DemoBanner from "./components/DemoBanner.vue";
 
 const { openGame } = useUi();
-const { notePlayed, noteDetected } = useLibrary();
+const { notePlayed, noteDetected, applyUpdate } = useLibrary();
 const { reculer, avancer } = useNavigation();
 
 // Suivi de session : à la fermeture d'un jeu, on ouvre sa fiche (la fenêtre a déjà
@@ -27,6 +27,7 @@ const { reculer, avancer } = useNavigation();
 let unlistenGameExit: (() => void) | null = null;
 let unlistenGameLaunch: (() => void) | null = null;
 let unlistenGameDetected: (() => void) | null = null;
+let unlistenLibrary: (() => void) | null = null;
 let retirerRaccourcis: (() => void) | null = null;
 
 /**
@@ -67,6 +68,8 @@ onMounted(async () => {
   // Un jeu repéré hors launcher (Genshin, Dofus, Game Pass…) entre dans la
   // bibliothèque à chaud : sans sa carte, « Récemment joué » n'aurait rien à dater.
   unlistenGameDetected = await onGameDetected((game) => noteDetected(game));
+  // Jeu installé, désinstallé ou acheté : la bibliothèque suit sans resynchronisation.
+  unlistenLibrary = await onLibraryUpdated((list) => applyUpdate(list));
   startWishlistNotifier();
 });
 onBeforeUnmount(() => {
@@ -77,6 +80,7 @@ onBeforeUnmount(() => {
   if (unlistenGameExit) unlistenGameExit();
   if (unlistenGameLaunch) unlistenGameLaunch();
   if (unlistenGameDetected) unlistenGameDetected();
+  if (unlistenLibrary) unlistenLibrary();
 });
 </script>
 
