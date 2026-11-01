@@ -5,6 +5,14 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.27.0
+- **Un accueil au premier lancement.** Un petit assistant t'aide à choisir ta langue et ta région, à connecter tes launchers et à créer ton compte Torii si tu le souhaites, puis une courte visite te montre où tout se trouve. Tout se passe d'un clic, et il se revoit dans Paramètres → Général.
+- **Torii sur ton téléphone.** Avec un compte Torii, retrouve la Boutique et ta bibliothèque depuis n'importe quel navigateur, sur app.torii-app.fr. Le site s'installe sur l'écran d'accueil, et chaque jeu y a sa fiche. Pour y voir tes jeux, active la synchronisation dans Paramètres → Réseau Torii.
+- **Ton temps de jeu sur tes autres appareils, si tu le veux.** Une nouvelle option dans Paramètres → Réseau Torii, éteinte par défaut, l'affiche sur le web avec ta dernière session. Tes amis ne les voient jamais, et la couper les efface du serveur.
+- **Tes revendeurs masqués te suivent.** Avec un compte Torii, la liste est la même sur ton PC, sur le web et sur ton téléphone.
+- **Un signal de chargement sur la fiche d'un jeu**, le temps que ses informations arrivent.
+- **Boutique** : dans une fenêtre étroite, la recherche passe sous le titre au lieu de se réduire à quelques lettres.
+
 ## 0.26.0
 - **Ta bibliothèque se met à jour toute seule.** Un jeu que tu installes, désinstalles ou finis de télécharger apparaît ou change d'état en quelques secondes, sans appuyer sur F5. Un jeu acheté arrive quand tu reviens sur Torii, quand tu refermes une page web ouverte dans Torii, ou au plus tard une demi-heure après.
 - **Un jeu Steam en cours de téléchargement n'est plus marqué installé** : son bouton reste sur « Installer » jusqu'à la fin, au lieu de proposer de jouer dès le premier octet.

@@ -5,6 +5,14 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.27.0
+- **A welcome on first launch.** A short setup helps you pick your language and region, connect your launchers and create your Torii account if you want one, then a quick tour shows you where everything is. You can skip it all in one click, and see it again in Settings → General.
+- **Torii on your phone.** With a Torii account, find the Store and your library from any browser, at app.torii-app.fr. The site installs on your home screen, and every game has its page. To see your games there, turn on sync in Settings → Torii network.
+- **Your playtime on your other devices, if you want.** A new option in Settings → Torii network, off by default, shows it on the web along with your last session. Your friends never see them, and turning it off deletes them from the server.
+- **Your hidden resellers follow you.** With a Torii account, the list is the same on your PC, on the web and on your phone.
+- **A loading indicator on a game's page**, while its information arrives.
+- **Store**: in a narrow window, the search moves below the title instead of shrinking to a few letters.
+
 ## 0.26.0
 - **Your library updates itself.** A game you install, uninstall or finish downloading shows up or changes state within seconds, without pressing F5. A game you buy arrives when you come back to Torii, when you close a web page opened in Torii, or at the latest half an hour later.
 - **A Steam game that is still downloading is no longer marked as installed**: its button stays on “Install” until the download finishes, instead of offering to play from the first byte.
