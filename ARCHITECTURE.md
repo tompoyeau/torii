@@ -1934,6 +1934,21 @@ stats et les liens (page Steam, site officiel, communauté).
   puis `http://127.0.0.1:9333/json/list` (une cible par WebView). ⚠️ Ce port donne la main
   sur les sessions connectées à tout programme du PC : ne jamais le laisser ouvert.
 
+## Boutique pour la version web (`store/`)
+
+Worker `torii-store`, qui rend à un navigateur ce que les commandes `store_*` rendent à
+l'interface de l'application : mêmes réponses, mêmes noms de champs. Détail, routes et
+protections du quota dans `store/README.md`.
+
+- 🔑 **Le Rust reste la référence** : une règle changée dans `metadata/` se reporte dans `store/src/`.
+  Les fonctions portent les mêmes noms de l'un à l'autre, et les tests reprennent les mêmes relevés.
+- Ni clé ni compte : ITAD et IGDB passent par `proxy/`, les jetons par `server/`, en service binding.
+- ⚠️ **Le quota du comparateur est partagé avec l'application** : une vingtaine d'appels en 4 s le
+  saturent pour tout le monde (mesuré le 01/11/2026). D'où le cache partagé par région et langue, la
+  pause après un refus et le plafond `RL_ITAD`.
+- Mesuré depuis Cloudflare le 01/11/2026 : Steam et Instant Gaming y répondent comme à un PC.
+  L'accueil coûte 6 à 8 ms de calcul et une fiche 4 à 9 ms, pour une lecture simplifiée.
+
 ## Prochaines étapes
 
 1. **Comparateur de prix** : wishlist (à capter) × CheapShark / IsThereAnyDeal.

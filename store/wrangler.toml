@@ -1,0 +1,50 @@
+name = "torii-store"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Un seul niveau de sous-domaine : le certificat gratuit de Cloudflare ne couvre pas plus
+# (cf. server/README.md). `custom_domain` crée aussi l'enregistrement DNS au déploiement.
+routes = [{ pattern = "torii-store.topo-host.com", custom_domain = true }]
+
+[vars]
+# Les pages autorisées à appeler ce Worker depuis un navigateur, séparées par des virgules.
+ORIGINES = "https://app.torii-app.fr"
+
+# Les clés IGDB et ITAD restent dans le proxy : ce Worker n'en détient aucune.
+[[services]]
+binding = "PROXY"
+service = "torii-igdb-proxy"
+
+# Vérifier un jeton de session, sans copier ni le poivre ni l'accès à la base.
+[[services]]
+binding = "AUTH"
+service = "torii-api"
+
+# --- Limites ------------------------------------------------------------------------
+#
+# ⚠️ wrangler 4 obligatoire : wrangler 3 ignore cette section sans rien dire. Le Worker
+# répond 500 « mal configuré » si les bindings manquent, pour que l'oubli se voie.
+#
+# `period` n'accepte que 10 ou 60 (secondes), et le compteur est tenu par centre de données :
+# ce sont des garde-fous contre l'abus, pas une comptabilité exacte.
+
+# Toutes les requêtes, avant même de lire le jeton.
+[[ratelimits]]
+name = "RL_IP"
+namespace_id = "3001"
+simple = { limit = 300, period = 60 }
+
+# Par compte connecté. Une visite normale reste loin en dessous : le front garde chaque
+# rayon 30 min en mémoire, et les rayons ne se chargent qu'en arrivant à l'écran.
+[[ratelimits]]
+name = "RL_COMPTE"
+namespace_id = "3002"
+simple = { limit = 120, period = 60 }
+
+# 🔑 Une seule clé, pour le service entier : c'est le plafond de ce que ce Worker envoie au
+# comparateur. Mesuré le 01/11/2026 : une vingtaine d'appels en 4 s le saturent pour TOUS
+# les utilisateurs de Torii, appli PC comprise, puisque la clé ITAD est la même.
+[[ratelimits]]
+name = "RL_ITAD"
+namespace_id = "3003"
+simple = { limit = 10, period = 10 }
