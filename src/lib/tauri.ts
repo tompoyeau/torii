@@ -1,5 +1,7 @@
 import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, OwnedGameSheet, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreBrowse, StoreBrowseSort, StoreShelfItem, StoreShelfKind, StoreSuggestion, StoreTag, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 import { avatarFictif } from "./covers";
+import { MODE_WEB } from "./mode";
+import { commandeConnue, commandeWeb } from "./web";
 import { t } from "../i18n";
 
 /** Champs saisis par l'utilisateur pour ajouter un jeu à la main. */
@@ -47,6 +49,17 @@ async function loadInvoke(): Promise<Invoke | null> {
   return cachedInvoke ?? null;
 }
 
+/**
+ * La démo du site : un navigateur nu, sans compte, sur des données inventées.
+ *
+ * 🔑 Ni l'application, ni la version web (`lib/mode.ts`). Tout ce qui retombe sur des données
+ * fictives passe par ce test : la version web n'a pas de pont natif non plus, mais elle
+ * montre de vraies données, et une panne ne doit jamais y afficher celles de la démo.
+ */
+export function modeDemo(): boolean {
+  return !hasTauriRuntime() && !MODE_WEB;
+}
+
 /** `true` dans l'application Tauri, `false` dans un navigateur nu (preview). */
 export async function inTauri(): Promise<boolean> {
   return (await loadInvoke()) !== null;
@@ -54,6 +67,15 @@ export async function inTauri(): Promise<boolean> {
 
 /** Appelle une commande Rust ; renvoie `fallback` si elle est indisponible ou échoue. */
 async function call<T>(cmd: string, args: Args | undefined, fallback: T): Promise<T> {
+  if (MODE_WEB) {
+    if (!commandeConnue(cmd)) return fallback;
+    try {
+      return await commandeWeb<T>(cmd, args);
+    } catch (err) {
+      console.error(`[torii] échec de ${cmd}`, err);
+      return fallback;
+    }
+  }
   const invoke = await loadInvoke();
   if (!invoke) {
     console.info(`[torii] ${cmd} indisponible hors Tauri`);
@@ -69,6 +91,7 @@ async function call<T>(cmd: string, args: Args | undefined, fallback: T): Promis
 
 /** Appelle une commande Rust en laissant remonter l'erreur (l'appelant la traite). */
 async function callOrThrow<T>(cmd: string, args?: Args): Promise<T> {
+  if (MODE_WEB) return await commandeWeb<T>(cmd, args);
   const invoke = await loadInvoke();
   if (!invoke) throw new Error(t("systeme.commandeHorsApplication", { commande: cmd }));
   return await invoke<T>(cmd, args);
@@ -380,6 +403,7 @@ export async function refreshGameInfo(game: Game): Promise<GameRefresh | null> {
 // pour être montré tel quel à l'utilisateur. Les avaler laisserait un formulaire muet.
 
 async function social<T>(cmd: string, args?: Args): Promise<T> {
+  if (MODE_WEB) return await commandeWeb<T>(cmd, args);
   const invoke = await loadInvoke();
   if (!invoke) throw new Error(t("systeme.socialHorsApplication"));
   return await invoke<T>(cmd, args);
@@ -856,7 +880,7 @@ export async function friendsCommon(force = false): Promise<FriendsCommon | null
  * d'échec ; hors Tauri (preview), profil fictif pour la maquette.
  */
 export async function steamMe(): Promise<SteamProfile | null> {
-  if (!(await inTauri())) return MOCK_PROFILE;
+  if (modeDemo()) return MOCK_PROFILE;
   return await call<SteamProfile | null>("steam_me", undefined, null);
 }
 
@@ -865,7 +889,7 @@ export async function steamMe(): Promise<SteamProfile | null> {
  * Steam n'est pas connecté. Hors Tauri (preview) : jeu de succès fictif pour la maquette.
  */
 export async function steamAchievements(appid: string): Promise<SteamAchievements | null> {
-  if (!(await inTauri())) return mockAchievements();
+  if (modeDemo()) return mockAchievements();
   return await call<SteamAchievements | null>("steam_achievements", { appid: Number(appid) }, null);
 }
 
@@ -887,7 +911,7 @@ export async function ownedGameSheet(game: Game, steamAppid: string | null): Pro
  * `null` si indisponible ; valeur fictive hors Tauri (preview).
  */
 export async function steamCurrentPlayers(appid: string): Promise<number | null> {
-  if (!(await inTauri())) return 40356; // mock preview
+  if (modeDemo()) return 40356; // mock preview
   return await call<number | null>("steam_current_players", { appid: Number(appid) }, null);
 }
 

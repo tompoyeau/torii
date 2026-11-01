@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { getSettings, hasTauriRuntime, wishlistAll } from "../lib/tauri";
+import { getSettings, modeDemo, wishlistAll } from "../lib/tauri";
 import type { WishlistItem } from "../types";
 
 // État partagé (singleton).
@@ -22,7 +22,7 @@ async function refresh() {
   indisponible.value = false;
   if (list) {
     items.value = list;
-  } else if (!hasTauriRuntime()) {
+  } else if (modeDemo()) {
     // Hors Tauri (preview) : données fictives pour la maquette.
     items.value = MOCK;
     steamConnected.value = true;

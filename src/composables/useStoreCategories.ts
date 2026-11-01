@@ -2,7 +2,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { parcoursDeDemo, tagsDeDemo } from "../data/storeMock";
 import { langueCourante } from "../i18n";
 import { regionCourante } from "../i18n/regions";
-import { hasTauriRuntime, storeBrowse, storeTags } from "../lib/tauri";
+import { modeDemo, storeBrowse, storeTags } from "../lib/tauri";
 import type { StoreBrowseSort, StoreShelfItem, StoreTag } from "../types";
 import { useStore } from "./useStore";
 import { useUi } from "./useUi";
@@ -55,7 +55,7 @@ const cle = () => `${contexte()}|${tri.value}|${[...choisis.value].sort((a, b) =
 async function chargerTags() {
   if (tagsCle === langueCourante.value && tags.value.length) return;
   const langue = langueCourante.value;
-  const liste = hasTauriRuntime() ? await storeTags() : tagsDeDemo();
+  const liste = modeDemo() ? tagsDeDemo() : await storeTags();
   if (!liste?.length || langue !== langueCourante.value) return;
   tags.value = liste;
   tagsCle = langue;
@@ -79,9 +79,9 @@ async function charger() {
     return;
   }
   etat.value = "chargement";
-  const res = hasTauriRuntime()
-    ? await storeBrowse(choisis.value, tri.value, 0)
-    : parcoursDeDemo(choisis.value, tri.value, 0);
+  const res = modeDemo()
+    ? parcoursDeDemo(choisis.value, tri.value, 0)
+    : await storeBrowse(choisis.value, tri.value, 0);
   if (ma !== jeton) return;
   if (!res) {
     etat.value = "echec";
@@ -99,9 +99,9 @@ async function chargerPlus() {
   if (!connu || chargementSuite.value || jeux.value.length >= total.value) return;
   const ma = jeton;
   chargementSuite.value = true;
-  const res = hasTauriRuntime()
-    ? await storeBrowse(choisis.value, tri.value, connu.pages)
-    : parcoursDeDemo(choisis.value, tri.value, connu.pages);
+  const res = modeDemo()
+    ? parcoursDeDemo(choisis.value, tri.value, connu.pages)
+    : await storeBrowse(choisis.value, tri.value, connu.pages);
   chargementSuite.value = false;
   if (ma !== jeton || !res) return;
   // Steam peut décaler son classement entre deux pages : pas de doublon à l'écran.

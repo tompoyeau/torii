@@ -2,7 +2,7 @@ import { reactive, ref } from "vue";
 import { accueilDeDemo, rayonDeDemo } from "../data/storeMock";
 import { langueCourante } from "../i18n";
 import { regionCourante } from "../i18n/regions";
-import { hasTauriRuntime, storeHome, storeShelf } from "../lib/tauri";
+import { modeDemo, storeHome, storeShelf } from "../lib/tauri";
 import type { StoreHome, StoreShelfItem, StoreShelfKind } from "../types";
 
 /**
@@ -43,9 +43,9 @@ async function chargerAccueil(force = false) {
   const frais = homeCle === cle && Date.now() - homeAt < DUREE && homeEtat.value === "pret";
   if ((frais && !force) || homeEtat.value === "chargement") return;
   homeEtat.value = "chargement";
-  // Hors Tauri (démo web) : relevé réel figé. Dans l'application, une panne s'affiche
-  // comme telle — jamais de données de démo à la place de vrais prix.
-  const res = hasTauriRuntime() ? await storeHome() : accueilDeDemo();
+  // Démo du site : relevé réel figé. Partout ailleurs, une panne s'affiche comme telle —
+  // jamais de données de démo à la place de vrais prix.
+  const res = modeDemo() ? accueilDeDemo() : await storeHome();
   if (contexte() !== cle) return; // la région a changé pendant l'appel
   if (res) {
     home.value = res;
@@ -64,7 +64,7 @@ async function chargerRayon(kind: StoreShelfKind, tag?: number, force = false) {
   if (actuel?.etat === "chargement") return;
   if (!force && actuel?.etat === "pret" && Date.now() - actuel.at < DUREE) return;
   rayons[cle] = { items: actuel?.items ?? [], etat: "chargement", at: actuel?.at ?? 0 };
-  const res = hasTauriRuntime() ? await storeShelf(kind, tag) : rayonDeDemo(kind, tag);
+  const res = modeDemo() ? rayonDeDemo(kind, tag) : await storeShelf(kind, tag);
   rayons[cle] = res
     ? { items: res, etat: "pret", at: Date.now() }
     : { items: actuel?.items ?? [], etat: "echec", at: actuel?.at ?? 0 };

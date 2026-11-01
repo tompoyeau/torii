@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { getSettings, steamFriends } from "../lib/tauri";
+import { getSettings, modeDemo, steamFriends } from "../lib/tauri";
 import { avatarFictif } from "../lib/covers";
 import type { Friend } from "../types";
 
@@ -18,9 +18,9 @@ async function refresh() {
   const [list, settings] = await Promise.all([steamFriends(), getSettings()]);
   if (token !== reqToken) return; // un rafraîchissement plus récent a pris le relais
   if (settings) steamConnected.value = settings.steamConnected;
-  // Hors Tauri (preview) : données fictives pour la maquette.
-  friends.value = list ?? MOCK_FRIENDS;
-  if (!list) steamConnected.value = true;
+  // Démo du site : données fictives pour la maquette.
+  friends.value = list ?? (modeDemo() ? MOCK_FRIENDS : []);
+  if (!list && modeDemo()) steamConnected.value = true;
   loaded.value = true;
   loading.value = false;
 }

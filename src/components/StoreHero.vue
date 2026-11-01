@@ -6,6 +6,7 @@ import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { libelleAvis, pageSteam, tonAvis } from "../lib/boutique";
 import { formatPrix } from "../lib/format";
 import { useImageCascade } from "../lib/images";
+import { MODE_WEB } from "../lib/mode";
 import { t } from "../i18n";
 import type { StoreShelfItem } from "../types";
 import { ouvrirPage } from "../composables/usePageWeb";
@@ -134,7 +135,7 @@ function quitterFocus(e: FocusEvent) {
           {{ jeu.gameId ? t("boutique.accueil.vedette.comparer") : t("boutique.accueil.vedette.voirSteam") }}
         </button>
         <button
-          v-if="jeu.gameId"
+          v-if="jeu.gameId && !MODE_WEB"
           class="btn-ghost"
           :aria-pressed="isWishlisted(jeu.gameId)"
           @click="toggle({ gameId: jeu.gameId, title: jeu.title, coverUrl: jeu.capsuleUrl })"

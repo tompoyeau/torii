@@ -8,6 +8,7 @@ import { useQuandVisible } from "../composables/useQuandVisible";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
+import { MODE_WEB } from "../lib/mode";
 import { etiquetteIntl, t, type Cle } from "../i18n";
 import type { StoreBrowseSort, StoreItem, StoreSuggestion } from "../types";
 import MenuCategories, { type OptionCategorie } from "./MenuCategories.vue";
@@ -310,7 +311,7 @@ function onCoverError(url: string | null) {
           </button>
         </nav>
 
-        <StoreWishlistDeals />
+        <StoreWishlistDeals v-if="!MODE_WEB" />
 
         <StoreHero v-if="vedette.length" :jeux="vedette" />
         <div v-else-if="homeEtat === 'chargement' || homeEtat === 'vide'" class="vedette-fantome" aria-hidden="true">

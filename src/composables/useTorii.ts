@@ -10,6 +10,7 @@ import {
   toriiSuggestions, toriiVerify,
   toriiDevices, toriiRevokeDevice, toriiRevokeOtherDevices,
 } from "../lib/tauri";
+import { MODE_WEB } from "../lib/mode";
 import type { ToriiPerson } from "../types";
 import type { LibraryIndex, PresenceMode, SocialPrefs, ToriiAccount, ToriiCircle, ToriiDevice } from "../types";
 
@@ -180,6 +181,8 @@ async function marquerSteamRapproche() {
 async function logout() {
   await toriiLogout();
   await oublierLeCompte();
+  // Sur le web, rien de ce compte ne doit rester en mémoire : la bibliothèque, les fiches…
+  if (MODE_WEB) window.location.reload();
 }
 
 /**

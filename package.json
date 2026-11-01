@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite --mode web --port 1430",
     "build": "vue-tsc --noEmit && vite build",
+    "build:web": "vue-tsc --noEmit && vite build --mode web --outDir dist-web --emptyOutDir",
     "preview": "vite preview",
     "tauri": "tauri",
     "build:demo": "vite build --base=./ --outDir site/demo --emptyOutDir",

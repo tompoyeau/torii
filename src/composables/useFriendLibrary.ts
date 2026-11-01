@@ -1,6 +1,7 @@
 import { t } from "../i18n";
 import { computed, ref } from "vue";
-import { hasTauriRuntime, libraryOf } from "../lib/tauri";
+import { fusionnerAppareils } from "../lib/libraries";
+import { libraryOf, modeDemo } from "../lib/tauri";
 import { useLibrary } from "./useLibrary";
 import { useTorii } from "./useTorii";
 import type { Game, LibGame, LibraryEntry } from "../types";
@@ -42,27 +43,6 @@ const loadedId = ref<string | null>(null);
  */
 function gameKeyOf(title: string): string {
   return `title:${title.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")}`;
-}
-
-/** Fusionne les appareils d'une personne : un jeu présent sur deux PC ne compte qu'une fois. */
-function merge(snapshots: LibGame[][]): LibGame[] {
-  const parCle = new Map<string, LibGame>();
-  for (const liste of snapshots) {
-    for (const jeu of liste) {
-      const deja = parCle.get(jeu.key);
-      if (!deja) {
-        parCle.set(jeu.key, { ...jeu, platforms: [...jeu.platforms] });
-        continue;
-      }
-      // Le même jeu sur deux machines : on cumule les launchers, et on récupère la
-      // jaquette si l'un des deux appareils l'avait et pas l'autre.
-      for (const p of jeu.platforms) if (!deja.platforms.includes(p)) deja.platforms.push(p);
-      if (!deja.cover && jeu.cover) deja.cover = jeu.cover;
-      // Même règle que côté Rust : une seule copie possédée suffit à faire du jeu le sien.
-      deja.familyShared = !!deja.familyShared && !!jeu.familyShared;
-    }
-  }
-  return [...parCle.values()].sort((a, b) => a.title.localeCompare(b.title, "fr"));
 }
 
 /** Maquette pour le navigateur seul (hors Tauri), comme le fait `useFriendsCommon`. */
@@ -120,7 +100,7 @@ export function useFriendLibrary() {
       à la vue « bibliothèque d'un ami » qu'au chargement groupé d'« En commun ». */
   async function fetchInto(accountId: string, force = false) {
     if (!force && libraries.value[accountId]) return;
-    if (!hasTauriRuntime()) {
+    if (modeDemo()) {
       libraries.value = { ...libraries.value, [accountId]: MOCK };
       return;
     }
@@ -137,7 +117,7 @@ export function useFriendLibrary() {
           .catch(() => [] as LibGame[]),
       ),
     );
-    libraries.value = { ...libraries.value, [accountId]: merge(snapshots) };
+    libraries.value = { ...libraries.value, [accountId]: fusionnerAppareils(snapshots) };
   }
 
   /** Comptes dont on peut lire la bibliothèque (ceux qui partagent). */

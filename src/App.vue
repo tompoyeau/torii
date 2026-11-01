@@ -6,7 +6,10 @@ import { useNavigation } from "./composables/useNavigation";
 import { installerRaccourcis } from "./composables/useRaccourcis";
 import { onGameDetected, onGameExited, onGameLaunched, onLibraryUpdated } from "./lib/tauri";
 import { startWishlistNotifier } from "./composables/useWishlistNotifier";
+import { useTorii } from "./composables/useTorii";
+import { MODE_WEB } from "./lib/mode";
 import AppShell from "./components/AppShell.vue";
+import EcranConnexion from "./components/EcranConnexion.vue";
 import GameDetail from "./components/GameDetail.vue";
 import StoreGameDetail from "./components/StoreGameDetail.vue";
 import SettingsView from "./components/SettingsView.vue";
@@ -21,6 +24,13 @@ import DemoBanner from "./components/DemoBanner.vue";
 const { openGame } = useUi();
 const { notePlayed, noteDetected, applyUpdate } = useLibrary();
 const { reculer, avancer } = useNavigation();
+
+/**
+ * Sur le web, tout est derrière la connexion : le quota du comparateur est partagé avec
+ * l'application. `booted` : la session a été vérifiée. Sans cette attente, un visiteur déjà
+ * connecté verrait passer l'écran de connexion à chaque ouverture.
+ */
+const { connected, booted: compteVerifie } = useTorii();
 
 // Suivi de session : à la fermeture d'un jeu, on ouvre sa fiche (la fenêtre a déjà
 // été restaurée au premier plan côté Rust).
@@ -39,6 +49,7 @@ let retirerRaccourcis: (() => void) | null = null;
  * le monde attend sur un champ texte, et qu'aucun menu maison ne remplace ici.
  */
 function onContextMenu(e: MouseEvent) {
+  if (MODE_WEB) return; // Dans un navigateur, c'est le menu qu'on attend.
   const cible = e.target as HTMLElement | null;
   if (cible?.closest("input, textarea, [contenteditable='true']")) return;
   e.preventDefault();
@@ -70,7 +81,7 @@ onMounted(async () => {
   unlistenGameDetected = await onGameDetected((game) => noteDetected(game));
   // Jeu installé, désinstallé ou acheté : la bibliothèque suit sans resynchronisation.
   unlistenLibrary = await onLibraryUpdated((list) => applyUpdate(list));
-  startWishlistNotifier();
+  if (!MODE_WEB) startWishlistNotifier();
 });
 onBeforeUnmount(() => {
   window.removeEventListener("mousedown", onMouseDown);
@@ -86,16 +97,19 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app">
-    <AppShell />
-    <GameDetail />
-    <StoreGameDetail />
-    <SettingsView />
-    <ContextMenu />
-    <AddGameModal />
+    <template v-if="!MODE_WEB || connected">
+      <AppShell />
+      <GameDetail />
+      <StoreGameDetail />
+      <SettingsView />
+      <ContextMenu />
+      <AddGameModal />
+      <UpdateBanner />
+    </template>
+    <EcranConnexion v-else-if="compteVerifie" />
     <ToriiSignInDialog />
-    <UpdateBanner />
     <Toast />
-    <SplashScreen />
+    <SplashScreen v-if="!MODE_WEB || connected || !compteVerifie" />
     <DemoBanner />
   </div>
 </template>

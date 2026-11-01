@@ -15,6 +15,7 @@ import { ouvrirPage } from "../composables/usePageWeb";
 import { installSource } from "../lib/tauri";
 import { activation, dateLongue, descripteur, libelleAvis, libelleFin, pageSteam, tonAvis } from "../lib/boutique";
 import { formatPrix } from "../lib/format";
+import { MODE_WEB } from "../lib/mode";
 import { t } from "../i18n";
 import { deviseAttendue, instantGamingPertinent } from "../i18n/regions";
 import type { StorePrice, StoreReview } from "../types";
@@ -146,15 +147,22 @@ const demoBiblio = computed(() => (demo.value ? byId(`steam:${demo.value}`) : nu
 /** Démo dont on vient de demander le téléchargement : on dit que Steam a pris le relais. */
 const demoDemandee = ref<number | null>(null);
 const libelleDemo = computed(() =>
-  demoBiblio.value?.installed
-    ? t("boutique.produit.demo.jouer")
-    : demoBiblio.value
-      ? t("boutique.produit.demo.installer")
-      : t("boutique.produit.demo.telecharger"),
+  MODE_WEB
+    ? t("boutique.produit.voirSur", { source: "Steam" })
+    : demoBiblio.value?.installed
+      ? t("boutique.produit.demo.jouer")
+      : demoBiblio.value
+        ? t("boutique.produit.demo.installer")
+        : t("boutique.produit.demo.telecharger"),
 );
 function actionDemo() {
   const id = demo.value;
   if (!id) return;
+  // Sur le web, rien à installer d'ici : la page de la démo, où Steam proposera le téléchargement.
+  if (MODE_WEB) {
+    ouvrirPage(pageSteam(id));
+    return;
+  }
   if (demoBiblio.value) {
     launchOrInstall(demoBiblio.value);
     return;
@@ -253,7 +261,7 @@ const detailOffre = (p: StorePrice) =>
             </span>
             <template v-if="possede">
               <StorePossede :etat="possede" />
-              <button class="badge-note lien" @click="voirBibliotheque">{{ t("boutique.produit.voirBibliotheque") }} →</button>
+              <button v-if="!MODE_WEB" class="badge-note lien" @click="voirBibliotheque">{{ t("boutique.produit.voirBibliotheque") }} →</button>
             </template>
             <!-- Sans offre, pas de bouton « Acheter » à côté duquel partager : le jeu reste
                  partageable d'ici. -->
@@ -349,7 +357,7 @@ const detailOffre = (p: StorePrice) =>
               </button>
             </div>
             <button
-              v-if="product"
+              v-if="product && !MODE_WEB"
               class="wish"
               :class="{ on: isWishlisted(product.gameId) }"
               @click="toggleWishlist({ gameId: product.gameId, title: product.title, coverUrl: product.coverUrl })"

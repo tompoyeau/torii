@@ -7,6 +7,7 @@ import { useContextMenu } from "../composables/useContextMenu";
 import PlatformIcon from "./PlatformIcon.vue";
 import { t } from "../i18n";
 import { useImageCascade } from "../lib/images";
+import { MODE_WEB } from "../lib/mode";
 
 const props = withDefaults(
   defineProps<{
@@ -61,7 +62,9 @@ function toggleFavorite() {
     @click="$emit('open')"
     @contextmenu="actions && openContext($event, game)"
   >
-    <div class="cover" :class="{ uninstalled: !game.installed }" :style="{ background: game.cover }">
+    <!-- Sur le web, le serveur ne sait pas ce qui est installé où : rien n'est grisé, et il n'y a
+         rien à lancer depuis la carte. -->
+    <div class="cover" :class="{ uninstalled: !game.installed && !MODE_WEB }" :style="{ background: game.cover }">
       <img
         v-if="coverSrc"
         :key="coverSrc"
@@ -106,7 +109,7 @@ function toggleFavorite() {
         {{ familyCopies }}
       </span>
       <span class="cover-title">{{ game.title }}</span>
-      <span class="cover-hover">
+      <span v-if="!MODE_WEB" class="cover-hover">
         <span class="cover-play">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
         </span>
@@ -119,10 +122,12 @@ function toggleFavorite() {
           ? game.sources.map((s) => platformName(s.platform)).join(" · ")
           : platformName(game.platform) }}</span>
         <template v-if="game.hoursPlayed != null"><span>·</span><span>{{ t("bibliotheque.heures", { n: game.hoursPlayed }) }}</span></template>
-        <span>·</span>
-        <span :class="game.installed ? 'installed' : 'not-installed'">
-          {{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}
-        </span>
+        <template v-if="!MODE_WEB">
+          <span>·</span>
+          <span :class="game.installed ? 'installed' : 'not-installed'">
+            {{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}
+          </span>
+        </template>
       </span>
     </div>
   </button>

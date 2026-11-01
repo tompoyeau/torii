@@ -2,7 +2,7 @@ import type { Game, GameDto, GameSource, PlatformId } from "../types";
 import { gradientFor, relativeTime } from "../lib/covers";
 import { t } from "../i18n";
 import type demoFr from "../i18n/fr/demo";
-import { cachedLibrary, displayableCover, scanLibrary } from "../lib/tauri";
+import { cachedLibrary, displayableCover, modeDemo, scanLibrary } from "../lib/tauri";
 
 /** Clé de rapprochement d'un titre : minuscules, alphanumérique seul (retire
  * ™®, ponctuation, espaces). Strict → évite les fusions abusives. */
@@ -179,11 +179,15 @@ export function fromDto(dto: GameDto): Game {
 /**
  * Source unique des jeux.
  * - Sous Tauri : commande Rust `scan_library` (Steam / Epic / GOG / manuel).
- * - Hors Tauri (navigateur, `npm run dev`) : données fictives.
+ * - Version web : les bibliothèques déposées par les appareils du compte (`lib/web.ts`).
+ * - Démo (navigateur, `npm run dev`) : données fictives.
+ *
+ * `null` : le relevé a échoué. 🔑 Une panne n'est jamais remplacée par les jeux de la démo.
  */
-export async function fetchGames(): Promise<Game[]> {
+export async function fetchGames(): Promise<Game[] | null> {
   const dtos = await scanLibrary();
-  return dtos ? dtos.map(fromDto) : mockGames();
+  if (dtos) return dtos.map(fromDto);
+  return modeDemo() ? mockGames() : null;
 }
 
 /**

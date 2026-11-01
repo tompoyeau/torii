@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { hasTauriRuntime } from "../lib/tauri";
+import { modeDemo } from "../lib/tauri";
 import { t } from "../i18n";
 
 /**
@@ -13,13 +13,12 @@ import { t } from "../i18n";
  * bandeau, un visiteur clique « Jouer », rien ne se passe, et il en conclut que
  * l'application est cassée. Le dire franchement coûte une ligne.
  *
- * 🔑 Le test est `hasTauriRuntime()`, pas une variable d'environnement de compilation :
- * la démo est le MÊME build que la préversion de développement (`npm run dev`), donc
- * aucun drapeau ne les distingue. Ce qui les distingue, c'est la présence du pont natif.
- * Corollaire utile : le bandeau ne peut pas apparaître par erreur dans l'application
- * installée, puisque le pont y est toujours là.
+ * 🔑 Le test est `modeDemo()` : la démo est le MÊME build que la préversion de développement
+ * (`npm run dev`), donc aucun drapeau ne les distingue d'elles-mêmes. Ce qui les sépare de
+ * l'application, c'est la présence du pont natif, et de la version web, sa compilation.
+ * Corollaire utile : le bandeau ne peut pas apparaître par erreur dans l'une ni dans l'autre.
  */
-const visible = ref(!hasTauriRuntime());
+const visible = ref(modeDemo());
 </script>
 
 <template>

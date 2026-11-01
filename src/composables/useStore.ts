@@ -4,7 +4,7 @@ import { ref } from "vue";
 import {
   clearExcludedStores as clearExcludedStoresBackend,
   getExcludedStores,
-  hasTauriRuntime,
+  modeDemo,
   setStoreExcluded,
   storeDeals,
   storeGame,
@@ -48,7 +48,7 @@ const indisponible = ref(false);
  * affichait, le comparateur saturé, la fiche de Baldur's Gate 3 (premier jeu de la démo)
  * à la place de n'importe quel jeu cliqué.
  */
-const demo = () => !hasTauriRuntime();
+const demo = modeDemo;
 
 /** Suggestions d'autocomplétion de la barre de recherche. */
 const suggestions = ref<StoreSuggestion[]>([]);

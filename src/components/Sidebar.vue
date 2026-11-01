@@ -9,6 +9,7 @@ import type { LibraryFilter, PlatformId, Settings } from "../types";
 import PlatformIcon from "./PlatformIcon.vue";
 import { t } from "../i18n";
 import { platformName } from "../data/platforms";
+import { MODE_WEB } from "../lib/mode";
 
 const { games } = useLibrary();
 const ui = useUi();
@@ -90,7 +91,7 @@ const platforms = computed<{ id: LibraryFilter; icon: PlatformId; label: string 
   { id: "ea", icon: "ea", label: platformName("ea") },
   { id: "battlenet", icon: "battlenet", label: platformName("battlenet") },
   { id: "horsLauncher", icon: "manual", label: platformName("manual") },
-]);
+].filter((p) => !MODE_WEB || count(p.id as LibraryFilter).value > 0) as { id: LibraryFilter; icon: PlatformId; label: string }[]);
 
 </script>
 
@@ -128,15 +129,15 @@ const platforms = computed<{ id: LibraryFilter; icon: PlatformId; label: string 
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="9" r="3" /><circle cx="17" cy="15" r="3" /><path d="M3 20a6 6 0 0 1 12 0M13 20a5 5 0 0 1 8 0" /></svg></span>
         {{ t("bibliotheque.laterale.famille") }} <span class="count">{{ count("family").value }}</span>
       </button>
-      <button class="nav-item" :class="{ active: section === 'common' }" @click="showCommon()">
+      <button v-if="!MODE_WEB" class="nav-item" :class="{ active: section === 'common' }" @click="showCommon()">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="8.5" cy="12" r="5.2" /><circle cx="15.5" cy="12" r="5.2" /></svg></span>
         {{ t("bibliotheque.laterale.enCommun") }}
       </button>
-      <button class="nav-item" :class="{ active: section === 'library' && filter ==='favorite' }" @click="setFilter('favorite')">
+      <button v-if="!MODE_WEB" class="nav-item" :class="{ active: section === 'library' && filter ==='favorite' }" @click="setFilter('favorite')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg></span>
         {{ t("bibliotheque.laterale.favoris") }} <span class="count">{{ count("favorite").value }}</span>
       </button>
-      <button class="nav-item" :class="{ active: section === 'library' && filter ==='installed' }" @click="setFilter('installed')">
+      <button v-if="!MODE_WEB" class="nav-item" :class="{ active: section === 'library' && filter ==='installed' }" @click="setFilter('installed')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v11m0 0l-4-4m4 4l4-4" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" /></svg></span>
         {{ t("bibliotheque.laterale.installes") }} <span class="count">{{ count("installed").value }}</span>
       </button>
@@ -148,13 +149,13 @@ const platforms = computed<{ id: LibraryFilter; icon: PlatformId; label: string 
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /><path d="M6 14.4V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5.6" /></svg></span>
         {{ t("bibliotheque.laterale.boutique") }}
       </button>
-      <button class="nav-item" :class="{ active: section === 'wishlist' }" @click="showWishlist()">
+      <button v-if="!MODE_WEB" class="nav-item" :class="{ active: section === 'wishlist' }" @click="showWishlist()">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg></span>
         {{ t("bibliotheque.laterale.wishlist") }}
       </button>
     </nav>
 
-    <nav class="nav-group">
+    <nav v-if="platforms.length" class="nav-group">
       <div class="nav-label">{{ t("bibliotheque.laterale.plateformes") }}</div>
       <button v-for="p in platforms" :key="p.id" class="nav-item plat"
               :class="{ active: section === 'library' && filter ===p.id }" @click="setFilter(p.id)">
@@ -163,7 +164,7 @@ const platforms = computed<{ id: LibraryFilter; icon: PlatformId; label: string 
       </button>
     </nav>
 
-    <button class="add-launcher" :class="{ manage: allConnected }" @click="openSettings('accounts')">
+    <button v-if="!MODE_WEB" class="add-launcher" :class="{ manage: allConnected }" @click="openSettings('accounts')">
       <svg v-if="allConnected" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="9" cy="6" r="2" fill="var(--surface)" /><circle cx="15" cy="12" r="2" fill="var(--surface)" /><circle cx="8" cy="18" r="2" fill="var(--surface)" /></svg>
       <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M12 9v6M9 12h6" /></svg>
       <span>{{ launcherLabel }}</span>

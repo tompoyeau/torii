@@ -4,7 +4,7 @@ import { useLibrary } from "../composables/useLibrary";
 import { usePreferences } from "../composables/usePreferences";
 import { useStore } from "../composables/useStore";
 import { useTheme } from "../composables/useTheme";
-import { useUi } from "../composables/useUi";
+import { useUi, type SettingsCategory } from "../composables/useUi";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { useNavigation } from "../composables/useNavigation";
@@ -21,6 +21,7 @@ import ToriiPanel from "./ToriiPanel.vue";
 import { useTorii } from "../composables/useTorii";
 import { useFriends } from "../composables/useFriends";
 import { showToast } from "../composables/useToast";
+import { MODE_WEB } from "../lib/mode";
 
 const { games, setHidden } = useLibrary();
 const { prefs } = usePreferences();
@@ -266,7 +267,11 @@ const CATEGORIES = computed(() => [
   { key: "stores", label: t("reglages.categories.revendeurs"), group: t("reglages.groupes.bibliotheque") },
   { key: "accounts", label: t("reglages.categories.comptes"), group: t("reglages.groupes.comptes") },
   { key: "torii", label: t("reglages.categories.torii"), group: t("reglages.groupes.comptes") },
-] as const);
+].filter((c) => !MODE_WEB || c.key === "general" || c.key === "stores" || c.key === "torii") as {
+  key: SettingsCategory;
+  label: string;
+  group: string;
+}[]);
 
 // --- Choix pour les préférences (segmented) --------------------------------
 const START_FILTERS = computed(() => [
@@ -513,7 +518,7 @@ function unhide(id: string) {
               </div>
               <div class="segmented">
                 <button class="seg" :class="{ on: langueChoisie === 'system' }" @click="choisirLangue('system')">
-                  {{ t("reglages.langue.systeme") }}
+                  {{ MODE_WEB ? t("web.reglages.langueNavigateur") : t("reglages.langue.systeme") }}
                 </button>
                 <!--
                   ⚠️ Le nom de chaque langue est écrit DANS cette langue (« English »,
@@ -554,13 +559,14 @@ function unhide(id: string) {
                   :aria-label="t('reglages.region.titre')"
                   @change="choisirRegion(($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="system">{{ t("reglages.region.systeme", { pays: nomDeRegion(regionDuSysteme()) }) }}</option>
+                  <option value="system">{{ t(MODE_WEB ? "web.reglages.regionNavigateur" : "reglages.region.systeme", { pays: nomDeRegion(regionDuSysteme()) }) }}</option>
                   <option v-for="r in regionsTriees" :key="r.code" :value="r.code">{{ nomDeRegion(r.code) }}</option>
                 </select>
                 <span class="region-devise">{{ t("reglages.region.devise", { devise: deviseAttendue }) }}</span>
               </div>
             </div>
 
+            <template v-if="!MODE_WEB">
             <div class="divider" />
 
             <button
@@ -611,6 +617,7 @@ function unhide(id: string) {
               </div>
               <span class="switch" :class="{ on: prefs.returnOnGameExit }"><span class="knob" /></span>
             </button>
+            </template>
 
             <div class="divider" />
 
@@ -633,6 +640,7 @@ function unhide(id: string) {
               </div>
             </div>
 
+            <template v-if="!MODE_WEB">
             <div class="divider" />
 
             <div class="pref wrap">
@@ -653,6 +661,7 @@ function unhide(id: string) {
                 </div>
               </div>
             </div>
+            </template>
 
             <div class="divider" />
 
@@ -681,9 +690,10 @@ function unhide(id: string) {
               <span class="switch" :class="{ on: prefs.reduceMotion }"><span class="knob" /></span>
             </button>
 
-            <div class="divider" />
+            <div v-if="!MODE_WEB" class="divider" />
 
             <button
+              v-if="!MODE_WEB"
               class="pref toggle-row"
               role="switch"
               :aria-checked="prefs.wishlistNotifications"
@@ -796,6 +806,7 @@ function unhide(id: string) {
           <template v-else-if="settingsCategory === 'stores'">
             <h2 class="pane-title">{{ t("reglages.categories.revendeurs") }}</h2>
             <p class="pane-hint">{{ t("reglages.revendeurs.sous") }}</p>
+            <p v-if="MODE_WEB" class="pane-hint">{{ t("web.reglages.revendeursLocaux") }}</p>
             <div v-if="excludedStores.length" class="items">
               <div v-for="name in excludedStores" :key="name" class="item">
                 <div class="thumb store"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /></svg></div>
@@ -810,7 +821,7 @@ function unhide(id: string) {
           <!-- Réseau Torii -->
           <template v-else-if="settingsCategory === 'torii'">
             <h2 class="pane-title">{{ t("reglages.categories.torii") }}</h2>
-            <p class="pane-hint">{{ t("reglages.torii.intro") }}</p>
+            <p v-if="!MODE_WEB" class="pane-hint">{{ t("reglages.torii.intro") }}</p>
 
             <ToriiPanel />
 
@@ -828,6 +839,9 @@ function unhide(id: string) {
                 </div>
               </div>
 
+              <!-- Sur le web : le pseudo, les appareils et la déconnexion. Le reste (présence, amis,
+                   synchronisation, jeux en silence) se règle sur le PC, où cela a un effet. -->
+              <template v-if="!MODE_WEB">
               <div class="divider" />
 
               <div class="pref">
@@ -1019,6 +1033,7 @@ function unhide(id: string) {
                 </div>
               </div>
               <p v-else class="empty">{{ t("reglages.torii.silence.aucun") }}</p>
+              </template>
 
               <div class="divider" />
 
@@ -1069,6 +1084,7 @@ function unhide(id: string) {
                 <button class="ghost-btn" @click="toriiLogout()">{{ t("reglages.torii.appareils.deconnecterCompte") }}</button>
               </div>
 
+              <template v-if="!MODE_WEB">
               <div class="divider" />
 
               <h3 class="sub-title danger">{{ t("reglages.torii.suppression.titre") }}</h3>
@@ -1102,6 +1118,7 @@ function unhide(id: string) {
                 </div>
                 <p v-if="deleteError" class="row-error" role="alert">{{ deleteError }}</p>
               </div>
+              </template>
             </template>
           </template>
 

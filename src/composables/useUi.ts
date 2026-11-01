@@ -1,5 +1,6 @@
 import { reactive, toRefs } from "vue";
 import type { LibraryFilter, SortKey } from "../types";
+import { MODE_WEB } from "../lib/mode";
 import { initialPrefs } from "./usePreferences";
 
 /** Section affichée dans la zone principale : bibliothèque, boutique, amis… */
@@ -45,13 +46,15 @@ interface UiState {
 
 const state = reactive<UiState>({
   // Amorçage depuis les préférences persistées (filtre/tri/vue par défaut).
-  section: "library",
+  // Sur le web, on arrive sur la Boutique, et la bibliothèque n'a qu'un seul tri utile : le
+  // serveur ne connaît ni le temps de jeu, ni la dernière partie, ni ce qui est installé.
+  section: MODE_WEB ? "store" : "library",
   friendProfileKey: null,
   friendLibraryId: null,
   pageWeb: null,
-  filter: initialPrefs.defaultFilter,
+  filter: MODE_WEB ? "all" : initialPrefs.defaultFilter,
   query: "",
-  sort: initialPrefs.defaultSort,
+  sort: MODE_WEB ? "alpha" : initialPrefs.defaultSort,
   listView: initialPrefs.listView,
   installedOnly: false,
   categories: [],

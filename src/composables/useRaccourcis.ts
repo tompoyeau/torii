@@ -2,6 +2,7 @@ import { nextTick } from "vue";
 import { useLibrary } from "./useLibrary";
 import { useNavigation } from "./useNavigation";
 import { useUi } from "./useUi";
+import { MODE_WEB } from "../lib/mode";
 import { hasTauriRuntime } from "../lib/tauri";
 import { t } from "../i18n";
 
@@ -92,7 +93,7 @@ function surTouche(e: KeyboardEvent) {
   }
   if (e.key === "F1" || (e.key === "?" && !ctrl && !e.altKey && !estUnChamp(e.target))) {
     e.preventDefault();
-    if (!nav.modaleOuverte()) ui.openSettings("raccourcis");
+    if (!MODE_WEB && !nav.modaleOuverte()) ui.openSettings("raccourcis");
     return;
   }
   if (e.key === "F5" || (ctrl && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "r")) {
@@ -118,9 +119,13 @@ function surTouche(e: KeyboardEvent) {
     e.preventDefault();
     if (!nav.modaleOuverte()) ui.openSettings();
   } else if (touche === "n") {
+    // Sur le web, Ctrl+N reste au navigateur : il n'y a pas de jeu à ajouter à la main.
+    if (MODE_WEB) return;
     e.preventDefault();
     if (!nav.modaleOuverte()) ui.openAddGame();
   } else if (chiffre) {
+    // La wishlist et les amis n'existent pas encore sur le web.
+    if (MODE_WEB && chiffre > "2") return;
     e.preventDefault();
     if (nav.modaleOuverte()) return;
     nav.quitterLesSurcouches();

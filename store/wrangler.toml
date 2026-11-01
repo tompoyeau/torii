@@ -8,7 +8,8 @@ routes = [{ pattern = "torii-store.topo-host.com", custom_domain = true }]
 
 [vars]
 # Les pages autorisées à appeler ce Worker depuis un navigateur, séparées par des virgules.
-ORIGINES = "https://app.torii-app.fr"
+# `localhost:1430` : `npm run dev:web`, à retirer une fois la version web en ligne.
+ORIGINES = "https://app.torii-app.fr,http://localhost:1430"
 
 # Les clés IGDB et ITAD restent dans le proxy : ce Worker n'en détient aucune.
 [[services]]

@@ -17,6 +17,8 @@ import {
   startGameWatch,
   type ManualInput,
 } from "../lib/tauri";
+import { MODE_WEB } from "../lib/mode";
+import { sessionPresente } from "../lib/web";
 import { usePreferences } from "./usePreferences";
 import type { Game, GameDto, LibraryFilter } from "../types";
 
@@ -26,6 +28,8 @@ const games = ref<Game[]>([]);
 const loading = ref(false);
 /** false tant que le tout premier scan n'a pas abouti (pilote l'écran de démarrage). */
 const booted = ref(false);
+/** Le dernier relevé a échoué : ce qu'on affiche n'est peut-être pas à jour, ou manque. */
+const echec = ref(false);
 const enrichingId = ref<string | null>(null);
 let started = false;
 
@@ -160,6 +164,8 @@ let freshLoaded = false;
 
 function load() {
   if (started) return;
+  // Sur le web, rien à charger avant la connexion : l'écran suivant rappellera `useLibrary`.
+  if (MODE_WEB && !sessionPresente()) return;
   started = true;
   loading.value = true;
 
@@ -179,6 +185,9 @@ function load() {
   fetchGames()
     .then((list) => {
       freshLoaded = true;
+      echec.value = list === null;
+      // Une panne garde ce qu'on affiche déjà : jamais une liste vide à la place.
+      if (list === null) return;
       // Fusionne les doublons cross-plateforme en cartes uniques multi-sources.
       games.value = mergeDuplicates(list);
       // En tâche de fond : IGDB peuple toute la métadonnée descriptive.
@@ -494,6 +503,7 @@ export function useLibrary() {
     games,
     loading,
     booted,
+    echec,
     enrichingId,
     byId,
     spotlight,

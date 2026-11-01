@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import "./style.css";
 import App from "./App.vue";
 import { logFrontError } from "./lib/tauri";
+import { MODE_WEB } from "./lib/mode";
 import { localeTransmise } from "./composables/usePreferences";
 import { demarrerStats } from "./lib/stats";
 
@@ -24,6 +25,7 @@ function surveiller() {
 }
 
 surveiller();
+if (MODE_WEB) document.documentElement.classList.add("web");
 
 const app = createApp(App);
 // Erreurs levées dans un composant : Vue les intercepte avant `window.onerror`.

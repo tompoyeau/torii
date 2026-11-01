@@ -280,6 +280,9 @@ button { font-family: inherit; cursor: pointer; }
 .wish-dot:hover { background: rgba(28, 20, 38, 0.9); }
 .wish-dot.on { opacity: 1; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .wish-dot svg { width: 16px; height: 16px; }
+/* La wishlist vit encore sur le PC de chacun : pas de cœur sur le web, plutôt qu'un cœur
+   qui ne retient rien. */
+html.web .wish-dot { display: none; }
 /* En-tête de rayon : titre, sous-titre, actions à droite. */
 .rayon-tete { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .rayon-tete h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }

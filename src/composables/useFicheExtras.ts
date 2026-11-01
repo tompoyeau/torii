@@ -1,7 +1,7 @@
 import { reactive } from "vue";
 import { langueCourante } from "../i18n";
 import { regionCourante } from "../i18n/regions";
-import { hasTauriRuntime, storeGameExtras } from "../lib/tauri";
+import { modeDemo, storeGameExtras } from "../lib/tauri";
 import type { StoreExtras, StoreGame } from "../types";
 import type { Etat } from "./useStoreHome";
 
@@ -26,7 +26,7 @@ async function charger(jeu: StoreGame, force = false) {
   if (!force && (actuel?.etat === "pret" || actuel?.etat === "chargement")) return;
   const steam = jeu.steam;
   // Sans fiche Steam (jeu absent de Steam, ou démo web) : pas de tags à chercher.
-  if (!steam || !jeu.appId || !hasTauriRuntime()) {
+  if (!steam || !jeu.appId || modeDemo()) {
     cache[k] = { etat: "pret", extras: null };
     return;
   }

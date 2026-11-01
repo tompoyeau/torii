@@ -21,6 +21,7 @@
 import { computed, ref } from "vue";
 import fr from "./fr";
 import en from "./en";
+import { MODE_WEB } from "../lib/mode";
 
 export type Langue = "fr" | "en";
 
@@ -171,7 +172,9 @@ export function langueParDefaut(): Langue {
   const demandee =
     typeof location !== "undefined" ? new URLSearchParams(location.search).get("lang") : null;
   if (demandee === "fr" || demandee === "en") return demandee;
-  return "en";
+  // Sur le web, il n'y a pas d'installation où faire ce choix une fois pour toutes, et un
+  // téléphone dit clairement quelle langue on lit : on le suit.
+  return MODE_WEB ? langueDuSysteme() : "en";
 }
 
 /** Pour un composant : `const { t } = useI18n()`. */

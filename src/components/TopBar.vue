@@ -8,6 +8,7 @@ import { useFriendList } from "../composables/useFriendList";
 import { useTorii } from "../composables/useTorii";
 import { useNavigation } from "../composables/useNavigation";
 import { avecRaccourci } from "../composables/useRaccourcis";
+import { MODE_WEB } from "../lib/mode";
 import { steamMe } from "../lib/tauri";
 import type { SteamProfile } from "../types";
 import { t } from "../i18n";
@@ -50,6 +51,7 @@ const { activeCount: friendsOnline } = useFriendList();
 // Identité de l'utilisateur (Steam) affichée dans l'en-tête. Masquée si non connecté.
 const me = ref<SteamProfile | null>(null);
 onMounted(async () => {
+  if (MODE_WEB) return; // Ni Steam ni amis sur le web : le nom affiché est celui du compte Torii.
   me.value = await steamMe();
   // Charge les amis dès le démarrage pour alimenter le badge de l'en-tête.
   refreshFriends();
@@ -132,11 +134,11 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
     <span v-if="loading" class="enrich-pill">
       <span class="spinner" />{{ t("bibliotheque.barre.actualisation") }}
     </span>
-    <button class="add-btn" :title="avecRaccourci(t('bibliotheque.barre.ajouterJeu'), ctrl, 'N')" @click="openAddGame">
+    <button v-if="!MODE_WEB" class="add-btn" :title="avecRaccourci(t('bibliotheque.barre.ajouterJeu'), ctrl, 'N')" @click="openAddGame">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
       <span>{{ t("bibliotheque.barre.ajouter") }}</span>
     </button>
-    <button class="icon-btn friends-btn" :class="{ active: section === 'friends' }" :title="avecRaccourci(t('bibliotheque.barre.amis'), ctrl, '4')" @click="showFriends">
+    <button v-if="!MODE_WEB" class="icon-btn friends-btn" :class="{ active: section === 'friends' }" :title="avecRaccourci(t('bibliotheque.barre.amis'), ctrl, '4')" @click="showFriends">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
       <span v-if="friendsOnline" class="friends-badge">{{ friendsOnline }}</span>
     </button>

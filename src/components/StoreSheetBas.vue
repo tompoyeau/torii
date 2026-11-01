@@ -8,7 +8,7 @@ import { useStore } from "../composables/useStore";
 import { pageSteam } from "../lib/boutique";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
-import { hasTauriRuntime } from "../lib/tauri";
+import { modeDemo } from "../lib/tauri";
 import { t } from "../i18n";
 import type { StoreGame, StoreShelfItem } from "../types";
 import StorePossede from "./StorePossede.vue";
@@ -63,8 +63,8 @@ const lignes = computed(() => {
   const parId = new Map(etatDlc.value.jeux.map((j) => [j.appId, j]));
   return visibles.value.map((id) => ({ id, jeu: parId.get(id) ?? null }));
 });
-// Hors Tauri (démo web), pas de comparateur : la section reste vide plutôt qu'en attente.
-const actif = props.partie === "dlc" && hasTauriRuntime();
+// Démo du site : pas de comparateur, la section reste vide plutôt qu'en attente.
+const actif = props.partie === "dlc" && !modeDemo();
 watch([aLEcran, visibles], () => {
   if (actif && aLEcran.value && appId.value) void chargerDlc(appId.value, visibles.value);
 });

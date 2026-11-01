@@ -5,6 +5,7 @@ import { useModaleDeNavigation } from "../composables/useNavigation";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import { showToast } from "../composables/useToast";
+import { MODE_WEB } from "../lib/mode";
 import { t } from "../i18n";
 
 /**
@@ -16,7 +17,7 @@ import { t } from "../i18n";
  * permet de verrouiller la sortie sans piéger personne : fermer Torii annule tout.
  */
 
-const { signInOpen, closeSignIn, requestCode, verify, completeSignup, abandonSignup } = useTorii();
+const { signInOpen, closeSignIn, requestCode, verify, completeSignup, abandonSignup, connected } = useTorii();
 
 type Etape = "email" | "code" | "pseudo";
 const etape = ref<Etape>("email");
@@ -28,8 +29,11 @@ const error = ref<string | null>(null);
 /** Code rendu directement par le serveur en mode développement (aucun e-mail ne part). */
 const devCode = ref<string | null>(null);
 
-/** L'étape du pseudo verrouille la fenêtre : rien ne doit pouvoir la refermer. */
-const verrouille = computed(() => etape.value === "pseudo");
+/**
+ * L'étape du pseudo verrouille la fenêtre : rien ne doit pouvoir la refermer. Sur le web, elle
+ * reste aussi ouverte tant qu'on n'est pas connecté : il n'y a rien d'autre derrière.
+ */
+const verrouille = computed(() => etape.value === "pseudo" || (MODE_WEB && !connected.value));
 
 useScrollLock(signInOpen);
 
@@ -158,7 +162,7 @@ onBeforeUnmount(() => {
 
       <!-- ── 1. L'adresse ── -->
       <form v-if="etape === 'email'" class="body" @submit.prevent="onEmail">
-        <p class="lead">{{ t("comptes.torii.argument") }}</p>
+        <p class="lead">{{ MODE_WEB ? t("web.connexion") : t("comptes.torii.argument") }}</p>
         <label class="field">
           <span>{{ t("comptes.torii.adresse") }}</span>
           <input

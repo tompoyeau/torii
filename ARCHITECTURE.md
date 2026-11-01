@@ -1934,6 +1934,31 @@ stats et les liens (page Steam, site officiel, communauté).
   puis `http://127.0.0.1:9333/json/list` (une cible par WebView). ⚠️ Ce port donne la main
   sur les sessions connectées à tout programme du PC : ne jamais le laisser ouvert.
 
+## Version web (`npm run dev:web`, `npm run build:web`)
+
+Le même front que l'application, connecté à un compte Torii au lieu d'un PC : la bibliothèque
+synchronisée et la Boutique, depuis n'importe quel navigateur.
+
+- 🔑 **Trois cas, pas deux.** L'application (pont natif), la démo du site (navigateur nu, données
+  fictives) et la version web (navigateur nu, vraies données). `MODE_WEB` (`lib/mode.ts`) vient de la
+  compilation (`.env.web`) ; `modeDemo()` (`lib/tauri.ts`) remplace `!hasTauriRuntime()` partout où
+  l'on retombe sur des données fictives. Une panne n'affiche donc jamais les jeux de la démo.
+- 🔑 **`lib/tauri.ts` reste le seul point d'entrée.** `call`, `callOrThrow` et `social` envoient les
+  commandes à `lib/web.ts` au lieu de Rust : les composables ne voient pas la différence. Une commande
+  absente de `COMMANDES` n'existe pas sur le web : `call` rend sa valeur de repli, les autres lèvent.
+- **Tout est derrière la connexion** (`App.vue`, `EcranConnexion.vue`) : le quota du comparateur est
+  partagé avec l'application. La fenêtre de connexion est la même, simplement impossible à refermer.
+- **La session est dans le `localStorage`** : pas de cookie, l'API et la page n'étant pas sur le même
+  site. Un 401 efface le jeton et recharge la page : rien du compte précédent ne reste en mémoire.
+- **La bibliothèque** est l'union des appareils du compte (`scan_library` → `lib/libraries.ts`),
+  convertie en `GameDto` pour passer par `mergeDuplicates` comme un scan. ⚠️ Le serveur ne connaît ni le
+  temps de jeu, ni la dernière partie, ni ce qui est installé (la liste est lisible par les amis) : pas
+  de tri, de catégories ni de vedette, et un jeu s'ouvre sur sa fiche Boutique.
+- **Pas sur le web, faute de PC** : lancer ou installer un jeu, connecter un launcher, ajouter un jeu.
+  **Pas encore** : wishlist (les cœurs sont masqués par `html.web`), amis, favoris, jeux masqués. Les
+  revendeurs masqués valent pour le navigateur, et partent au Worker à chaque appel (`exclus`).
+- Pour essayer sur des services locaux, `.env.web.local` : `VITE_TORII_API`, `VITE_TORII_STORE`.
+
 ## Boutique pour la version web (`store/`)
 
 Worker `torii-store`, qui rend à un navigateur ce que les commandes `store_*` rendent à

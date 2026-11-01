@@ -2,14 +2,14 @@
  * Statistiques d'usage : Umami auto-hébergé (stats.topo-host.com), sans cookie.
  *
  * 🔑 Pour l'instant, seule la DÉMO WEB (torii-app.fr/demo/) est mesurée, dans la même
- * fiche que le site (« Torii · site + démo »). L'application installée n'envoie RIEN :
- * `hasTauriRuntime()` coupe court. Si elle doit un jour mesurer son usage, ce sera avec
+ * fiche que le site (« Torii · site + démo »). L'application installée et la version web
+ * n'envoient RIEN : `modeDemo()` coupe court. Si elles doivent un jour mesurer leur usage, ce sera avec
  * un interrupteur dans les paramètres et une mention sur le site, pas en douce.
  *
  * Les échecs sont silencieux : un bloqueur de pub ou un réseau coupé ne doit rien casser.
  */
 import { watch } from "vue";
-import { hasTauriRuntime } from "./tauri";
+import { modeDemo } from "./tauri";
 import { useUi } from "../composables/useUi";
 
 const SCRIPT = "https://stats.topo-host.com/t.js";
@@ -22,7 +22,7 @@ declare global {
 let actif = false;
 
 export function demarrerStats(): void {
-  if (hasTauriRuntime()) return;
+  if (!modeDemo()) return;
   if (location.hostname !== "torii-app.fr" && location.hostname !== "www.torii-app.fr") return;
   actif = true;
   const s = document.createElement("script");
