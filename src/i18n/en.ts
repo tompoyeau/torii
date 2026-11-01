@@ -21,6 +21,7 @@ import page from "./en/page";
 import prix from "./en/prix";
 import reglages from "./en/reglages";
 import systeme from "./en/systeme";
+import tuto from "./en/tuto";
 import web from "./en/web";
 
 import type { Forme } from "./index";
@@ -39,6 +40,7 @@ const en: Forme<typeof fr> = {
   prix,
   reglages,
   systeme,
+  tuto,
   web,
 };
 export default en;

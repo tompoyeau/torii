@@ -89,6 +89,25 @@ fn langue_heritee() -> Option<String> {
     locale::installation_anterieure().then(|| "fr".to_string())
 }
 
+/// Tant que ce fichier existe, le tuto du premier lancement reste à faire. 🔑 Un fichier, et pas
+/// une préférence de l'interface : après un redémarrage, WebView2 peut relire un `localStorage`
+/// antérieur (voir `locale::choix_retenu`), et le tuto reviendrait alors qu'il a été fait.
+const TUTO_A_FAIRE: &str = "tuto_a_faire";
+
+/// Le tuto du premier lancement reste-t-il à faire ? Fermer Torii en plein milieu le laisse à faire.
+#[tauri::command]
+fn tuto_a_faire(app: tauri::AppHandle) -> bool {
+    app.path().app_config_dir().is_ok_and(|dir| dir.join(TUTO_A_FAIRE).exists())
+}
+
+/// Le tuto est terminé ou passé : il ne se remontrera plus de lui-même.
+#[tauri::command]
+fn tuto_fait(app: tauri::AppHandle) {
+    if let Ok(dir) = app.path().app_config_dir() {
+        let _ = std::fs::remove_file(dir.join(TUTO_A_FAIRE));
+    }
+}
+
 /// Le réglage de langue et de région retenu par la dernière session. Voir
 /// `locale::choix_retenu`.
 #[tauri::command]
@@ -2092,6 +2111,12 @@ pub fn run() {
                 // 🔑 La langue avant le menu, la présence et le reste : tout ce qui suit peut
                 // afficher un texte ou interroger une boutique avant que l'interface ait
                 // chargé son script. Voir `locale::definir_et_retenir`.
+                // Avant que quoi que ce soit n'écrive dans le dossier : seule une installation
+                // neuve reçoit le tuto, pas quelqu'un qui met à jour.
+                if locale::installation_neuve(&dir) {
+                    let _ = std::fs::create_dir_all(&dir);
+                    let _ = std::fs::write(dir.join(TUTO_A_FAIRE), "");
+                }
                 locale::charger(&dir);
                 journal::init(dir);
             }
@@ -2155,6 +2180,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_locale,
             langue_heritee,
+            tuto_a_faire,
+            tuto_fait,
             locale_choice,
             scan_library,
             cached_library,

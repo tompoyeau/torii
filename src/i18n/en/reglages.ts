@@ -72,6 +72,11 @@ const en: Forme<typeof fr> = {
       titre: "Reduce motion",
       sous: "Turns off transitions and effects (accessibility, low-end machines).",
     },
+    tuto: {
+      titre: "Welcome tutorial",
+      sous: "Go through Torii's setup and tour again, as on first launch.",
+      bouton: "See the tutorial again",
+    },
     alertesPrix: {
       titre: "Price alerts (wishlist)",
       sous:

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useLibrary } from "../composables/useLibrary";
+import { useLangueRegion } from "../composables/useLangueRegion";
 import { usePreferences } from "../composables/usePreferences";
+import { useTuto } from "../composables/useTuto";
 import { useStore } from "../composables/useStore";
 import { useTheme } from "../composables/useTheme";
 import { useUi, type SettingsCategory } from "../composables/useUi";
@@ -12,8 +14,8 @@ import { listeRaccourcis } from "../composables/useRaccourcis";
 import { useUpdater } from "../composables/useUpdater";
 import { platformName } from "../data/platforms";
 import { appVersion, clearCaches, getAutostart, getSettings, getWindowPrefs, openExternal, openLog, relaunchApp, setAutostart, setWindowPrefs } from "../lib/tauri";
-import { etiquetteIntl, LANGUES, langueCourante, langueParDefaut, t, type Langue } from "../i18n";
-import { deviseAttendue, instantGamingPertinent, nomDeRegion, REGIONS, regionDuSysteme, type CodeRegion } from "../i18n/regions";
+import { etiquetteIntl, LANGUES, langueCourante, t } from "../i18n";
+import { deviseAttendue, instantGamingPertinent, nomDeRegion, regionDuSysteme } from "../i18n/regions";
 import { ilYA } from "../lib/format";
 import PlatformIcon from "./PlatformIcon.vue";
 import AccountsSettings from "./AccountsSettings.vue";
@@ -437,7 +439,7 @@ const THEMES = computed<{ key: ThemeChoice; label: string }[]>(() => [
  * Le bouton allumé du sélecteur. Une langue jamais choisie (`null`) s'affiche comme la
  * langue par défaut qu'elle produit — pas comme « Suivre Windows », qui est un choix.
  */
-const langueChoisie = computed<Langue | "system">(() => prefs.language ?? langueParDefaut());
+const { langueChoisie, choisirLangue, regionChoisie, choisirRegion, regionsTriees } = useLangueRegion();
 
 /**
  * La langue affichée au chargement de l'application.
@@ -451,21 +453,12 @@ const langueChoisie = computed<Langue | "system">(() => prefs.language ?? langue
 const langueAuDemarrage = langueCourante.value;
 const langueAChange = computed(() => langueCourante.value !== langueAuDemarrage);
 
-function choisirLangue(choix: Langue | "system") {
-  prefs.language = choix;
+/** Le tuto se revoit depuis l'écran normal de l'application, pas par-dessus les Paramètres. */
+const { demarrer: demarrerTuto } = useTuto();
+function revoirTuto() {
+  fermerParametres();
+  demarrerTuto();
 }
-
-const regionChoisie = computed<CodeRegion | "system">(() => prefs.region ?? "system");
-function choisirRegion(choix: string) {
-  prefs.region = choix === "system" ? null : (choix as CodeRegion);
-}
-
-/** Les régions, triées par leur nom dans la langue affichée — pas par code pays. */
-const regionsTriees = computed(() =>
-  [...REGIONS].sort((a, b) =>
-    nomDeRegion(a.code).localeCompare(nomDeRegion(b.code), etiquetteIntl.value),
-  ),
-);
 
 // --- Jeux masqués -----------------------------------------------------------
 const hiddenGames = computed(() =>
@@ -708,6 +701,16 @@ function unhide(id: string) {
               </div>
               <span class="switch" :class="{ on: prefs.wishlistNotifications }"><span class="knob" /></span>
             </button>
+
+            <div v-if="!MODE_WEB" class="divider" />
+
+            <div v-if="!MODE_WEB" class="pref">
+              <div class="row-text">
+                <span class="row-title">{{ t("reglages.general.tuto.titre") }}</span>
+                <span class="row-sub">{{ t("reglages.general.tuto.sous") }}</span>
+              </div>
+              <button class="ghost-btn" @click="revoirTuto">{{ t("reglages.general.tuto.bouton") }}</button>
+            </div>
           </template>
 
           <!-- Raccourcis clavier -->

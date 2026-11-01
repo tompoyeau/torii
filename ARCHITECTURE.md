@@ -1940,6 +1940,27 @@ stats et les liens (page Steam, site officiel, communauté).
   puis `http://127.0.0.1:9333/json/list` (une cible par WebView). ⚠️ Ce port donne la main
   sur les sessions connectées à tout programme du PC : ne jamais le laisser ouvert.
 
+## Tuto du premier lancement (`useTuto.ts`, `TutoAssistant.vue`, `TutoVisite.vue`)
+
+Un assistant où l'on règle vraiment les choses (langue et région, launchers, compte Torii), puis une
+visite en bulles sur la vraie interface. Application seulement, et tout se passe d'un clic.
+
+- 🔑 **Seulement à une installation neuve.** `locale::installation_neuve` regarde le dossier en tout
+  début de `setup` : ni `locale.json` (version récente), ni les traces d'une plus ancienne. Elle crée
+  alors `tuto_a_faire`, que `tuto_fait` retire : quelqu'un qui met à jour ne voit rien, et fermer
+  Torii en plein tuto le reprendra au lancement suivant.
+- ⚠️ **Un fichier, pas une préférence** : après un redémarrage, WebView2 peut relire un `localStorage`
+  antérieur (voir « Changer de langue »), et le tuto reviendrait alors qu'il a été fait.
+- **La langue d'abord** : une installation neuve démarre en anglais. La changer à cette étape relit
+  la bibliothèque, sans le redémarrage que proposent les Paramètres.
+- **Les launchers** réutilisent `AccountsSettings`. Son `fermer("parametres")` ne fait rien ici : les
+  Paramètres ne sont pas ouverts.
+- **La visite montre et n'ouvre rien** : afficher la Boutique pour la présenter coûterait des appels
+  au comparateur à chaque nouvel utilisateur. Les cibles portent `data-tuto` ; une cible cachée
+  (fenêtre étroite de la démo) est sautée.
+- Se revoit depuis Paramètres → Général, y compris dans la démo : c'est là qu'on l'essaie sans
+  repartir d'une installation neuve.
+
 ## Version web (`npm run dev:web`, `npm run build:web`)
 
 Le même front que l'application, connecté à un compte Torii au lieu d'un PC : la bibliothèque

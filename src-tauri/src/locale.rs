@@ -235,6 +235,12 @@ pub fn installation_anterieure() -> bool {
     INSTALLATION_ANTERIEURE.get().copied().unwrap_or(false)
 }
 
+/// Ce dossier est-il celui d'une installation neuve ? À demander en tout début de `setup`, comme
+/// `charger` : ni le réglage de langue d'une version récente, ni les traces d'une plus ancienne.
+pub fn installation_neuve(config_dir: &std::path::Path) -> bool {
+    !fichier(config_dir).exists() && !TRACES_ANTERIEURES.iter().any(|f| config_dir.join(f).exists())
+}
+
 /* ── Textes affichés par la couche native ──────────────────────────────────── */
 
 /// L'interface est-elle en anglais ?
@@ -288,6 +294,28 @@ pub fn zone_euro() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn une_mise_a_jour_n_est_pas_une_installation_neuve() {
+        let dir = std::env::temp_dir().join(format!("ludo-locale-neuve-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(installation_neuve(&dir), "le dossier n'existe même pas encore");
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(installation_neuve(&dir));
+
+        // Le journal et le reste de ce qu'un démarrage crée ne comptent pas.
+        std::fs::write(dir.join("torii.log"), "").unwrap();
+        assert!(installation_neuve(&dir));
+
+        // Une version récente a retenu sa langue, une plus ancienne a laissé ses caches.
+        std::fs::write(fichier(&dir), "{}").unwrap();
+        assert!(!installation_neuve(&dir));
+        std::fs::remove_file(fichier(&dir)).unwrap();
+        std::fs::write(dir.join("library_cache_v1.json"), "[]").unwrap();
+        assert!(!installation_neuve(&dir));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn anglais_americain() {

@@ -5,7 +5,8 @@ import { useLibrary } from "./composables/useLibrary";
 import { useNavigation } from "./composables/useNavigation";
 import { installerRaccourcis } from "./composables/useRaccourcis";
 import { suivreRevendeursDuCompte } from "./composables/useRevendeursCompte";
-import { onGameDetected, onGameExited, onGameLaunched, onLibraryUpdated } from "./lib/tauri";
+import { useTuto } from "./composables/useTuto";
+import { onGameDetected, onGameExited, onGameLaunched, onLibraryUpdated, tutoAFaire } from "./lib/tauri";
 import { startWishlistNotifier } from "./composables/useWishlistNotifier";
 import { useTorii } from "./composables/useTorii";
 import { MODE_WEB } from "./lib/mode";
@@ -18,6 +19,8 @@ import SettingsView from "./components/SettingsView.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import AddGameModal from "./components/AddGameModal.vue";
 import ToriiSignInDialog from "./components/ToriiSignInDialog.vue";
+import TutoAssistant from "./components/TutoAssistant.vue";
+import TutoVisite from "./components/TutoVisite.vue";
 import UpdateBanner from "./components/UpdateBanner.vue";
 import Toast from "./components/Toast.vue";
 import SplashScreen from "./components/SplashScreen.vue";
@@ -26,6 +29,7 @@ import DemoBanner from "./components/DemoBanner.vue";
 const { openGame } = useUi();
 const { notePlayed, noteDetected, applyUpdate } = useLibrary();
 const { reculer, avancer } = useNavigation();
+const { phase: phaseTuto, demarrer: demarrerTuto } = useTuto();
 
 /**
  * Sur le web, tout est derrière la connexion : le quota du comparateur est partagé avec
@@ -77,6 +81,10 @@ onMounted(async () => {
   window.addEventListener("contextmenu", onContextMenu);
   retirerRaccourcis = installerRaccourcis();
   suivreRevendeursDuCompte();
+  // L'écran de démarrage le recouvre le temps de tout charger.
+  void tutoAFaire().then((aFaire) => {
+    if (aFaire) demarrerTuto();
+  });
   unlistenGameExit = await onGameExited((id) => openGame(id));
   // Une partie détectée (même lancée depuis Steam ou le bureau) remonte aussitôt dans
   // « Récemment joué », sans attendre une resynchronisation.
@@ -111,6 +119,8 @@ onBeforeUnmount(() => {
       <AddGameModal />
       <UpdateBanner />
       <BarreMobile v-if="MODE_WEB" />
+      <TutoAssistant v-if="phaseTuto === 'assistant'" />
+      <TutoVisite v-else-if="phaseTuto === 'visite'" />
     </template>
     <EcranConnexion v-else-if="compteVerifie" />
     <ToriiSignInDialog />

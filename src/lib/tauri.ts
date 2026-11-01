@@ -777,6 +777,16 @@ export async function setStoreExcluded(name: string, excluded: boolean): Promise
   return await call<string[] | null>("set_store_excluded", { name, excluded }, null);
 }
 
+/** Le tuto du premier lancement reste-t-il à faire ? Jamais hors de l'application. */
+export async function tutoAFaire(): Promise<boolean> {
+  return await call<boolean>("tuto_a_faire", undefined, false);
+}
+
+/** Le tuto est terminé ou passé : il ne se remontrera plus de lui-même. */
+export async function tutoFait(): Promise<void> {
+  await call<void>("tuto_fait", undefined, undefined);
+}
+
 /** Réaffiche toutes les boutiques (vide la liste d'exclusion). Renvoie la liste vide. */
 export async function clearExcludedStores(): Promise<string[] | null> {
   return await call<string[] | null>("clear_excluded_stores", undefined, null);

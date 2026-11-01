@@ -31,6 +31,7 @@ import page from "./fr/page";
 import prix from "./fr/prix";
 import reglages from "./fr/reglages";
 import systeme from "./fr/systeme";
+import tuto from "./fr/tuto";
 import web from "./fr/web";
 
 export default {
@@ -45,5 +46,6 @@ export default {
   prix,
   reglages,
   systeme,
+  tuto,
   web,
 } as const;

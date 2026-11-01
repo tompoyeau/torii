@@ -70,6 +70,11 @@ export default {
       titre: "Réduire les animations",
       sous: "Désactive les transitions et effets (accessibilité, machines modestes).",
     },
+    tuto: {
+      titre: "Tuto de bienvenue",
+      sous: "Revois la configuration et la visite de Torii, comme au premier lancement.",
+      bouton: "Revoir le tuto",
+    },
     alertesPrix: {
       titre: "Alertes de prix (wishlist)",
       sous:

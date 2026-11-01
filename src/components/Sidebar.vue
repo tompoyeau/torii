@@ -75,7 +75,7 @@ const { total, count, platforms } = useFiltresBibliotheque();
       </div>
     </div>
 
-    <nav class="nav-group">
+    <nav class="nav-group" data-tuto="bibliotheque">
       <div class="nav-label">{{ t("bibliotheque.laterale.bibliotheque") }}</div>
       <button class="nav-item" :class="{ active: section === 'library' && filter ==='all' }" @click="setFilter('all')">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg></span>
@@ -105,11 +105,11 @@ const { total, count, platforms } = useFiltresBibliotheque();
 
     <nav class="nav-group">
       <div class="nav-label">{{ t("bibliotheque.laterale.decouvrir") }}</div>
-      <button class="nav-item" :class="{ active: section === 'store' }" @click="showStore()">
+      <button class="nav-item" data-tuto="boutique" :class="{ active: section === 'store' }" @click="showStore()">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /><path d="M6 14.4V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5.6" /></svg></span>
         {{ t("bibliotheque.laterale.boutique") }}
       </button>
-      <button v-if="!MODE_WEB" class="nav-item" :class="{ active: section === 'wishlist' }" @click="showWishlist()">
+      <button v-if="!MODE_WEB" class="nav-item" data-tuto="wishlist" :class="{ active: section === 'wishlist' }" @click="showWishlist()">
         <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg></span>
         {{ t("bibliotheque.laterale.wishlist") }}
       </button>
