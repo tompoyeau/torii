@@ -413,8 +413,8 @@ async function social<T>(cmd: string, args?: Args): Promise<T> {
  * Demande un code de connexion. Renvoie le code lui-même quand le serveur tourne en
  * mode développement — dans ce cas aucun e-mail ne part, et l'interface l'affiche.
  */
-export async function toriiRequestCode(email: string): Promise<string | null> {
-  return (await social<string | null>("torii_request_code", { email })) ?? null;
+export async function toriiRequestCode(email: string, captcha?: string): Promise<string | null> {
+  return (await social<string | null>("torii_request_code", captcha ? { email, captcha } : { email })) ?? null;
 }
 
 /** Vérifie le code et ouvre la session (persistée chiffrée côté Rust). */

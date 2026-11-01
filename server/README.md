@@ -48,6 +48,35 @@ connecter, y compris les comptes existants.
 rien dire et déploie un Worker sans aucune limite. Le Worker répond 500 « mal configuré »
 si les bindings manquent, pour que l'oubli se voie tout de suite.
 
+## Depuis une page web (`src/captcha.js`)
+
+La version web se connecte à un compte, elle n'en crée pas. Un appel portant l'en-tête `Origin`
+vient d'une page ; l'application n'en envoie jamais.
+
+| Route | Depuis une page web |
+|---|---|
+| `POST /v1/auth/request-code` | Exige `captcha`, un jeton Cloudflare Turnstile, sinon 403 `captcha_refuse` |
+| `POST /v1/auth/verify` | Adresse sans compte : 403 `compte_inexistant`, rien n'est créé |
+| `POST /v1/auth/signup` | Toujours 403 `compte_inexistant` |
+
+🔑 Le jeton doit venir de l'une des pages de `TURNSTILE_HOSTNAMES` (`wrangler.toml`), pour l'action
+`connexion`. Dans le doute (Cloudflare injoignable, secret absent), c'est un refus : la connexion web
+s'arrête, celle de l'application continue.
+
+⚠️ **Ce que ça n'arrête pas** : un script peut omettre `Origin` et se faire passer pour l'application.
+Sur ce chemin-là, seules les limites ci-dessus s'appliquent.
+
+Mise en place, une seule fois : créer un widget Turnstile (mode géré) pour `app.torii-app.fr` et
+`localhost`, mettre sa clé publique dans `.env.web` (`VITE_TURNSTILE_SITE_KEY`), et poser sa clé secrète :
+
+```bash
+npx wrangler secret put TURNSTILE_SECRET
+```
+
+En local, dans `.dev.vars`, les clés d'essai de Cloudflare :
+`TURNSTILE_SECRET=1x0000000000000000000000000000000AA` et `TURNSTILE_HOSTNAMES=example.com`, avec côté
+page `VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA` dans `.env.web.local`.
+
 ## Mise en place (une seule fois)
 
 Prérequis : `npx wrangler login` (déjà fait si tu as déployé `proxy/`).

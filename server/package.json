@@ -2,9 +2,11 @@
   "name": "torii-api",
   "private": true,
   "version": "0.1.0",
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "node --test",
     "schema": "wrangler d1 execute torii --remote --file=schema.sql",
     "schema:local": "wrangler d1 execute torii --local --file=schema.sql",
     "migrate": "wrangler d1 execute torii --remote --file=migrations/0001_libraries.sql",

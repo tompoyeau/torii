@@ -7,6 +7,7 @@ import { useFocusTrap } from "../composables/useFocusTrap";
 import { showToast } from "../composables/useToast";
 import { MODE_WEB } from "../lib/mode";
 import { t } from "../i18n";
+import CaptchaTurnstile from "./CaptchaTurnstile.vue";
 
 /**
  * Création de compte et connexion, en trois temps : adresse, code, pseudo.
@@ -28,6 +29,9 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 /** Code rendu directement par le serveur en mode développement (aucun e-mail ne part). */
 const devCode = ref<string | null>(null);
+/** Sur le web seulement : le jeton du contrôle anti-robot, exigé pour envoyer un code. */
+const captcha = ref<string | null>(null);
+const captchaEl = ref<InstanceType<typeof CaptchaTurnstile> | null>(null);
 
 /**
  * L'étape du pseudo verrouille la fenêtre : rien ne doit pouvoir la refermer. Sur le web, elle
@@ -51,6 +55,7 @@ watch(signInOpen, (ouvert) => {
   code.value = "";
   pseudo.value = "";
   devCode.value = null;
+  captcha.value = null;
   error.value = null;
 });
 
@@ -62,6 +67,7 @@ watch([signInOpen, etape], async () => {
 });
 
 const emailValide = computed(() => /\S+@\S+\.\S+/.test(email.value.trim()));
+const peutEnvoyer = computed(() => emailValide.value && (!MODE_WEB || captcha.value !== null));
 const codeValide = computed(() => code.value.trim().length === 6);
 const pseudoValide = computed(() => pseudo.value.trim().length >= 2);
 
@@ -71,15 +77,18 @@ function fermer() {
 }
 
 async function onEmail() {
-  if (!emailValide.value || busy.value) return;
+  if (!peutEnvoyer.value || busy.value) return;
   busy.value = true;
   error.value = null;
   try {
-    devCode.value = await requestCode(email.value);
+    devCode.value = await requestCode(email.value, captcha.value ?? undefined);
     code.value = "";
+    // Le jeton a servi, et le contrôle se remontera si l'on revient à cette étape.
+    captcha.value = null;
     etape.value = "code";
   } catch (e) {
     error.value = message(e);
+    captchaEl.value?.reinitialiser();
   } finally {
     busy.value = false;
   }
@@ -171,8 +180,13 @@ onBeforeUnmount(() => {
           />
         </label>
         <p class="hint">{{ t("comptes.torii.sansMotDePasse") }}</p>
+        <CaptchaTurnstile v-if="MODE_WEB" ref="captchaEl" @jeton="captcha = $event" />
+        <p v-if="MODE_WEB" class="hint">
+          {{ t("web.sansCompte") }}
+          <a href="https://torii-app.fr/#telecharger" target="_blank" rel="noopener">{{ t("web.telecharger") }}</a>
+        </p>
         <div class="actions">
-          <button type="submit" class="btn-primary" :disabled="!emailValide || busy">
+          <button type="submit" class="btn-primary" :disabled="!peutEnvoyer || busy">
             {{ busy ? t("comptes.torii.envoi") : t("comptes.torii.recevoirCode") }}
           </button>
         </div>
@@ -196,7 +210,7 @@ onBeforeUnmount(() => {
           <strong>{{ devCode }}</strong>.
         </p>
         <div class="actions">
-          <button type="button" class="btn-ghost" @click="etape = 'email'">{{ t("comptes.torii.changerAdresse") }}</button>
+          <button type="button" class="btn-ghost" @click="etape = 'email'; error = null">{{ t("comptes.torii.changerAdresse") }}</button>
           <button type="submit" class="btn-primary" :disabled="!codeValide || busy">
             {{ busy ? t("comptes.torii.verification") : t("comptes.torii.valider") }}
           </button>
@@ -270,6 +284,7 @@ onBeforeUnmount(() => {
 }
 
 .hint { margin: -4px 0 0; font-size: 12px; color: var(--text-faint); line-height: 1.5; }
+.hint a { color: var(--accent); }
 .actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
 .btn-primary {

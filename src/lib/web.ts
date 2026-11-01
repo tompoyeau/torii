@@ -99,6 +99,9 @@ async function appel<T>(base: string, chemin: string, init: RequestInit = {}): P
     ecrireJeton(null);
     window.location.reload();
   }
+  // Le serveur n'écrit qu'en français : ces deux-là s'affichent sur le web, dans la langue de l'interface.
+  if (corps?.error === "compte_inexistant") throw new Error(t("web.pasDeCompte"));
+  if (corps?.error === "captcha_refuse") throw new Error(t("web.captcha.refuse"));
   throw new Error(corps?.message ?? t("web.injoignable"));
 }
 
@@ -197,26 +200,20 @@ const COMMANDES: Record<string, (a: Args) => Promise<unknown>> = {
   },
 
   // Compte
-  torii_request_code: async ({ email }) => {
-    const r = await envoyer<{ devCode?: string }>("/v1/auth/request-code", { email });
+  torii_request_code: async ({ email, captcha }) => {
+    const r = await envoyer<{ devCode?: string }>("/v1/auth/request-code", { email, captcha });
     return r.devCode ?? null;
   },
+  // 🔑 Pas de création de compte sur le web : un compte se crée dans l'application, et le serveur
+  // refuse d'en créer un depuis une page (`server/src/captcha.js`).
   torii_verify: async ({ email, code }): Promise<ToriiSignIn> => {
-    const r = await envoyer<{ token?: string; created?: boolean; account?: ToriiAccount; signupToken?: string }>(
-      "/v1/auth/verify",
-      { email, code, device: nomAppareil(), deferProfile: true },
-    );
-    if (r.token) ecrireJeton(r.token);
-    return { account: r.account ?? null, created: !!r.created, signupToken: r.signupToken ?? null };
-  },
-  torii_signup: async ({ signupToken, displayName }) => {
-    const r = await envoyer<{ token: string; account: ToriiAccount }>("/v1/auth/signup", {
-      signupToken,
-      displayName,
+    const r = await envoyer<{ token: string; account: ToriiAccount }>("/v1/auth/verify", {
+      email,
+      code,
       device: nomAppareil(),
     });
     ecrireJeton(r.token);
-    return r.account;
+    return { account: r.account, created: false, signupToken: null };
   },
   torii_me: async () => {
     if (!sessionPresente()) return null;

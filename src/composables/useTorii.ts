@@ -95,9 +95,10 @@ async function refresh() {
 /**
  * Demande un code par e-mail. Renvoie le code lui-même si le serveur tourne en mode
  * développement — l'interface l'affiche alors, puisqu'aucun e-mail ne partira.
+ * `captcha` : le jeton du contrôle anti-robot, exigé du serveur pour une page web.
  */
-async function requestCode(email: string): Promise<string | null> {
-  return await toriiRequestCode(email.trim());
+async function requestCode(email: string, captcha?: string): Promise<string | null> {
+  return await toriiRequestCode(email.trim(), captcha);
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   body, clamp, fail, hash, hmac, json, looksLikeEmail, newFriendCode, newId,
   normalizeEmail, now, randomCode, randomToken, sameHash,
 } from "./lib.js";
+import { captchaValide, depuisUnePage } from "./captcha.js";
 import { forgetAllLibraries } from "./library.js";
 
 /** Validité d'un code de connexion. Assez court pour limiter la fenêtre d'attaque. */
@@ -100,6 +101,13 @@ export async function requestCode(request, env) {
   const email = normalizeEmail(data.email);
   if (!looksLikeEmail(email)) {
     return fail(400, "email_invalide", "Cette adresse e-mail n'est pas valide.");
+  }
+
+  if (depuisUnePage(request)) {
+    const ip = request.headers.get("cf-connecting-ip");
+    if (!(await captchaValide(env, data.captcha, ip))) {
+      return fail(403, "captcha_refuse", "La vérification anti-robot n'a pas abouti. Réessaie.");
+    }
   }
 
   const existing = await env.DB.prepare(
@@ -241,6 +249,12 @@ export async function verifyCode(request, env) {
   // pseudo tout de suite, plutôt que de laisser le nom dérivé de l'adresse e-mail.
   const created = !account;
 
+  // Un compte se crée dans l'application, jamais depuis une page web. Le dire ici ne révèle rien :
+  // pour arriver jusque-là, il a fallu lire le code reçu dans cette boîte.
+  if (created && depuisUnePage(request)) {
+    return fail(403, "compte_inexistant", "Aucun compte Torii pour cette adresse. Crée-le dans Torii sur ton PC, puis reviens ici.");
+  }
+
   // 🔑 Inscription différée, quand le client le demande. On ne crée rien ici : on renvoie
   // un laissez-passer, et le compte n'existera qu'une fois le pseudo choisi. Sans ça,
   // fermer la fenêtre au milieu laisse derrière soi un compte jamais terminé, portant un
@@ -304,6 +318,9 @@ async function ouvrirSession(env, accountId, device) {
  * compte : c'est exactement la garantie demandée côté application.
  */
 export async function signup(request, env) {
+  if (depuisUnePage(request)) {
+    return fail(403, "compte_inexistant", "Un compte Torii se crée dans Torii sur ton PC.");
+  }
   const data = (await body(request)) || {};
   const displayName = clamp(data.displayName, 40).trim();
   const device = clamp(data.device, 60) || "inconnu";

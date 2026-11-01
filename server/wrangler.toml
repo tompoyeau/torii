@@ -8,6 +8,11 @@ compatibility_date = "2025-06-01"
 # ⚠️ Un seul niveau : le certificat gratuit couvre *.topo-host.com, pas *.torii.topo-host.com.
 routes = [{ pattern = "torii-api.topo-host.com", custom_domain = true }]
 
+[vars]
+# Les pages où le contrôle anti-robot est accepté (cf. src/captcha.js), séparées par des virgules.
+# ⚠️ Jamais `localhost` ici : un jeton obtenu sur la machine de quelqu'un passerait en production.
+TURNSTILE_HOSTNAMES = "app.torii-app.fr"
+
 # Base D1 : comptes, amis, présence.
 # `database_id` est renseigné par `npx wrangler d1 create torii` (voir README).
 [[d1_databases]]

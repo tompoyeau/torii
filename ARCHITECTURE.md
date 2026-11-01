@@ -1948,6 +1948,9 @@ synchronisée et la Boutique, depuis n'importe quel navigateur.
   absente de `COMMANDES` n'existe pas sur le web : `call` rend sa valeur de repli, les autres lèvent.
 - **Tout est derrière la connexion** (`App.vue`, `EcranConnexion.vue`) : le quota du comparateur est
   partagé avec l'application. La fenêtre de connexion est la même, simplement impossible à refermer.
+- 🔑 **Le web se connecte à un compte, il n'en crée pas**, et un contrôle anti-robot (Cloudflare
+  Turnstile, `CaptchaTurnstile.vue`) précède l'envoi du code. C'est le serveur qui l'impose, à tout appel
+  portant l'en-tête `Origin` (`server/src/captcha.js`, voir `server/README.md`).
 - **La session est dans le `localStorage`** : pas de cookie, l'API et la page n'étant pas sur le même
   site. Un 401 efface le jeton et recharge la page : rien du compte précédent ne reste en mémoire.
 - **La bibliothèque** est l'union des appareils du compte (`scan_library` → `lib/libraries.ts`),
@@ -1957,7 +1960,8 @@ synchronisée et la Boutique, depuis n'importe quel navigateur.
 - **Pas sur le web, faute de PC** : lancer ou installer un jeu, connecter un launcher, ajouter un jeu.
   **Pas encore** : wishlist (les cœurs sont masqués par `html.web`), amis, favoris, jeux masqués. Les
   revendeurs masqués valent pour le navigateur, et partent au Worker à chaque appel (`exclus`).
-- Pour essayer sur des services locaux, `.env.web.local` : `VITE_TORII_API`, `VITE_TORII_STORE`.
+- Pour essayer sur des services locaux, `.env.web.local` : `VITE_TORII_API`, `VITE_TORII_STORE`,
+  `VITE_TURNSTILE_SITE_KEY` (clé d'essai, voir `server/README.md`).
 
 ## Boutique pour la version web (`store/`)
 
