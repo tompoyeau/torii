@@ -28,8 +28,8 @@ export default {
         texte: "Vois qui joue à quoi en direct, et ce que vous avez en commun, sur Steam ou ailleurs.",
       },
       alertes: {
-        titre: "Prévenu quand un ami se lance",
-        texte: "Un bandeau discret te le dit au moment où il démarre un jeu.",
+        titre: "Une alerte quand un ami lance un jeu",
+        texte: "Un bandeau discret apparaît dès qu'il commence à jouer.",
       },
       suivi: {
         titre: "Tes réglages te suivent",

@@ -30,8 +30,8 @@ const tuto: Forme<typeof fr> = {
         texte: "See who's playing what live, and what you have in common, on Steam or anywhere else.",
       },
       alertes: {
-        titre: "Know when a friend jumps in",
-        texte: "A discreet banner tells you the moment they start a game.",
+        titre: "An alert when a friend starts a game",
+        texte: "A discreet banner appears as soon as they start playing.",
       },
       suivi: {
         titre: "Your settings follow you",
