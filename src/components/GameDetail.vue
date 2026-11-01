@@ -269,6 +269,11 @@ watch(
   { immediate: true },
 );
 const fiche = computed(() => entreeFiche(game.value?.id).fiche);
+/**
+ * Ce que Steam et IGDB disent du jeu n'est pas encore arrivé. Sur le web, où rien n'est gardé sur
+ * place, c'est presque toute la fiche : sans ce signal, elle paraît vide le temps de la réponse.
+ */
+const enChargement = computed(() => loadingMeta.value || entreeFiche(game.value?.id).etat === "chargement");
 const steam = computed(() => fiche.value?.steam ?? null);
 /** L'appid de la page Steam du jeu, s'il en a une sûre. */
 const appIdSteam = computed(() => fiche.value?.appId ?? (steamAppid.value ? Number(steamAppid.value) : null));
@@ -699,6 +704,10 @@ function retour() {
 
       <div class="detail-body">
         <div class="detail-main">
+          <div v-if="enChargement" class="detail-chargement" role="status">
+            <span class="spin" aria-hidden="true" />{{ t("fiche.chargementDetails") }}
+          </div>
+
           <!-- Les amis qui ont le jeu, tout de suite sous le bandeau : c'est souvent la première
                chose qu'on cherche en ouvrant la fiche d'un jeu multijoueur. -->
           <div v-if="friendOwners.length" class="detail-section amis">
@@ -754,13 +763,12 @@ function retour() {
             :possedes="fiche.dlcPossedes"
           />
 
-          <div v-if="description || loadingMeta" class="detail-section">
+          <div v-if="description" class="detail-section">
             <div class="titre-ligne">
               <h4>{{ t("fiche.apropos") }}</h4>
-              <span v-if="description?.anglais" class="etiquette">{{ t("fiche.enAnglais") }}</span>
+              <span v-if="description.anglais" class="etiquette">{{ t("fiche.enAnglais") }}</span>
             </div>
-            <p v-if="description" class="detail-desc" :lang="description.anglais ? 'en' : undefined">{{ description.texte }}</p>
-            <p v-else class="detail-desc dim">{{ t("fiche.chargementDetails") }}</p>
+            <p class="detail-desc" :lang="description.anglais ? 'en' : undefined">{{ description.texte }}</p>
             <StoreSheetBlocs v-if="steam" :key="game.id" :blocs="steam.description" />
           </div>
 
@@ -1002,7 +1010,9 @@ function retour() {
 .titre-ligne h4 { margin: 0; }
 .etiquette { font-size: 11.5px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-dim); }
 .detail-desc { font-size: 15.5px; line-height: 1.7; color: var(--text-dim); max-width: 90ch; margin: 0; }
-.detail-desc.dim { color: var(--text-faint); font-style: italic; }
+.detail-chargement { display: flex; align-items: center; gap: 10px; padding: 8px 0 30px; font-size: 14px; color: var(--text-faint); }
+.spin { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .sec-count {
   display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 8px;
   border-radius: 99px; background: var(--surface-2); color: var(--text-dim);
