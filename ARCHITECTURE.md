@@ -1975,6 +1975,15 @@ synchronisée et la Boutique, depuis n'importe quel navigateur.
 - **Installable sur l'écran d'accueil** : `public-web/` (manifeste, icônes) remplace `public/` en mode
   web, et `pageInstallable` (`vite.config.ts`) ajoute les balises au HTML. Pas de service worker : tout
   vient du réseau, et une Boutique hors ligne n'aurait aucun prix à montrer.
+- **Publier** : `npm run build:web`, puis `wrangler pages deploy dist-web --project-name torii-app
+  --branch main`. Sans `--branch main`, wrangler prend la branche git courante et ne fait qu'une
+  prévisualisation. Projet Cloudflare Pages `torii-app`, et `app.torii-app.fr` en CNAME chez OVH vers
+  `torii-app.pages.dev`. ⚠️ Déclarer le domaine dans Pages AVANT le CNAME, sinon erreur 522. Pages et
+  pas Workers : Workers refuse un domaine dont le DNS n'est pas chez Cloudflare. L'adresse
+  `torii-app.pages.dev` reste joignable, sans connexion possible : `TURNSTILE_HOSTNAMES` l'exclut.
+- **En-têtes** : `public-web/_headers`. ⚠️ Un nouveau service appelé par le front se déclare aussi dans
+  `connect-src`, un nouvel hôte de vidéos dans `media-src`. `wrangler pages dev` les applique en local :
+  c'est là qu'on les essaie, Vite ne les lit pas.
 - Pour essayer sur des services locaux, `.env.web.local` : `VITE_TORII_API`, `VITE_TORII_STORE`,
   `VITE_TURNSTILE_SITE_KEY` (clé d'essai, voir `server/README.md`).
 
