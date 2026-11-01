@@ -2,6 +2,7 @@ import type { Forme } from "../index";
 import type fr from "../fr/web";
 
 const web: Forme<typeof fr> = {
+  navigation: "Main navigation",
   injoignable: "The service isn't responding right now. Try again in a minute.",
   pasSurLeWeb: "This only works in Torii on your PC.",
   connexion: "Your library and the Store, on any device. Sign in with your Torii account.",

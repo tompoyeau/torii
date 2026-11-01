@@ -474,7 +474,7 @@ function unhide(id: string) {
 </script>
 
 <template>
-  <div v-if="settingsOpen" class="overlay" @click.self="fermerParametres">
+  <div v-if="settingsOpen" class="overlay" :class="{ web: MODE_WEB }" @click.self="fermerParametres">
     <div ref="modale" class="dialog" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('reglages.titre')">
       <!-- Rail de navigation -->
       <aside class="snav">
@@ -1376,5 +1376,20 @@ function unhide(id: string) {
   .dialog { flex-direction: column; height: 90vh; }
   .snav { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); }
   .snav-title, .snav-group { width: 100%; }
+}
+/* Web sur téléphone : un écran comme les autres, au-dessus de la barre du bas, pas une pop-in. */
+@media (max-width: 820px) {
+  .overlay.web { inset: 0 0 var(--barre-mobile); padding: 0; background: var(--bg); backdrop-filter: none; overscroll-behavior: contain; }
+  .overlay.web .dialog { flex-direction: column; width: 100%; height: 100%; border: none; border-radius: 0; box-shadow: none; }
+  .overlay.web .snav { width: 100%; flex: none; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6px; padding: 10px 14px; overflow-x: auto; scrollbar-width: none; border-right: none; border-bottom: 1px solid var(--border); }
+  .overlay.web .snav::-webkit-scrollbar { display: none; }
+  .overlay.web .snav-title, .overlay.web .snav-group { display: none; }
+  .overlay.web .snav-item { flex: none; width: auto; white-space: nowrap; }
+  /* On en sort par la barre du bas ou le retour du téléphone. */
+  .overlay.web .close { display: none; }
+  .overlay.web .spane-inner { max-width: none; padding: 20px 18px 32px; }
+  .overlay.web .pref { flex-wrap: wrap; gap: 10px 16px; }
+  .overlay.web .row-text { flex-basis: 100%; }
+  .overlay.web .segmented { flex-wrap: wrap; }
 }
 </style>

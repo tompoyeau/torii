@@ -1960,6 +1960,21 @@ synchronisée et la Boutique, depuis n'importe quel navigateur.
 - **Pas sur le web, faute de PC** : lancer ou installer un jeu, connecter un launcher, ajouter un jeu.
   **Pas encore** : wishlist (les cœurs sont masqués par `html.web`), amis, favoris, jeux masqués. Les
   revendeurs masqués valent pour le navigateur, et partent au Worker à chaque appel (`exclus`).
+- **Sur téléphone, sous 820 px** : la barre latérale cède la place à `BarreMobile.vue` (Boutique,
+  Bibliothèque, Paramètres), et ses filtres à `FiltresMobile.vue`, tous deux sur les compteurs de
+  `useFiltresBibliotheque`. `--barre-mobile` (`style.css`) vaut sa hauteur, 0 ailleurs : fiches,
+  Paramètres, messages et visionneuse s'arrêtent au-dessus. Ce qui dépend d'elle est limité à
+  `html.web` ou à la classe `.web` : la démo, sans barre, garde ses boutons. L'application n'est pas
+  concernée : sa fenêtre ne descend pas sous 940 px.
+- 🔑 **Le retour du téléphone recule dans Torii** (`suivreLeNavigateur`, `useNavigation.ts`). Chaque
+  étape pousse une entrée numérotée dans l'historique du navigateur, et le `popstate` rejoue l'écart.
+  Les flèches et le bouton des fiches passent par `history.go` : une seule voie, les deux historiques
+  ne peuvent pas diverger. Le bouton retour de la souris et Alt+← sont laissés au navigateur. Une
+  modale se ferme au retour et l'entrée quittée est reprise. ⚠️ Chromium saute les entrées poussées
+  sans geste de l'utilisateur : `element.click()` depuis un script fausse donc un essai du retour.
+- **Installable sur l'écran d'accueil** : `public-web/` (manifeste, icônes) remplace `public/` en mode
+  web, et `pageInstallable` (`vite.config.ts`) ajoute les balises au HTML. Pas de service worker : tout
+  vient du réseau, et une Boutique hors ligne n'aurait aucun prix à montrer.
 - Pour essayer sur des services locaux, `.env.web.local` : `VITE_TORII_API`, `VITE_TORII_STORE`,
   `VITE_TURNSTILE_SITE_KEY` (clé d'essai, voir `server/README.md`).
 

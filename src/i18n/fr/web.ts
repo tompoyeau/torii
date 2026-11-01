@@ -1,5 +1,6 @@
 /** La version web : ce qui n'existe pas dans l'application. */
 export default {
+  navigation: "Navigation principale",
   injoignable: "Le service ne répond pas pour l'instant. Réessaie dans une minute.",
   pasSurLeWeb: "Ça ne se fait que dans Torii sur ton PC.",
   connexion: "Ta bibliothèque et la Boutique, sur n'importe quel appareil. Connecte-toi avec ton compte Torii.",

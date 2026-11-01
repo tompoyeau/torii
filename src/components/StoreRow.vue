@@ -86,4 +86,10 @@ watch(
 .piste.portrait { grid-auto-columns: 172px; }
 .piste.paysage { grid-auto-columns: 280px; }
 .piste > :deep(*) { scroll-snap-align: start; }
+/* De quoi voir qu'il y a une suite : la carte suivante dépasse du bord de l'écran. */
+@media (max-width: 620px) {
+  .piste { gap: 12px; }
+  .piste.portrait { grid-auto-columns: 38vw; }
+  .piste.paysage { grid-auto-columns: 72vw; }
+}
 </style>

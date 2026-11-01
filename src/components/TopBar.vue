@@ -92,7 +92,9 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 </script>
 
 <template>
-  <div class="topbar">
+  <div class="topbar" :class="{ web: MODE_WEB }">
+    <!-- Sur téléphone, la barre latérale et son logo ne sont plus là. -->
+    <img v-if="MODE_WEB" class="marque" src="/torii.svg" alt="Torii" />
     <!-- Sur une page web, ses propres flèches (dans sa barre) servent les deux historiques. -->
     <div v-if="section !== 'web'" class="historique">
       <button
@@ -142,16 +144,16 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
       <span v-if="friendsOnline" class="friends-badge">{{ friendsOnline }}</span>
     </button>
-    <button class="icon-btn" :title="avecRaccourci(t('bibliotheque.barre.resynchroniser'), 'F5')" :disabled="loading" @click="reload()">
+    <button class="icon-btn resynchro" :class="{ 'hors-biblio': !chercheDansLaBiblio }" :title="avecRaccourci(t('bibliotheque.barre.resynchroniser'), 'F5')" :aria-label="t('bibliotheque.barre.resynchroniser')" :disabled="loading" @click="reload()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
     </button>
-    <button class="icon-btn" :title="t('bibliotheque.barre.theme')" @click="toggleTheme">
+    <button class="icon-btn theme" :title="t('bibliotheque.barre.theme')" :aria-label="t('bibliotheque.barre.theme')" @click="toggleTheme">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5Z" /></svg>
     </button>
-    <button class="icon-btn" :class="{ active: settingsOpen }" :title="avecRaccourci(t('bibliotheque.barre.parametres'), ctrl, ',')" @click="openSettings()">
+    <button class="icon-btn reglages" :class="{ active: settingsOpen }" :title="avecRaccourci(t('bibliotheque.barre.parametres'), ctrl, ',')" :aria-label="t('bibliotheque.barre.parametres')" @click="openSettings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3.1" /><path d="M19.4 13a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1.1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1.1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H8a1.6 1.6 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V8a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></svg>
     </button>
-    <button class="me" :title="t('bibliotheque.barre.monCompteTorii', { nom: myName })" @click="openMyAccount">
+    <button class="me" :title="t('bibliotheque.barre.monCompteTorii', { nom: myName })" :aria-label="t('bibliotheque.barre.monCompteTorii', { nom: myName })" @click="openMyAccount">
       <img v-if="me?.avatarUrl" class="me-avatar" :src="me.avatarUrl" :alt="myName" />
       <span v-else class="me-avatar fallback">{{ myInitials }}</span>
       <span class="me-name">{{ myName }}</span>
@@ -267,4 +269,26 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 }
 .me-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .me-torii { font-size: 11px; color: var(--accent); margin-left: -2px; }
+.marque { display: none; }
+
+/* Web sur téléphone : le logo et le compte, le reste est dans la barre du bas. La barre du haut
+   défile avec la page : l'écran est trop petit pour lui laisser sa hauteur en permanence.
+   Le retour passe par le geste du téléphone et par le bouton des fiches. */
+@media (max-width: 820px) {
+  .topbar.web { position: static; gap: 8px; padding: 12px 0; background: none; backdrop-filter: none; }
+  .topbar.web .marque { display: block; width: 34px; height: 34px; flex: none; }
+  .topbar.web .historique,
+  .topbar.web .hint,
+  .topbar.web .theme,
+  .topbar.web .reglages,
+  .topbar.web .resynchro.hors-biblio,
+  .topbar.web .me-name,
+  .topbar.web .me-torii { display: none; }
+  .topbar.web .search + .topbar-spacer { display: none; }
+  .topbar.web .search { flex: 1 1 0; max-width: none; }
+  .topbar.web .search input { padding-right: 38px; }
+  .topbar.web .me { padding: 0 4px; }
+  /* Seul le rond qui tourne : le texte prendrait la place du champ. */
+  .topbar.web .enrich-pill { padding: 6px; font-size: 0; gap: 0; }
+}
 </style>

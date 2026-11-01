@@ -328,7 +328,34 @@ html.web .wish-dot { display: none; }
    Sa largeur, partagée par la grille de l'application et par les fiches (jeu, Boutique)
    qui s'ouvrent À SA DROITE : la barre reste visible et cliquable partout. Nulle quand
    elle passe au-dessus du contenu (fenêtre étroite : démo web sur téléphone). */
-:root { --largeur-laterale: 262px; }
+:root { --largeur-laterale: 262px; --barre-mobile: 0px; }
 @media (max-width: 820px) {
   :root { --largeur-laterale: 0px; }
+  /* La barre du bas (`BarreMobile`), qui remplace la latérale sur la version web. */
+  html.web { --barre-mobile: calc(58px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* --- Écrans tactiles ----------------------------------------------------------
+   Un doigt ne survole pas : l'état « survolé » resterait collé à la dernière carte touchée. Les
+   flèches des rayons s'effacent devant le geste, plus naturel, et le texte de 16 px évite le
+   zoom automatique d'iOS sur les champs de saisie (d'où le `!important` devant les « scoped »). */
+html.web { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (hover: none) {
+  .cover-card:hover .cover { transform: none; box-shadow: var(--shadow-card); }
+  .carte-paysage:hover .visuel { transform: none; }
+  .fleche { display: none; }
+  /* Les barres dessinées plus haut prennent 10 px de large : sur un téléphone, le doigt suffit. */
+  html.web ::-webkit-scrollbar { width: 0; height: 0; }
+}
+@media (hover: none) and (pointer: coarse) {
+  html.web input, html.web select, html.web textarea { font-size: 16px !important; }
+}
+
+/* --- Téléphone : les pièces communes aux rayons --------------------------------- */
+@media (max-width: 620px) {
+  .cover-card .cover-title { left: 10px; right: 10px; bottom: 10px; font-size: 16px; }
+  .rayon-tete { flex-wrap: nowrap; align-items: baseline; }
+  .rayon-tete > :first-child { min-width: 0; }
+  .rayon-tete h2 { font-size: 18px; }
+  .rayon-tete .actions { flex: none; }
 }

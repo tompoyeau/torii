@@ -82,6 +82,8 @@ function surTouche(e: KeyboardEvent) {
   const ctrl = e.ctrlKey || e.metaKey;
 
   if (e.altKey && !ctrl && !e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    // Sur le web, c'est le raccourci du navigateur, et `useNavigation` suit son historique.
+    if (MODE_WEB) return;
     e.preventDefault();
     if (e.key === "ArrowLeft") nav.reculer();
     else nav.avancer();

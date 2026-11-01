@@ -239,4 +239,17 @@ function quitterFocus(e: FocusEvent) {
   .titre { font-size: 30px; }
   .vignette { width: 84px; }
 }
+/* Le texte occupe toute la largeur : le voile s'assombrit vers le bas, plus de gauche à droite. */
+@media (max-width: 620px) {
+  .vedette { min-height: 0; border-radius: 18px; }
+  .voile { background: linear-gradient(0deg, rgba(8, 5, 14, 0.95) 0%, rgba(8, 5, 14, 0.78) 55%, rgba(8, 5, 14, 0.25) 100%); }
+  .image { object-position: center top; }
+  .contenu { padding: 56px 18px 0; gap: 10px; max-width: none; }
+  .titre { font-size: 26px; }
+  .desc { -webkit-line-clamp: 2; line-clamp: 2; }
+  .navigation { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; padding: 16px 18px; scrollbar-width: none; }
+  .navigation::-webkit-scrollbar { display: none; }
+  .rond { display: none; }
+  .vignette { flex: none; width: 78px; }
+}
 </style>

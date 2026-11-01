@@ -140,5 +140,10 @@ h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: 
 .deja { background: var(--surface-3); color: var(--text); border-color: var(--border); }
 .fantome { height: 78px; cursor: default; }
 .suite { margin-top: 2px; }
+/* Le prix passe sous le titre : à côté, il ne laissait que quelques lettres du nom. */
+@media (max-width: 620px) {
+  .ligne { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 12px; row-gap: 4px; }
+  .vignette { grid-row: 1 / 3; width: 100%; }
+}
 .echec { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-faint); }
 </style>

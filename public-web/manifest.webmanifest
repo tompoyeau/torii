@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "Torii",
+  "short_name": "Torii",
+  "description": "Ta bibliothèque de jeux et la Boutique, sur n'importe quel appareil.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#131019",
+  "theme_color": "#131019",
+  "icons": [
+    { "src": "/icones/torii-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icones/torii-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icones/torii-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

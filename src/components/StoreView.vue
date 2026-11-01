@@ -203,6 +203,7 @@ function onCoverError(url: string | null) {
               :placeholder="t('boutique.rechercher')"
               :aria-label="t('boutique.rechercher')"
               autocomplete="off"
+              enterkeyhint="search"
               role="combobox"
               aria-autocomplete="list"
               :aria-expanded="suggestOpen && suggestions.length > 0"
@@ -305,7 +306,7 @@ function onCoverError(url: string | null) {
 
     <div v-else class="accueil">
       <template v-if="!activeQuery">
-        <nav class="raccourcis" :aria-label="t('boutique.accueil.rayons')">
+        <nav class="raccourcis no-scrollbar" :aria-label="t('boutique.accueil.rayons')">
           <button v-for="n in NAV" :key="n.cle" class="chip" @click="allerA(n.cible)">
             {{ t(`boutique.accueil.nav.${n.cle}` as Cle) }}
           </button>
@@ -465,8 +466,9 @@ function onCoverError(url: string | null) {
 .store-head { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
 .store-title h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
 .store-title .sub { margin: 4px 0 0; font-size: 13.5px; color: var(--text-faint); }
-/* Recherche par titre et catégories : côte à côte, jamais l'une sous l'autre. */
-.store-outils { display: flex; gap: 8px; margin-left: auto; flex: 1; min-width: 320px; max-width: 660px; }
+/* Recherche par titre et catégories : côte à côte, jamais l'une sous l'autre. Base de 420 px : sous
+   cette place, l'ensemble passe sous le titre au lieu d'écraser le champ jusqu'à le rendre illisible. */
+.store-outils { display: flex; gap: 8px; margin-left: auto; flex: 1 1 420px; min-width: 320px; max-width: 660px; }
 .store-search-wrap { position: relative; flex: 1; min-width: 0; }
 /* Le bouton des catégories, à la hauteur de la barre de recherche. */
 .store-cats { align-self: stretch; display: flex; flex: none; }
@@ -488,6 +490,8 @@ function onCoverError(url: string | null) {
 .store-search:focus-within { border-color: var(--accent); }
 .store-search > svg { width: 17px; height: 17px; color: var(--text-faint); flex: none; }
 .store-search input { flex: 1; min-width: 0; background: none; border: none; color: var(--text); font-size: 14px; padding: 8px 0; }
+/* La bordure de la barre marque déjà le focus : un second contour ferait double emploi. */
+.store-search input:focus-visible { outline: none; }
 .store-search .clear { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: none; border: none; color: var(--text-faint); }
 .store-search .clear svg { width: 15px; height: 15px; }
 .store-search .clear:hover { background: var(--surface-2); color: var(--text); }
@@ -574,7 +578,22 @@ function onCoverError(url: string | null) {
   .duo { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 620px) {
-  .store-head { flex-direction: column; align-items: stretch; }
-  .store-outils { margin-left: 0; max-width: none; min-width: 0; }
+  .store-head { flex-direction: column; align-items: stretch; gap: 0; margin-bottom: 14px; }
+  .store-outils { margin-left: 0; max-width: none; min-width: 0; flex: none; }
+  /* La barre du bas dit déjà où l'on est : le titre reste pour les lecteurs d'écran. */
+  .store-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Le clavier du téléphone a sa touche de recherche. */
+  .store-search { padding-right: 6px; }
+  .store-search .go { display: none; }
+  .store-cats :deep(.cat-libelle), .store-cats :deep(.caret) { display: none; }
+  /* Les rayons sur une ligne qui défile : sur trois lignes, ils repoussaient la vedette hors de l'écran. */
+  .raccourcis { flex-wrap: nowrap; overflow-x: auto; margin: 0 -18px -12px; padding: 0 18px; }
+  .raccourcis .chip { flex: none; }
+  .accueil { gap: 28px; }
+  .accueil > *, #rayon-offerts { scroll-margin-top: 12px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  .meta { flex-wrap: wrap; gap: 2px 8px; }
+  .store-name { margin-left: 0; }
+  .vedette-fantome { height: 320px; }
 }
 </style>

@@ -52,7 +52,8 @@ async function basculerMenu() {
   if (ouvert.value) {
     recherche.value = "";
     await nextTick();
-    champ.value?.focus();
+    // Sur un écran tactile, le focus sortirait le clavier, qui cacherait la liste.
+    if (!window.matchMedia("(hover: none)").matches) champ.value?.focus();
   }
 }
 
@@ -113,6 +114,7 @@ onBeforeUnmount(() => {
       :class="{ active: actif }"
       aria-haspopup="dialog"
       :aria-expanded="ouvert"
+      :aria-label="libelle"
       :title="titre"
       @click.stop="basculerMenu"
     >
@@ -173,7 +175,7 @@ onBeforeUnmount(() => {
 }
 
 .cat-menu {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: 290px;
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: min(290px, calc(100vw - 36px));
   background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
   box-shadow: var(--shadow-hero); display: flex; flex-direction: column; overflow: hidden;
 }

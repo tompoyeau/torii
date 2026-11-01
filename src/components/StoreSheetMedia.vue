@@ -255,4 +255,15 @@ button.lecture:hover { transform: scale(1.06); background: var(--accent); color:
 .defile svg { width: 17px; height: 17px; }
 .defile.prec { left: 4px; }
 .defile.suiv { right: 4px; }
+/* La bande défile sous le doigt. */
+@media (hover: none) {
+  .defile { display: none; }
+}
+/* Sur une vidéo de 190 px de haut, le bouton et la légende se recouvraient. */
+@media (max-width: 620px) {
+  .lecture:not(.petite) { width: 52px; height: 52px; }
+  .lecture:not(.petite) svg { width: 24px; height: 24px; }
+  .legende { padding: 10px 12px; gap: 8px; }
+  .legende .btn-ghost { padding: 7px 10px; font-size: 12px; }
+}
 </style>

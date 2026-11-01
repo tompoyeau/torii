@@ -6,6 +6,7 @@ import { useLibrary } from "./useLibrary";
 import { useFriendList, type UnifiedFriend } from "./useFriendList";
 import { titreFiltre } from "../data/platforms";
 import { t } from "../i18n";
+import { MODE_WEB } from "../lib/mode";
 import type { LibraryFilter } from "../types";
 
 /**
@@ -115,6 +116,8 @@ const avant: Etape[] = [];
 const version = ref(0);
 /** Vrai pendant qu'on rejoue une étape : ce changement-là n'en crée pas une nouvelle. */
 let restauration = false;
+/** Sur le web : le numéro de l'étape courante dans l'historique du navigateur. */
+let rang = 0;
 
 watch(
   () => [
@@ -137,10 +140,12 @@ watch(
       return;
     }
     arriere.push(courante);
-    if (arriere.length > LIMITE) arriere.shift();
+    // Sur le web, chaque étape a son entrée dans l'historique du navigateur : rien ne s'oublie.
+    if (!MODE_WEB && arriere.length > LIMITE) arriere.shift();
     avant.length = 0;
     courante = nouvelle;
     version.value++;
+    if (MODE_WEB) history.pushState({ torii: ++rang }, "");
   },
 );
 
@@ -228,8 +233,8 @@ function appliquer(e: Etape) {
   });
 }
 
-/** Recule (n < 0) ou avance (n > 0) de |n| étapes. */
-function deplacer(n: number): boolean {
+/** Recule (n < 0) ou avance (n > 0) de |n| étapes dans les piles. */
+function rejouer(n: number): boolean {
   const depuis = n < 0 ? arriere : avant;
   const vers = n < 0 ? avant : arriere;
   if (!n || !depuis.length) return false;
@@ -239,6 +244,15 @@ function deplacer(n: number): boolean {
     cible = depuis.pop()!;
   }
   appliquer(cible);
+  return true;
+}
+
+/** Sur le web, le navigateur décide : son `popstate` rejoue le déplacement (voir plus bas). */
+function deplacer(n: number): boolean {
+  if (!MODE_WEB) return rejouer(n);
+  const depuis = n < 0 ? arriere : avant;
+  if (!n || !depuis.length) return false;
+  history.go(n);
   return true;
 }
 
@@ -268,6 +282,48 @@ export function useModaleDeNavigation(modale: Modale) {
     if (i >= 0) modales.splice(i, 1);
   });
 }
+
+// --- Historique du navigateur (web) ---------------------------------------------
+
+/**
+ * Sur le web, le bouton retour du téléphone doit reculer dans Torii, pas quitter le site. Chaque
+ * étape pousse donc une entrée dans l'historique du navigateur, numérotée par son `rang` ; le
+ * `popstate` rejoue l'écart. Les flèches et le bouton des fiches passent par `history.go` : une
+ * seule voie, et les deux historiques ne peuvent pas diverger.
+ */
+function suivreLeNavigateur() {
+  // La position à restaurer est connue de `restaurerDefilement` : le navigateur ne s'en mêle pas.
+  history.scrollRestoration = "manual";
+  // Après un rechargement, on reprend le numéro de l'entrée : les piles, elles, sont reparties de zéro.
+  const etat: unknown = history.state?.torii;
+  rang = typeof etat === "number" ? etat : 0;
+  history.replaceState({ torii: rang }, "");
+
+  /** Le retour qui a seulement fermé une modale vient d'être annulé : son `popstate` ne compte pas. */
+  let annulation = false;
+  window.addEventListener("popstate", (e) => {
+    if (annulation) {
+      annulation = false;
+      return;
+    }
+    const cible: unknown = e.state?.torii;
+    if (typeof cible !== "number") return;
+    const n = cible - rang;
+    // Une modale n'est pas une étape : le retour la ferme, et on reprend l'entrée qu'on quittait.
+    const modale = modaleOuverte();
+    if (modale && n < 0) {
+      modale.fermer();
+      annulation = true;
+      history.go(-n);
+      return;
+    }
+    rang = cible;
+    // Plus rien à rejouer : les entrées d'avant un rechargement mènent toutes au même écran.
+    // Autant quitter le site tout de suite, comme le ferait le retour sur la toute première.
+    if (!rejouer(n) && n < 0) history.go(-(cible + 1));
+  });
+}
+if (MODE_WEB) suivreLeNavigateur();
 
 // --- Gestes -------------------------------------------------------------------
 

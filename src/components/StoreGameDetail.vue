@@ -462,7 +462,7 @@ const detailOffre = (p: StorePrice) =>
 
 <style scoped>
 /* À droite de la barre latérale, comme la fiche d'un jeu de la bibliothèque. */
-.sd { position: fixed; inset: 0 0 0 var(--largeur-laterale); z-index: 110; background: var(--bg); overflow-y: auto; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
+.sd { position: fixed; inset: 0 0 var(--barre-mobile) var(--largeur-laterale); z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
 .sd.open { opacity: 1; visibility: visible; }
 .sd-banner { position: relative; height: 40vh; min-height: 300px; overflow: hidden; }
 .sd-banner-art { position: absolute; inset: 0; }
@@ -595,7 +595,7 @@ const detailOffre = (p: StorePrice) =>
 .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin 0.7s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.lightbox { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 4vh 5vw; background: rgba(6, 4, 10, 0.86); backdrop-filter: blur(6px); cursor: zoom-out; }
+.lightbox { position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 300; display: grid; place-items: center; padding: 4vh 5vw; background: rgba(6, 4, 10, 0.86); backdrop-filter: blur(6px); cursor: zoom-out; }
 .lb-img { max-width: 100%; max-height: 92vh; border-radius: 12px; object-fit: contain; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6); }
 .lb-close { position: fixed; top: 20px; right: 22px; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(14, 10, 20, 0.55); color: #fff; }
 .lb-close svg { width: 20px; height: 20px; }
@@ -618,5 +618,26 @@ const detailOffre = (p: StorePrice) =>
 }
 @media (max-width: 820px) {
   .sd-header, .sd-body { padding-left: 22px; padding-right: 22px; }
+  /* Comparer les prix passe avant de lire la description. */
+  .sd-prices { order: -1; }
+}
+@media (max-width: 620px) {
+  /* La bannière suit son contenu : titre, tags et notes tiennent rarement dans une hauteur fixe,
+     et ils remontaient sous le bouton retour. La pastille « Boutique » redit la barre du bas. */
+  .sd-banner { height: auto; min-height: 260px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .sd-scrim { background: linear-gradient(0deg, var(--bg) 1%, rgba(10, 7, 16, 0.72) 55%, rgba(10, 7, 16, 0.45) 100%); }
+  .sd-tag { display: none; }
+  .sd-header, .sd-body { padding-left: 18px; padding-right: 18px; }
+  .sd-header { position: relative; padding-top: 68px; padding-bottom: 18px; }
+  .sd-body { gap: 28px; padding-top: 18px; padding-bottom: 40px; }
+  /* Le retour reste à portée du pouce quand la fiche défile, sans son libellé qui masquerait l'image. */
+  .sd-nav { position: fixed; top: 12px; left: 12px; }
+  .sd-back { padding: 9px 10px; }
+  .sd-back-label { display: none; }
+  .sd-forward { display: none; }
+  .sd-prices { min-width: 0; }
+  .lb-nav { top: auto; bottom: calc(14px + var(--barre-mobile)); transform: none; width: 44px; height: 44px; }
+  .lb-count { bottom: calc(24px + var(--barre-mobile)); }
+  .lb-close { top: 12px; right: 12px; }
 }
 </style>

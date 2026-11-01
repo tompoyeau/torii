@@ -28,7 +28,7 @@ const { section } = useUi();
 
 <style scoped>
 .toasts {
-  position: fixed; left: 0; right: 0; bottom: 26px; z-index: 300;
+  position: fixed; left: 0; right: 0; bottom: calc(26px + var(--barre-mobile)); z-index: 300;
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   pointer-events: none;
 }

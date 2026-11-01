@@ -9,6 +9,7 @@ import { startWishlistNotifier } from "./composables/useWishlistNotifier";
 import { useTorii } from "./composables/useTorii";
 import { MODE_WEB } from "./lib/mode";
 import AppShell from "./components/AppShell.vue";
+import BarreMobile from "./components/BarreMobile.vue";
 import EcranConnexion from "./components/EcranConnexion.vue";
 import GameDetail from "./components/GameDetail.vue";
 import StoreGameDetail from "./components/StoreGameDetail.vue";
@@ -58,11 +59,13 @@ function onContextMenu(e: MouseEvent) {
 // Les boutons « retour » et « avant » de la souris = MouseEvent.button 3 et 4. On
 // empêche la webview de naviguer dans son propre historique (mousedown) et on pilote
 // l'historique de l'application (`useNavigation`) sur le relâchement (mouseup).
+// Sur le web, on laisse faire le navigateur : `useNavigation` suit son historique.
 function onMouseDown(e: MouseEvent) {
+  if (MODE_WEB) return;
   if (e.button === 3 || e.button === 4) e.preventDefault();
 }
 function onMouseUp(e: MouseEvent) {
-  if (e.button !== 3 && e.button !== 4) return;
+  if (MODE_WEB || (e.button !== 3 && e.button !== 4)) return;
   e.preventDefault();
   if (e.button === 3) reculer();
   else avancer();
@@ -105,6 +108,7 @@ onBeforeUnmount(() => {
       <ContextMenu />
       <AddGameModal />
       <UpdateBanner />
+      <BarreMobile v-if="MODE_WEB" />
     </template>
     <EcranConnexion v-else-if="compteVerifie" />
     <ToriiSignInDialog />

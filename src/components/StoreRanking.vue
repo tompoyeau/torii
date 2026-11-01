@@ -172,4 +172,12 @@ const detail = (j: StoreShelfItem) =>
   .vignette { width: 92px; }
   .etat { display: none; }
 }
+/* Le prix passe sous le titre : à côté, il ne laissait que quelques lettres du nom du jeu. */
+@media (max-width: 620px) {
+  .ligne { display: grid; grid-template-columns: 18px 96px minmax(0, 1fr); column-gap: 10px; row-gap: 4px; padding: 8px 0; }
+  .rang { grid-row: 1 / 3; font-size: 13px; }
+  .vignette { grid-row: 1 / 3; width: 100%; }
+  .sous { flex-wrap: wrap; gap: 2px 8px; }
+  .tarif { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+}
 </style>

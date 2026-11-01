@@ -8,6 +8,7 @@ import type { Game, SortKey } from "../types";
 import { etiquetteIntl, t } from "../i18n";
 import { MODE_WEB } from "../lib/mode";
 import CategoryFilter from "./CategoryFilter.vue";
+import FiltresMobile from "./FiltresMobile.vue";
 import Sidebar from "./Sidebar.vue";
 import TopBar from "./TopBar.vue";
 import HeroFeatured from "./HeroFeatured.vue";
@@ -101,6 +102,7 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
       <WishlistView v-else-if="section === 'wishlist'" />
       <template v-else>
       <HeroFeatured v-if="!MODE_WEB" />
+      <FiltresMobile v-if="MODE_WEB" />
 
       <div class="sec-head">
         <h2>{{ titreFiltre(filter) }}</h2>
@@ -194,7 +196,13 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 .invitation p { max-width: 52ch; margin-inline: auto; line-height: 1.5; color: var(--text-dim); }
 
 @media (max-width: 820px) {
-  .shell { grid-template-columns: 1fr; }
-  .main { padding: 0 18px 40px; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .main {
+    padding: 0 max(18px, env(safe-area-inset-right, 0px)) calc(40px + var(--barre-mobile)) max(18px, env(safe-area-inset-left, 0px));
+  }
+}
+/* Deux jaquettes par ligne sur téléphone : le réglage de leur taille vaut pour un écran de PC. */
+@media (max-width: 620px) {
+  .grid:not(.list) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
 }
 </style>
