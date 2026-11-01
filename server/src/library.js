@@ -6,7 +6,7 @@
  * bibliothèque, elle, reste. Deux conséquences assumées, écrites ici pour qu'on ne les
  * redécouvre pas plus tard : la promesse « aucun historique » du README ne couvre QUE la
  * présence, et une copie de cette base dit ce que les gens **possèdent** — pas ce qu'ils
- * jouent, ni quand.
+ * jouent, ni quand, sauf pour ceux qui ont activé l'envoi du temps de jeu (voir `uploadStats`).
  *
  * ## Pourquoi R2 plutôt qu'une table de jeux
  *
@@ -58,6 +58,9 @@ const MAX_TITLE = 120;
 const MAX_COVER = 300;
 const MAX_PLATFORMS = 6;
 const MAX_PLATFORM = 16;
+const MAX_APPID = 4_294_967_295;
+/** Une borne contre les valeurs absurdes : près de deux siècles de jeu. */
+const MAX_MINUTES = 100_000_000;
 /** Appareils mémorisés par compte. Au-delà, c'est un client qui boucle, pas un joueur. */
 const MAX_DEVICES = 5;
 
@@ -66,6 +69,8 @@ const ID = /^[A-Za-z0-9_-]{1,40}$/;
 
 /** Clé de l'objet R2. Le compte d'abord : c'est ce qui rend le préfixe listable. */
 const objectKey = (accountId, deviceId) => `lib/${accountId}/${deviceId}.json`;
+/** Le temps de jeu d'un appareil : un objet à part (voir `uploadStats`). */
+const statsKey = (accountId, deviceId) => `stats/${accountId}/${deviceId}.json`;
 
 /**
  * Retient d'un jeu ce qui sert à l'afficher et à le croiser, rien de plus.
@@ -102,6 +107,11 @@ function normalizeGame(raw) {
   // doit pas pouvoir glisser une chaîne dans l'objet R2. Absent = possédé, le cas
   // courant, et l'immense majorité des lignes n'a donc pas ce champ.
   if (raw.familyShared === true) game.familyShared = true;
+  // L'identifiant Steam du jeu, pour relier sa fiche sans deviner par le titre. Il ne dit rien
+  // de plus que ce que la liste dit déjà : ce que la personne possède.
+  if (Number.isInteger(raw.steamAppId) && raw.steamAppId > 0 && raw.steamAppId <= MAX_APPID) {
+    game.steamAppId = raw.steamAppId;
+  }
   return game;
 }
 
@@ -311,7 +321,7 @@ export async function forgetLibrary(request, env, session, deviceId) {
   if (!libs) return fail(500, "mal_configure", "Le stockage des bibliothèques n'est pas configuré.");
   if (!ID.test(deviceId)) return json({ ok: true });
 
-  await libs.delete(objectKey(session.accountId, deviceId));
+  await libs.delete([objectKey(session.accountId, deviceId), statsKey(session.accountId, deviceId)]);
   await env.DB.prepare("DELETE FROM libraries WHERE account_id = ? AND device_id = ?")
     .bind(session.accountId, deviceId)
     .run();
@@ -337,9 +347,92 @@ export async function forgetAllLibraries(env, accountId) {
   const rows = await env.DB.prepare("SELECT device_id FROM libraries WHERE account_id = ?")
     .bind(accountId)
     .all();
-  const cles = (rows.results || []).map((r) => objectKey(accountId, r.device_id));
+  const cles = (rows.results || []).flatMap((r) => [objectKey(accountId, r.device_id), statsKey(accountId, r.device_id)]);
 
   const libs = bucket(env);
   if (libs && cles.length) await libs.delete(cles);
   await env.DB.prepare("DELETE FROM libraries WHERE account_id = ?").bind(accountId).run();
+}
+
+/* ── Temps de jeu ───────────────────────────────────────────────────────────── */
+
+/**
+ * Le temps de jeu d'un appareil, pour que son propriétaire le retrouve sur ses autres appareils.
+ * C'est une option du PC, éteinte par défaut.
+ *
+ * 🔑 UN OBJET À PART, ET AUCUN CHEMIN POUR LES AMIS. Il aurait suffi de l'ajouter à la bibliothèque,
+ * mais les amis lisent celle-ci : il aurait fallu le retirer à chaque lecture, et un oubli l'aurait
+ * exposé. Ici, la route de lecture ne prend même pas de compte en paramètre : elle ne sait lire que
+ * celui de la session.
+ *
+ * 🔑 L'INDEX N'EST PAS TOUCHÉ. Les amis voient la date et l'empreinte de la bibliothèque : si le
+ * temps de jeu les faisait bouger, ils sauraient quand la personne vient de jouer, partage de
+ * présence éteint ou non.
+ *
+ * Une valeur par jeu, écrasée à chaque envoi : ni session ni historique.
+ */
+function normalizeStats(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const key = clamp(raw.key, MAX_KEY);
+  if (!key) return null;
+  const stats = { key };
+  if (Number.isInteger(raw.minutes) && raw.minutes > 0 && raw.minutes <= MAX_MINUTES) stats.minutes = raw.minutes;
+  if (Number.isInteger(raw.lastPlayed) && raw.lastPlayed > 0 && raw.lastPlayed <= now() + 86_400) {
+    stats.lastPlayed = raw.lastPlayed;
+  }
+  return stats.minutes || stats.lastPlayed ? stats : null;
+}
+
+/** `PUT /v1/library-stats` — le temps de jeu d'un appareil : `{ deviceId, games: [{ key, minutes, lastPlayed }] }`. */
+export async function uploadStats(request, env, session) {
+  const libs = bucket(env);
+  if (!libs) return fail(500, "mal_configure", "Le stockage des bibliothèques n'est pas configuré.");
+  if (Number(request.headers.get("content-length") || 0) > MAX_BODY) {
+    return fail(413, "trop_gros", "Cet envoi dépasse la taille acceptée.");
+  }
+  const data = (await body(request, MAX_BODY)) || {};
+  const deviceId = clamp(data.deviceId, 40);
+  if (!ID.test(deviceId)) return fail(400, "appareil_invalide", "Identifiant d'appareil invalide.");
+  if (!Array.isArray(data.games)) return fail(400, "requete_invalide", "Il manque la liste des jeux.");
+
+  // Seulement un appareil déjà connu : `MAX_DEVICES` borne aussi ces objets-ci, et l'index reste
+  // la seule carte qui y mène quand il faut tout effacer.
+  const connu = await env.DB.prepare("SELECT 1 AS oui FROM libraries WHERE account_id = ? AND device_id = ?")
+    .bind(session.accountId, deviceId)
+    .first();
+  if (!connu) return fail(409, "appareil_inconnu", "Cet appareil n'a pas encore envoyé sa bibliothèque.");
+
+  const parCle = new Map();
+  for (const brut of data.games) {
+    if (parCle.size >= MAX_GAMES) break;
+    const stats = normalizeStats(brut);
+    if (stats && !parCle.has(stats.key)) parCle.set(stats.key, stats);
+  }
+  const games = [...parCle.values()];
+  await libs.put(statsKey(session.accountId, deviceId), JSON.stringify({ updatedAt: now(), games }), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+  });
+  return json({ ok: true, gameCount: games.length });
+}
+
+/** `GET /v1/library-stats/{deviceId}` — le temps de jeu de MES appareils, et de personne d'autre. */
+export async function readStats(request, env, session, deviceId) {
+  const libs = bucket(env);
+  if (!libs) return fail(500, "mal_configure", "Le stockage des bibliothèques n'est pas configuré.");
+  const objet = ID.test(deviceId) ? await libs.get(statsKey(session.accountId, deviceId)) : null;
+  // Option éteinte, ou rien d'envoyé encore : ce n'est pas une erreur, juste rien à montrer.
+  if (!objet) return json({ games: [] }, 200, { "cache-control": "private, no-store" });
+  return json(await objet.json(), 200, { "cache-control": "private, no-store" });
+}
+
+/** `DELETE /v1/library-stats` — l'option s'éteint : tout le temps de jeu part, tout de suite. */
+export async function forgetStats(request, env, session) {
+  const libs = bucket(env);
+  if (!libs) return fail(500, "mal_configure", "Le stockage des bibliothèques n'est pas configuré.");
+  const rows = await env.DB.prepare("SELECT device_id FROM libraries WHERE account_id = ?")
+    .bind(session.accountId)
+    .all();
+  const cles = (rows.results || []).map((r) => statsKey(session.accountId, r.device_id));
+  if (cles.length) await libs.delete(cles);
+  return json({ ok: true });
 }

@@ -2,7 +2,7 @@ import { t } from "../i18n";
 import { fusionnerAppareils } from "./libraries";
 import { CLE_A_ENVOYER, CLE_COMPTE } from "./revendeurs";
 import type {
-  GameDto, LibGame, LibraryIndex, LibrarySnapshot, PlatformId, ToriiAccount, ToriiDevice, ToriiSignIn,
+  GameDto, GameMeta, LibGame, LibraryIndex, LibrarySnapshot, OwnedGameSheet, PlatformId, StatsJeu, ToriiAccount, ToriiDevice, ToriiSignIn,
 } from "../types";
 
 /**
@@ -173,10 +173,10 @@ const PLATEFORMES: readonly string[] = ["steam", "epic", "gog", "riot", "ubisoft
  * multi-sources, exactement comme avec le scan d'un PC.
  *
  * ⚠️ `installed: false` ne veut rien dire ici : le serveur ne sait pas ce qui est installé où,
- * et l'interface web n'en parle pas. Il ne connaît pas non plus le temps de jeu : la liste
- * envoyée par le PC est volontairement pauvre, parce que les amis peuvent la lire.
+ * et l'interface web n'en parle pas. La liste envoyée par le PC est volontairement pauvre, parce
+ * que les amis peuvent la lire : le temps de jeu arrive à part, s'il a été autorisé.
  */
-function versDtos(jeu: LibGame): GameDto[] {
+function versDtos(jeu: LibGame, stats?: StatsJeu): GameDto[] {
   const plateformes = jeu.platforms.filter((p) => PLATEFORMES.includes(p));
   return (plateformes.length ? plateformes : ["manual"]).map((platform) => ({
     id: `${platform}:${jeu.key}`,
@@ -187,14 +187,42 @@ function versDtos(jeu: LibGame): GameDto[] {
     familyShared: !!jeu.familyShared,
     sizeGb: 0,
     coverUrl: jeu.cover ?? null,
-    launchTarget: "",
+    launchTarget: platform === "steam" && jeu.steamAppId ? String(jeu.steamAppId) : "",
+    playtimeMinutes: stats?.minutes ?? null,
+    lastPlayed: stats?.lastPlayed ?? null,
   }));
+}
+
+/**
+ * Le temps de jeu de mes appareils, par jeu. Sans l'option sur le PC, il n'y a simplement rien.
+ * Deux PC voient souvent le même compte Steam : on garde le plus grand temps et la session la plus récente.
+ */
+async function tempsDeJeu(index: LibraryIndex): Promise<Map<string, StatsJeu>> {
+  const listes = await Promise.all(
+    index.mine.map((e) =>
+      api<{ games: StatsJeu[] }>(`/v1/library-stats/${e.deviceId}`)
+        .then((r) => r.games)
+        // Le temps de jeu n'est qu'un complément : la bibliothèque s'affiche sans lui.
+        .catch(() => [] as StatsJeu[]),
+    ),
+  );
+  const parCle = new Map<string, StatsJeu>();
+  for (const stats of listes.flat()) {
+    const deja = parCle.get(stats.key);
+    parCle.set(stats.key, {
+      key: stats.key,
+      minutes: Math.max(deja?.minutes ?? 0, stats.minutes ?? 0) || undefined,
+      lastPlayed: Math.max(deja?.lastPlayed ?? 0, stats.lastPlayed ?? 0) || undefined,
+    });
+  }
+  return parCle;
 }
 
 /** Ma bibliothèque : l'union de ce qu'ont déposé mes appareils. Vide sans session. */
 async function bibliotheque(): Promise<GameDto[]> {
   if (!sessionPresente()) return [];
   const index = await api<LibraryIndex>("/v1/library");
+  const stats = tempsDeJeu(index);
   const instantanes = await Promise.all(
     index.mine.map((e) =>
       api<LibrarySnapshot>(`/v1/library/${e.accountId}/${e.deviceId}`)
@@ -203,7 +231,8 @@ async function bibliotheque(): Promise<GameDto[]> {
         .catch(() => [] as LibGame[]),
     ),
   );
-  return fusionnerAppareils(instantanes).flatMap(versDtos);
+  const parCle = await stats;
+  return fusionnerAppareils(instantanes).flatMap((jeu) => versDtos(jeu, parCle.get(jeu.key)));
 }
 
 // --- Les commandes ------------------------------------------------------------------
@@ -265,6 +294,20 @@ const COMMANDES: Record<string, (a: Args) => Promise<unknown>> = {
   store_game: ({ gameId }) => boutique(`/v1/game/${encodeURIComponent(gameId as string)}`),
   store_id_for_steam: async ({ appId }) => (await boutique<{ id: string | null }>(`/v1/id-for-steam/${appId}`)).id,
   lien_partage: async ({ titre }) => (await boutique<{ lien: string | null }>("/v1/share", { titre: titre as string })).lien,
+
+  // Fiche d'un jeu de la bibliothèque. Le titre ne sert que si le PC n'a pas donné d'appid Steam.
+  enrich_game: async ({ title, platform, launchTarget }) => {
+    const appId = platform === "steam" && launchTarget ? (launchTarget as string) : null;
+    return (await boutique<{ meta: GameMeta | null }>("/v1/meta", { appId, titre: appId ? null : (title as string) })).meta;
+  },
+  owned_game_sheet: async ({ title, steamAppid }) =>
+    (
+      await boutique<{ fiche: OwnedGameSheet | null }>("/v1/owned", {
+        appId: steamAppid as number | null,
+        titre: steamAppid ? null : (title as string),
+      })
+    ).fiche,
+  steam_current_players: async ({ appid }) => (await boutique<{ joueurs: number | null }>(`/v1/players/${appid}`)).joueurs,
 
   // Revendeurs masqués
   get_excluded_stores: async () => lireExclus(),

@@ -556,6 +556,11 @@ export async function librarySetSync(enabled: boolean): Promise<SyncResult> {
   return await social<SyncResult>("library_set_sync", { enabled });
 }
 
+/** Active l'envoi du temps de jeu, ou le coupe et l'efface du serveur. */
+export async function librarySetPlaytime(enabled: boolean): Promise<void> {
+  await social<void>("library_set_playtime", { enabled });
+}
+
 /**
  * Cercle poussé par le battement de cœur (toutes les 30 s) : publier sa présence
  * renvoie celle des amis, donc l'interface se met à jour sans rien demander.

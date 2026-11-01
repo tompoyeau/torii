@@ -68,6 +68,9 @@ et `exclus`, répété pour chaque revendeur masqué.
 | `GET /v1/suggest?q=` | `store_suggest` | `StoreSuggestion[]` |
 | `GET /v1/id-for-steam/{appid}` | `store_id_for_steam` | `{ id }` |
 | `GET /v1/share?titre=` | `lien_partage` | `{ lien }` |
+| `GET /v1/owned?appId=` ou `?titre=` | `owned_game_sheet` | `{ fiche }` : `OwnedGameSheet`, `null` sans lien sûr avec Steam |
+| `GET /v1/meta?appId=` ou `?titre=` | `enrich_game` | `{ meta }` : le descriptif IGDB, `null` s'il ne connaît pas le jeu |
+| `GET /v1/players/{appid}` | `steam_current_players` | `{ joueurs }` |
 
 Les types sont ceux de `src/types.ts`. Une erreur rend `{ error, message }`, avec un code stable :
 `non_connecte` (401), `trop_de_requetes` (429), `indisponible` (503).

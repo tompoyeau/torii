@@ -2,7 +2,7 @@ import { t } from "../i18n";
 import { computed, ref } from "vue";
 import {
   getSettings,
-  libraryForgetDevice, libraryIndex as fetchLibraryIndex, librarySetSync, librarySync,
+  libraryForgetDevice, libraryIndex as fetchLibraryIndex, librarySetPlaytime, librarySetSync, librarySync,
   onToriiCircle, toriiCircle, toriiInvite, toriiInviteAccount, toriiLogout, toriiMe,
   toriiMutedGames, toriiMuteGame, toriiPrefs, toriiRemoveFriend, toriiRequestCode,
   toriiDeleteAccount, toriiRespond, toriiRotateCode, toriiSetPrefs, toriiSetProfile,
@@ -289,6 +289,16 @@ async function setLibrarySync(enabled: boolean) {
   }
 }
 
+async function setPlaytimeSync(enabled: boolean) {
+  librarySyncing.value = true;
+  try {
+    await librarySetPlaytime(enabled);
+    prefs.value = await toriiPrefs();
+  } finally {
+    librarySyncing.value = false;
+  }
+}
+
 /** Renvoie la bibliothèque même si rien n'a changé (bouton « Synchroniser maintenant »). */
 async function syncLibraryNow() {
   librarySyncing.value = true;
@@ -438,6 +448,7 @@ export function useTorii() {
     librarySyncing,
     refreshLibraryIndex,
     setLibrarySync,
+    setPlaytimeSync,
     setShareLibrary,
     syncLibraryNow,
     forgetDevice,

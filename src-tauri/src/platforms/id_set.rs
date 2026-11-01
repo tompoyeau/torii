@@ -82,6 +82,20 @@ mod tests {
     use super::{EXCLUDED_STORES, HIDDEN};
 
     #[test]
+    fn replace_remplace_toute_la_liste() {
+        let dir = std::env::temp_dir().join(format!("ludo-idset-replace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        EXCLUDED_STORES.set(&dir, "G2A", true).unwrap();
+        let liste = EXCLUDED_STORES.replace(&dir, vec!["Kinguin".into(), "Eneba".into(), "Kinguin".into()]).unwrap();
+        assert_eq!(liste, vec!["Eneba".to_string(), "Kinguin".to_string()]);
+        assert!(!EXCLUDED_STORES.load(&dir).contains("G2A"), "relu du disque");
+        assert!(EXCLUDED_STORES.replace(&dir, Vec::new()).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn set_unset_roundtrip() {
         let dir = std::env::temp_dir().join(format!("ludo-idset-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

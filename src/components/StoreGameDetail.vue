@@ -261,7 +261,7 @@ const detailOffre = (p: StorePrice) =>
             </span>
             <template v-if="possede">
               <StorePossede :etat="possede" />
-              <button v-if="!MODE_WEB" class="badge-note lien" @click="voirBibliotheque">{{ t("boutique.produit.voirBibliotheque") }} →</button>
+              <button class="badge-note lien" @click="voirBibliotheque">{{ t("boutique.produit.voirBibliotheque") }} →</button>
             </template>
             <!-- Sans offre, pas de bouton « Acheter » à côté duquel partager : le jeu reste
                  partageable d'ici. -->

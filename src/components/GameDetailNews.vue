@@ -65,4 +65,10 @@ h3 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; colo
   font-size: 12.5px; color: var(--text-dim); line-height: 1.45;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
+/* Sur téléphone, l'image au-dessus du texte : à côté, elle ne lui laissait que trois mots par ligne. */
+@media (max-width: 620px) {
+  .grille { grid-template-columns: minmax(0, 1fr); }
+  .carte { flex-direction: column; }
+  .carte img { width: 100%; }
+}
 </style>

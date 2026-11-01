@@ -27,8 +27,9 @@ import StoreSheetFacts from "./StoreSheetFacts.vue";
 import StoreSheetMedia from "./StoreSheetMedia.vue";
 import { etiquetteIntl, langueCourante, t } from "../i18n";
 import { useImageCascade } from "../lib/images";
+import { MODE_WEB } from "../lib/mode";
 
-const { byId, ensureEnriched, refreshInfo, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
+const { games, byId, ensureEnriched, refreshInfo, enrichingId, setFavorite, markPlayed, launchOrInstall, removeManual } = useLibrary();
 const { charger: chargerFiche, entree: entreeFiche } = useFichePossede();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
@@ -237,8 +238,6 @@ const loadingMeta = computed(
   () => !!game.value && enrichingId.value === game.value.id,
 );
 
-const { src: bannerSrc, onError: onBannerError } = useImageCascade(() => [game.value?.heroUrl, game.value?.heroAlt]);
-
 function hideBrokenCover(e: Event) {
   (e.target as HTMLElement).style.display = "none";
 }
@@ -273,6 +272,36 @@ const fiche = computed(() => entreeFiche(game.value?.id).fiche);
 const steam = computed(() => fiche.value?.steam ?? null);
 /** L'appid de la page Steam du jeu, s'il en a une sûre. */
 const appIdSteam = computed(() => fiche.value?.appId ?? (steamAppid.value ? Number(steamAppid.value) : null));
+
+/**
+ * Le visuel de la bannière. Sur le web, le serveur ne connaît que la jaquette : on prend ceux de
+ * Steam quand le jeu y est relié, et chacun peut manquer (les jeux récents n'ont plus d'adresse
+ * prévisible), d'où la première capture puis la jaquette.
+ */
+const visuelsWeb = computed(() => {
+  if (!MODE_WEB) return [];
+  const appId = appIdSteam.value;
+  const steamApps = "https://cdn.cloudflare.steamstatic.com/steam/apps";
+  return [
+    appId ? `${steamApps}/${appId}/library_hero.jpg` : null,
+    appId ? `${steamApps}/${appId}/header.jpg` : null,
+    steam.value?.captures[0]?.grande,
+    game.value?.coverUrl,
+  ];
+});
+const { src: bannerSrc, onError: onBannerError } = useImageCascade(() => [game.value?.heroUrl, game.value?.heroAlt, ...visuelsWeb.value]);
+
+/** Tous les launchers du jeu sur le web, où il n'y a rien à lancer ; le principal ailleurs. */
+const plateformes = computed(() => {
+  if (!game.value) return [];
+  return MODE_WEB && sources.value.length ? [...new Set(sources.value.map((s) => s.platform))] : [game.value.platform];
+});
+
+/**
+ * Sur le web, aucun jeu n'a de temps de jeu : l'option n'est sans doute pas activée sur le PC. On
+ * regarde toute la bibliothèque : un jeu Riot sans temps de jeu ne veut rien dire à lui seul.
+ */
+const sansTempsDeJeu = computed(() => MODE_WEB && !games.value.some((g) => g.hoursPlayed != null || g.lastPlayedAt));
 
 /**
  * Une démo mène à son jeu complet : à sa carte s'il est déjà dans la bibliothèque,
@@ -343,7 +372,8 @@ const description = computed(() => {
   if (g.description && g.descriptionSource === "locale") return { texte: g.description, anglais: false };
   if (steam.value?.resume) return { texte: steam.value.resume, anglais: false };
   if (!g.description) return null;
-  return { texte: g.description, anglais: g.descriptionSource === "igdb" && langueCourante.value !== "en" };
+  // Sur le web, le descriptif vient toujours d'IGDB (`enrich_game`).
+  return { texte: g.description, anglais: (g.descriptionSource === "igdb" || MODE_WEB) && langueCourante.value !== "en" };
 });
 
 /** Vrais succès Steam (rareté comprise) récupérés à l'ouverture de la fiche. */
@@ -454,12 +484,13 @@ watch(
     currentPlayers.value = null;
     const appid = steamAppid.value;
     if (!id || !appid) return;
-    loadingAch.value = true;
+    // Sur le web, pas de succès : leur lecture passe par le cookie Steam, qui reste sur le PC.
+    loadingAch.value = !MODE_WEB;
     // Joueurs en ce moment (rapide, public) en parallèle des succès (anti-course par id).
     void steamCurrentPlayers(appid).then((n) => {
       if (selectedGameId.value === id) currentPlayers.value = n;
     });
-    const res = await steamAchievements(appid).catch(() => null);
+    const res = MODE_WEB ? null : await steamAchievements(appid).catch(() => null);
     if (selectedGameId.value === id) steamAch.value = res;
     loadingAch.value = false;
   },
@@ -528,7 +559,7 @@ function retour() {
         </div>
         <div class="detail-header" :class="{ 'avec-bandeau': bandeau.length || (steamAch && steamAch.total) }">
           <div class="detail-title-wrap">
-            <span class="detail-plat"><PlatformIcon :platform="game.platform" />{{ platformName(game.platform) }}</span>
+            <span v-for="p in plateformes" :key="p" class="detail-plat"><PlatformIcon :platform="p" />{{ platformName(p) }}</span>
             <h1 class="detail-title">{{ game.title }}</h1>
             <button v-if="jeuComplet" class="demo-de" @click.stop="voirJeuComplet">
               <span>{{ t("fiche.demo.de", { titre: jeuComplet.titre }) }}</span>
@@ -536,7 +567,12 @@ function retour() {
             </button>
           </div>
           <div class="detail-actions">
-            <div class="play-wrap">
+            <!-- Sur le web, rien à lancer ni à installer : l'action de la fiche, c'est de voir les prix. -->
+            <button v-if="MODE_WEB" class="btn-play big" @click.stop="viewInStore">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 13.3 12.8 21a1.5 1.5 0 0 1-2.1 0l-7-7a1.4 1.4 0 0 1-.4-1V4.6A1.5 1.5 0 0 1 4.6 3h8.4a1.4 1.4 0 0 1 1 .4l6.5 6.5a2 2 0 0 1 0 2.8Z" /><circle cx="7.8" cy="7.8" r="1.4" fill="currentColor" stroke="none" /></svg>
+              {{ t("web.fiche.voirPrix") }}
+            </button>
+            <div v-else class="play-wrap">
               <button class="btn-play big" @click.stop="onPlay">
                 <svg v-if="game.installed" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 21h14" /></svg>
@@ -558,6 +594,7 @@ function retour() {
               </div>
             </div>
             <button
+              v-if="!MODE_WEB"
               class="btn-ghost solid"
               :class="{ 'fav-on': game.favorite }"
               :title="game.favorite ? t('bibliotheque.carte.retirerFavoris') : t('bibliotheque.carte.ajouterFavoris')"
@@ -566,7 +603,7 @@ function retour() {
             >
               <svg viewBox="0 0 24 24" :fill="game.favorite ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.9l-4.6 2.4.9-5.1L4.5 10l5.2-.8z" /></svg>
             </button>
-            <button class="btn-ghost solid" :title="t('fiche.voirBoutique')" :aria-label="t('fiche.voirBoutique')" @click.stop="viewInStore">
+            <button v-if="!MODE_WEB" class="btn-ghost solid" :title="t('fiche.voirBoutique')" :aria-label="t('fiche.voirBoutique')" @click.stop="viewInStore">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 13.3 12.8 21a1.5 1.5 0 0 1-2.1 0l-7-7a1.4 1.4 0 0 1-.4-1V4.6A1.5 1.5 0 0 1 4.6 3h8.4a1.4 1.4 0 0 1 1 .4l6.5 6.5a2 2 0 0 1 0 2.8Z" /><circle cx="7.8" cy="7.8" r="1.4" fill="currentColor" stroke="none" /></svg>
             </button>
             <button
@@ -579,7 +616,7 @@ function retour() {
             </button>
             <!-- Visible pour tous les jeux : « Actualiser les infos » concerne aussi les
                  jeux non installés. Les options d'installation restent réservées aux autres. -->
-            <div class="settings-wrap">
+            <div v-if="!MODE_WEB" class="settings-wrap">
               <button
                 class="btn-ghost solid"
                 :title="t('fiche.options')"
@@ -738,13 +775,13 @@ function retour() {
         </div>
 
         <aside class="detail-aside">
-          <div class="stat-card">
+          <div v-if="!MODE_WEB || grandChiffre || game.lastPlayed || playersLabel || game.developer || game.year || game.genre" class="stat-card">
             <template v-if="grandChiffre">
               <div class="stat-play" :class="{ texte: 'texte' in grandChiffre }">{{ grandChiffre.valeur }}<span v-if="grandChiffre.unite"> {{ grandChiffre.unite }}</span></div>
               <div class="stat-label">{{ grandChiffre.libelle }}</div>
             </template>
             <div class="stat-rows" :class="{ seules: !grandChiffre }">
-              <div class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.statut") }}</span><span class="v">{{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}</span></div>
+              <div v-if="!MODE_WEB" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /></svg>{{ t("fiche.stats.statut") }}</span><span class="v">{{ game.installed ? t("bibliotheque.installe") : t("bibliotheque.nonInstalle") }}</span></div>
               <div v-if="game.lastPlayed" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{{ t("fiche.stats.derniereSession") }}</span><span class="v">{{ game.lastPlayed }}</span></div>
               <div v-if="playersLabel" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.enCeMoment") }}</span><span class="v">{{ playersLabel }}</span></div>
               <div v-if="game.developer" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10" /></svg>{{ t("fiche.stats.developpeur") }}</span><span class="v">{{ game.developer }}</span></div>
@@ -754,6 +791,8 @@ function retour() {
               <div v-if="showFamily" class="stat-row"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.5-4.3" /></svg>{{ t("fiche.stats.familleSteam") }}</span><span class="v">{{ t("fiche.stats.copies", { n: familyCopies }) }}</span></div>
             </div>
           </div>
+
+          <p v-if="sansTempsDeJeu" class="sans-temps">{{ t("web.fiche.sansTempsDeJeu") }}</p>
 
           <div v-if="liens.length" class="liens-card">
             <span class="liens-titre">{{ t("fiche.liens.titre") }}</span>
@@ -793,7 +832,7 @@ function retour() {
 /* À droite de la barre latérale, qui reste visible : la fiche est un écran de l'application,
    pas une fenêtre posée par-dessus. */
 .detail {
-  position: fixed; inset: 0 0 0 var(--largeur-laterale); z-index: 100; background: var(--bg); overflow-y: auto;
+  position: fixed; inset: 0 0 var(--barre-mobile) var(--largeur-laterale); z-index: 100; background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
   opacity: 0; visibility: hidden; transition: opacity 0.28s;
 }
 .detail.open { opacity: 1; visibility: visible; }
@@ -875,7 +914,7 @@ function retour() {
 .score.neg { color: #ff8a80; }
 .detail-plat {
   display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px;
-  letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.9); margin-bottom: 12px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.9); margin: 0 6px 12px 0;
   padding: 4px 11px 4px 8px; border-radius: 99px; background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
@@ -981,7 +1020,7 @@ function retour() {
 .owner-av-fb { background: linear-gradient(140deg, #6b6f7a, #3a3d47); color: #fff; font-size: 11px; font-weight: 700; font-family: var(--mono); }
 .owner-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lightbox {
-  position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 4vh 5vw;
+  position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 300; display: grid; place-items: center; padding: 4vh 5vw;
   background: rgba(6, 4, 10, 0.86); backdrop-filter: blur(6px); cursor: zoom-out;
 }
 .lb-img {
@@ -1031,11 +1070,32 @@ function retour() {
 .liens-titre { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); font-weight: 700; }
 .liens-card .lien { background: none; border: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; text-align: left; }
 .liens-card .lien:hover { text-decoration: underline; }
+.sans-temps { margin: 0; padding: 14px 16px; border-radius: 14px; border: 1px dashed var(--border-strong); font-size: 12.5px; line-height: 1.5; color: var(--text-dim); }
 @media (max-width: 980px) {
   .detail-body { grid-template-columns: minmax(0, 1fr); }
   .detail-aside { position: static; }
 }
 @media (max-width: 820px) {
   .detail-header, .detail-body { padding-left: 22px; padding-right: 22px; }
+}
+@media (max-width: 620px) {
+  /* La bannière suit son contenu : titre, stats et notes ne tiennent pas dans une hauteur fixe. */
+  .detail-banner, .detail-banner.riche { height: auto; min-height: 260px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .detail-banner-scrim { background: linear-gradient(0deg, var(--bg) 1%, rgba(10, 7, 16, 0.72) 55%, rgba(10, 7, 16, 0.45) 100%); }
+  .detail-header, .detail-header.avec-bandeau { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 14px; padding: 68px 18px 18px; }
+  .detail-title { font-size: 30px; }
+  /* Le retour reste à portée du pouce quand la fiche défile. */
+  .detail-nav { position: fixed; top: 12px; left: 12px; }
+  .detail-back { padding: 9px 10px; }
+  .detail-back-label, .detail-forward { display: none; }
+  .detail-header .detail-actions, .detail-header.avec-bandeau .detail-actions { order: 1; align-self: stretch; }
+  .detail-actions .btn-play { flex: 1; justify-content: center; }
+  .detail-strip { align-self: stretch; padding: 10px 4px; }
+  .strip-cell { flex: 1 1 40%; min-width: 0; padding: 0 12px; }
+  .strip-cell.large { min-width: 0; }
+  .detail-body { gap: 24px; padding: 18px 18px 40px; }
+  .lb-nav { top: auto; bottom: calc(14px + var(--barre-mobile)); transform: none; width: 44px; height: 44px; }
+  .lb-count { bottom: calc(24px + var(--barre-mobile)); }
+  .lb-close { top: 12px; right: 12px; }
 }
 </style>

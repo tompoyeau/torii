@@ -21,7 +21,8 @@
  */
 
 import { empreinte, fail, json, lireContexte, memo } from "./lib.js";
-import { lienPartage } from "./igdb.js";
+import { lienPartage, lienSteam, metaSteam, metaTitre } from "./igdb.js";
+import { fichePossede, joueursEnCeMoment } from "./possede.js";
 import { deals, search, suggest, triItad } from "./offres.js";
 import { game } from "./produit.js";
 import { extras, home, idPourSteam, parcourir, rayonValide, shelf, tagsBoutique, valeurTri } from "./vitrine.js";
@@ -136,6 +137,27 @@ const ROUTES = {
     });
   },
 
+  // Enveloppé : « aucun lien sûr avec Steam » est une réponse, pas une panne.
+  "/v1/owned": (ctx, q) => {
+    const appId = nombre(q.get("appId"), MAX_ID, null);
+    const titre = (q.get("titre") ?? "").trim().slice(0, MAX_TITRE);
+    if (appId === null && !titre) return fail(400, "jeu_inconnu", "Il manque le jeu.");
+    return servir(ctx, "owned", [appId ?? "", appId === null ? titre.toLowerCase() : ""], DIX_MINUTES, async () => {
+      const appid = appId ?? (await lienSteam(ctx, titre));
+      return { fiche: appid === null ? null : await fichePossede(ctx, appid) };
+    }, { parExclus: false });
+  },
+
+  // Le descriptif IGDB : tout ce qu'on sait d'un jeu que Steam ne connaît pas (Riot, Ubisoft…).
+  "/v1/meta": (ctx, q) => {
+    const appId = nombre(q.get("appId"), MAX_ID, null);
+    const titre = (q.get("titre") ?? "").trim().slice(0, MAX_TITRE);
+    if (appId === null && !titre) return fail(400, "jeu_inconnu", "Il manque le jeu.");
+    return servir(ctx, "meta", [appId ?? "", appId === null ? titre.toLowerCase() : ""], UN_JOUR, async () => ({
+      meta: appId === null ? await metaTitre(ctx, titre) : await metaSteam(ctx, appId),
+    }), { parRegion: false, parExclus: false });
+  },
+
   "/v1/share": (ctx, q) => {
     const titre = (q.get("titre") ?? "").trim().slice(0, MAX_TITRE);
     if (!titre) return json({ lien: null });
@@ -155,6 +177,15 @@ const DYNAMIQUES = [
       if (!JEU.test(id)) return fail(400, "jeu_inconnu", "Cet identifiant de jeu n'est pas valable.");
       return servir(ctx, "game", [id.toLowerCase()], DIX_MINUTES, () => game(ctx, id), { parExclus: false });
     },
+  },
+  {
+    motif: /^\/v1\/players\/(\d{1,10})$/,
+    traiter: (ctx, q, appid) =>
+      servir(ctx, "players", [appid], CINQ_MINUTES, async () => ({ joueurs: await joueursEnCeMoment(ctx, Number(appid)) }), {
+        parLangue: false,
+        parRegion: false,
+        parExclus: false,
+      }),
   },
   {
     motif: /^\/v1\/id-for-steam\/(\d{1,10})$/,

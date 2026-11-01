@@ -192,6 +192,10 @@ function toggleFavorite() {
   font-family: var(--mono); font-size: 11px; color: var(--text-faint);
   display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;
 }
+/* Sur deux colonnes étroites, chaque morceau passait à la ligne dans sa propre case. */
+@media (max-width: 620px) {
+  .card-sub { flex-wrap: wrap; gap: 0 6px; }
+}
 .card-sub .installed { color: var(--manual); }
 .card-sub .not-installed { color: var(--text-faint); }
 .cover.uninstalled { filter: saturate(0.85) brightness(0.9); }

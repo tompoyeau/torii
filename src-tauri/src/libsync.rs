@@ -12,6 +12,13 @@
 //!   * `share_library` (côté serveur, via `set_profile`) : **laisser lire aux amis**. Sa
 //!     propre bibliothèque reste lisible par soi seul quand il est éteint.
 //!
+//! ## Le temps de jeu, à part
+//!
+//! `SocialPrefs::sync_playtime` (éteint par défaut) envoie en plus le temps de jeu et la dernière
+//! session de chaque jeu, pour les retrouver sur ses autres appareils. Ils partent dans un objet
+//! distinct que les amis ne peuvent pas lire, et sans toucher à la bibliothèque : sa date et son
+//! empreinte, que les amis voient, ne bougent pas quand on joue. Voir `server/src/library.js`.
+//!
 //! ## Ce qui n'est pas envoyé
 //!
 //! Les jeux **masqués** (ils n'existent nulle part ailleurs dans Torii) et ceux marqués
@@ -58,6 +65,20 @@ pub struct LibGame {
     /// Un jeu possédé pour de bon quelque part (même sur un autre launcher) ne l'est pas.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub family_shared: bool,
+    /// L'appid Steam quand le jeu y est possédé : sa fiche se relie sans deviner par le titre.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steam_app_id: Option<u64>,
+}
+
+/// Le temps de jeu d'un jeu, tel qu'il part sur le serveur (option `sync_playtime`).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StatsJeu {
+    pub key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minutes: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_played: Option<i64>,
 }
 
 /// Une ligne d'index : un appareil, à moi ou à un ami qui partage.
@@ -105,6 +126,19 @@ pub struct Snapshot {
 
 /* ── Ce qu'on envoie ───────────────────────────────────────────────────────── */
 
+/// Ce jeu peut-il quitter la machine ? 🔑 La même réponse pour la liste et pour le temps de jeu.
+fn diffusable(game: &GameDto, muets: &HashSet<String>) -> bool {
+    if game.hidden || muets.contains(&game.id) {
+        return false;
+    }
+    if let Some(t) = game.app_type.as_deref() {
+        if NON_JEUX.contains(&t.to_lowercase().as_str()) {
+            return false;
+        }
+    }
+    !game.title.trim().is_empty()
+}
+
 /// Réduit la bibliothèque scannée à ce qui part sur le serveur.
 ///
 /// Fonction **pure** et testée : c'est ici que se joue la promesse faite à l'utilisateur
@@ -125,18 +159,7 @@ pub fn partageables(games: &[GameDto], muets: &HashSet<String>) -> Vec<LibGame> 
     let mut dans_l_ordre: Vec<&GameDto> = games.iter().collect();
     dans_l_ordre.sort_by(|a, b| a.id.cmp(&b.id));
 
-    for game in dans_l_ordre {
-        if game.hidden || muets.contains(&game.id) {
-            continue;
-        }
-        if let Some(t) = game.app_type.as_deref() {
-            if NON_JEUX.contains(&t.to_lowercase().as_str()) {
-                continue;
-            }
-        }
-        if game.title.trim().is_empty() {
-            continue;
-        }
+    for game in dans_l_ordre.into_iter().filter(|g| diffusable(g, muets)) {
         // ⚠️ HTTPS seulement : le serveur écarte le reste, autant ne pas l'envoyer (et
         // surtout ne pas le compter dans l'empreinte, qui ne correspondrait plus).
         let cover = game
@@ -155,7 +178,11 @@ pub fn partageables(games: &[GameDto], muets: &HashSet<String>) -> Vec<LibGame> 
                 // Vrai jusqu'à preuve du contraire : c'est le `&=` plus bas qui tranche,
                 // une fois toutes les sources du jeu vues.
                 family_shared: true,
+                steam_app_id: None,
             });
+        if game.platform == "steam" && entree.steam_app_id.is_none() {
+            entree.steam_app_id = game.launch_target.parse().ok();
+        }
         if !entree.platforms.contains(&game.platform) {
             entree.platforms.push(game.platform.clone());
         }
@@ -176,6 +203,40 @@ pub fn partageables(games: &[GameDto], muets: &HashSet<String>) -> Vec<LibGame> 
     par_cle.into_values().collect()
 }
 
+/// Le temps de jeu de ce qui peut quitter la machine. Fonction **pure**, comme `partageables` : un
+/// jeu masqué ou muet ne part pas. Un même jeu sur deux launchers garde le plus grand temps et la
+/// session la plus récente, comme la carte qui les réunit dans l'interface (`mergeDuplicates`).
+pub fn stats_partageables(games: &[GameDto], muets: &HashSet<String>) -> Vec<StatsJeu> {
+    let mut par_cle: BTreeMap<String, StatsJeu> = BTreeMap::new();
+    for game in games.iter().filter(|g| diffusable(g, muets)) {
+        let minutes = game.playtime_minutes.filter(|m| *m > 0);
+        let derniere = game.last_played.filter(|t| *t > 0);
+        if minutes.is_none() && derniere.is_none() {
+            continue;
+        }
+        let cle = social::game_key(&game.title);
+        let entree = par_cle.entry(cle.clone()).or_insert(StatsJeu { key: cle, minutes: None, last_played: None });
+        entree.minutes = entree.minutes.max(minutes);
+        entree.last_played = entree.last_played.max(derniere);
+    }
+    par_cle.into_values().collect()
+}
+
+/// L'empreinte d'un envoi de temps de jeu : tant qu'on n'a pas joué, rien ne repart.
+fn empreinte_stats(stats: &[StatsJeu]) -> String {
+    fnv1a(&serde_json::to_vec(stats).unwrap_or_default())
+}
+
+/// FNV-1a 64 bits, en hexadécimal.
+fn fnv1a(octets: &[u8]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in octets {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
 /// Empreinte du contenu (FNV-1a 64 bits, en hexadécimal).
 ///
 /// 🔑 Volontairement **pas** une empreinte cryptographique, et donc aucune dépendance
@@ -184,13 +245,8 @@ pub fn partageables(games: &[GameDto], muets: &HashSet<String>) -> Vec<LibGame> 
 /// sert d'ETag. Une collision (1 sur 1,8 × 10¹⁹) ne coûterait qu'une bibliothèque périmée
 /// jusqu'au changement suivant.
 pub fn empreinte(games: &[LibGame]) -> String {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    let mut avale = |octets: &[u8]| {
-        for b in octets {
-            h ^= u64::from(*b);
-            h = h.wrapping_mul(0x100_0000_01b3);
-        }
-    };
+    let mut tampon: Vec<u8> = Vec::new();
+    let mut avale = |octets: &[u8]| tampon.extend_from_slice(octets);
     for jeu in games {
         avale(jeu.key.as_bytes());
         avale(b"\x1f");
@@ -203,9 +259,10 @@ pub fn empreinte(games: &[LibGame]) -> String {
         // Sans lui, une bibliothèque dont seul le statut familial change ne repartirait
         // jamais : l'empreinte doit couvrir tout ce que l'ami verra.
         avale(if jeu.family_shared { b"f" } else { b"o" });
+        avale(jeu.steam_app_id.map(|id| id.to_string()).unwrap_or_default().as_bytes());
         avale(b"\x1e");
     }
-    format!("{h:016x}")
+    fnv1a(&tampon)
 }
 
 /* ── Appareil ──────────────────────────────────────────────────────────────── */
@@ -229,6 +286,7 @@ fn appareil(config_dir: &Path, prefs: &mut social::SocialPrefs) -> String {
         platforms: Vec::new(),
         cover: None,
         family_shared: false,
+        steam_app_id: None,
     }]);
     let id = format!("{nanos:x}-{hote}");
     prefs.device_id = Some(id.clone());
@@ -284,6 +342,7 @@ pub fn sync(config_dir: &Path, games: &[GameDto], force: bool) -> Result<SyncRes
         .as_ref()
         .is_some_and(|s| s.digest == digest && s.account_id == compte);
     if deja && !force {
+        envoyer_stats(config_dir, games, &muets, &mut prefs, &compte);
         return Ok(SyncResult {
             uploaded: false,
             game_count: liste.len(),
@@ -304,10 +363,11 @@ pub fn sync(config_dir: &Path, games: &[GameDto], force: bool) -> Result<SyncRes
     // Mémorisé APRÈS l'accusé de réception : un envoi raté doit être retenté au prochain
     // scan, pas considéré comme fait.
     prefs.last_library_sync = Some(social::LastLibrarySync {
-        account_id: compte,
+        account_id: compte.clone(),
         digest: digest.clone(),
     });
     let _ = social::save_prefs(config_dir, &prefs);
+    envoyer_stats(config_dir, games, &muets, &mut prefs, &compte);
 
     Ok(SyncResult {
         uploaded: true,
@@ -315,6 +375,44 @@ pub fn sync(config_dir: &Path, games: &[GameDto], force: bool) -> Result<SyncRes
         digest,
         skipped: None,
     })
+}
+
+/// Envoie le temps de jeu si l'option est allumée et s'il a changé.
+///
+/// ⚠️ Après la bibliothèque, jamais à sa place : le serveur n'accepte que les appareils qu'il
+/// connaît. Et sans remonter d'erreur : cet envoi ne doit pas faire échouer l'autre. Une panne
+/// se rattrape au scan suivant, puisque l'empreinte n'est mémorisée qu'après l'accusé de réception.
+fn envoyer_stats(
+    config_dir: &Path,
+    games: &[GameDto],
+    muets: &HashSet<String>,
+    prefs: &mut social::SocialPrefs,
+    compte: &str,
+) {
+    if !prefs.sync_playtime {
+        return;
+    }
+    let stats = stats_partageables(games, muets);
+    let digest = empreinte_stats(&stats);
+    let deja = prefs
+        .last_stats_sync
+        .as_ref()
+        .is_some_and(|s| s.digest == digest && s.account_id == compte);
+    if deja {
+        return;
+    }
+    let corps = serde_json::json!({ "deviceId": appareil(config_dir, prefs), "games": stats });
+    let envoi: Result<serde_json::Value, String> = social::call(config_dir, "PUT", "/v1/library-stats", Some(corps));
+    if envoi.is_ok() {
+        prefs.last_stats_sync = Some(social::LastLibrarySync { account_id: compte.to_string(), digest });
+        let _ = social::save_prefs(config_dir, prefs);
+    }
+}
+
+/// Efface du serveur le temps de jeu de tous les appareils du compte.
+pub fn forget_stats(config_dir: &Path) -> Result<(), String> {
+    let _: serde_json::Value = social::call(config_dir, "DELETE", "/v1/library-stats", None)?;
+    Ok(())
 }
 
 /* ── Lecture ───────────────────────────────────────────────────────────────── */
@@ -348,6 +446,7 @@ pub fn forget_all(config_dir: &Path) -> Result<(), String> {
     let _: serde_json::Value = social::call(config_dir, "DELETE", "/v1/library", None)?;
     let mut prefs = social::load_prefs(config_dir);
     prefs.last_library_sync = None;
+    prefs.last_stats_sync = None;
     let _ = social::save_prefs(config_dir, &prefs);
     Ok(())
 }
@@ -376,6 +475,65 @@ mod tests {
         assert_eq!(a.len(), 1);
         assert_eq!((&a[0].title, &a[0].cover), (&b[0].title, &b[0].cover));
         assert_eq!(empreinte(&a), empreinte(&b));
+    }
+
+    #[test]
+    fn le_temps_de_jeu_garde_le_plus_grand_et_le_plus_recent() {
+        let mut steam = jeu("steam:292030", "The Witcher 3: Wild Hunt", "steam");
+        steam.playtime_minutes = Some(600);
+        steam.last_played = Some(100);
+        let mut gog = jeu("gog:1207664663", "The Witcher 3: Wild Hunt™", "gog");
+        gog.playtime_minutes = Some(90);
+        gog.last_played = Some(200);
+        let stats = stats_partageables(&[steam, gog], &HashSet::new());
+        assert_eq!(stats.len(), 1);
+        assert_eq!((stats[0].minutes, stats[0].last_played), (Some(600), Some(200)));
+    }
+
+    #[test]
+    fn un_jeu_masque_ou_muet_ne_donne_pas_son_temps_de_jeu() {
+        let mut masque = jeu("steam:1", "Masqué", "steam");
+        masque.hidden = true;
+        masque.playtime_minutes = Some(600);
+        let mut muet = jeu("steam:2", "Muet", "steam");
+        muet.playtime_minutes = Some(600);
+        let mut dlc = jeu("steam:3", "Un DLC", "steam");
+        dlc.app_type = Some("dlc".into());
+        dlc.playtime_minutes = Some(600);
+        let muets = HashSet::from(["steam:2".to_string()]);
+        assert!(stats_partageables(&[masque, muet, dlc], &muets).is_empty());
+    }
+
+    #[test]
+    fn un_jeu_sans_temps_de_jeu_ne_part_pas() {
+        let mut zero = jeu("riot:lol", "League of Legends", "riot");
+        zero.playtime_minutes = Some(0);
+        assert!(stats_partageables(&[zero], &HashSet::new()).is_empty());
+    }
+
+    #[test]
+    fn la_liste_des_jeux_ne_porte_jamais_le_temps_de_jeu() {
+        let mut steam = jeu("steam:620", "Portal 2", "steam");
+        steam.launch_target = "620".into();
+        steam.playtime_minutes = Some(600);
+        steam.last_played = Some(100);
+        let liste = partageables(&[steam], &HashSet::new());
+        assert_eq!(liste[0].steam_app_id, Some(620));
+        let json = serde_json::to_string(&liste).unwrap();
+        assert!(!json.contains("600") && !json.to_lowercase().contains("minutes") && !json.contains("lastPlayed"));
+    }
+
+    #[test]
+    fn jouer_ne_change_pas_l_empreinte_de_la_bibliotheque() {
+        let avant = jeu("steam:620", "Portal 2", "steam");
+        let mut apres = avant.clone();
+        apres.playtime_minutes = Some(600);
+        apres.last_played = Some(100);
+        assert_eq!(
+            empreinte(&partageables(&[avant], &HashSet::new())),
+            empreinte(&partageables(&[apres], &HashSet::new())),
+            "les amis voient cette empreinte : elle ne doit pas dire qu'on vient de jouer"
+        );
     }
 
     #[test]

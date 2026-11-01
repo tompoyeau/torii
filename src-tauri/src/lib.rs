@@ -1872,6 +1872,26 @@ async fn library_set_sync(app: tauri::AppHandle, enabled: bool) -> Result<libsyn
     library_sync(app, true).await
 }
 
+/// Active ou coupe l'envoi du temps de jeu. 🔑 Le couper efface ce qui est sur le serveur, et
+/// l'option reste allumée si ça échoue : mieux vaut réessayer que de la dire éteinte en laissant
+/// les données derrière elle.
+#[tauri::command]
+async fn library_set_playtime(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    if !enabled {
+        let dir2 = dir.clone();
+        offload!(libsync::forget_stats(&dir2))?;
+    }
+    let mut prefs = social::load_prefs(&dir);
+    prefs.sync_playtime = enabled;
+    prefs.last_stats_sync = None;
+    social::save_prefs(&dir, &prefs)?;
+    if enabled {
+        library_sync(app, false).await?;
+    }
+    Ok(())
+}
+
 /// Jeux qu'on ne diffuse jamais aux amis (applications permanentes, jeux privés).
 #[tauri::command]
 fn torii_muted_games(app: tauri::AppHandle) -> Result<Vec<String>, String> {
@@ -2228,6 +2248,7 @@ pub fn run() {
             library_of,
             library_forget_device,
             library_set_sync,
+            library_set_playtime,
             notify_user
         ])
         .run(tauri::generate_context!())

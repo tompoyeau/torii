@@ -23,7 +23,11 @@ const web: Forme<typeof fr> = {
   reglages: {
     langueNavigateur: "Follow the browser",
     regionNavigateur: "Follow the browser ({pays})",
-    revendeursLocaux: "This list only applies to this browser.",
+    revendeursLocaux: "This list follows your account, on all your devices.",
+  },
+  fiche: {
+    voirPrix: "See prices",
+    sansTempsDeJeu: "To see your playtime here, turn the option on in Torii on your PC: Settings → Torii network.",
   },
 };
 export default web;

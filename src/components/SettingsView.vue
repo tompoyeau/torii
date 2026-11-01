@@ -33,7 +33,7 @@ const {
   deleteAccount: toriiDeleteAccount,
   findSteamFriends, inviteAccount, rotateCode, setDisplayName,
   libraryIndex: toriiLibrary, librarySyncing, refreshLibraryIndex,
-  setLibrarySync, setShareLibrary, syncLibraryNow, forgetDevice,
+  setLibrarySync, setPlaytimeSync, setShareLibrary, syncLibraryNow, forgetDevice,
   devices, devicesLoading, refreshDevices, revokeDevice, revokeOtherDevices,
 } = useTorii();
 
@@ -72,6 +72,9 @@ const onToggleLibrarySync = () =>
 
 const onToggleShareLibrary = () =>
   withLibrary(() => setShareLibrary(!toriiAccount.value?.shareLibrary));
+
+const onTogglePlaytimeSync = () =>
+  withLibrary(() => setPlaytimeSync(!toriiPrefs.value.syncPlaytime));
 
 const onSyncLibraryNow = () =>
   withLibrary(async () => {
@@ -974,6 +977,22 @@ function unhide(id: string) {
                   </span>
                 </div>
                 <span class="switch" :class="{ on: toriiAccount?.shareLibrary }"><span class="knob" /></span>
+              </button>
+
+              <button
+                class="pref toggle-row spaced"
+                role="switch"
+                :aria-checked="!!toriiPrefs.syncPlaytime"
+                :disabled="!toriiPrefs.syncLibrary || librarySyncing"
+                @click="onTogglePlaytimeSync"
+              >
+                <div class="row-text">
+                  <span class="row-title">{{ t("reglages.torii.bibliotheque.tempsDeJeu") }}</span>
+                  <span class="row-sub">
+                    {{ toriiPrefs.syncLibrary ? t("reglages.torii.bibliotheque.tempsDeJeuSous") : t("reglages.torii.bibliotheque.partageSansSynchro") }}
+                  </span>
+                </div>
+                <span class="switch" :class="{ on: toriiPrefs.syncPlaytime }"><span class="knob" /></span>
               </button>
 
               <p v-if="libraryError" class="row-error" role="alert">{{ libraryError }}</p>

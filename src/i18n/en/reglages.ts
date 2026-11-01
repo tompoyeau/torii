@@ -234,6 +234,10 @@ const en: Forme<typeof fr> = {
       partageSous:
         "Your friends see what you own, on Steam or not. When off, your library is only " +
         "for you and your own devices.",
+      tempsDeJeu: "My playtime on my other devices",
+      tempsDeJeuSous:
+        "Also sends your playtime and last session, as Steam, Epic or GOG report them, so you " +
+        "can see them on the web and on your phone. Your friends never see them. Turning it off deletes them from the server.",
       partageSansSynchro: "Turn on sync first: without it, there's nothing to show.",
       envoye: "{n} game sent from “{appareil}”, {quand}. | {n} games sent from “{appareil}”, {quand}.",
       rienEnvoye: "Nothing has been sent from this device yet.",

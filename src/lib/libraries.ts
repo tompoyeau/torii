@@ -18,6 +18,7 @@ export function fusionnerAppareils(snapshots: LibGame[][]): LibGame[] {
       // jaquette si l'un des deux appareils l'avait et pas l'autre.
       for (const p of jeu.platforms) if (!deja.platforms.includes(p)) deja.platforms.push(p);
       if (!deja.cover && jeu.cover) deja.cover = jeu.cover;
+      if (!deja.steamAppId && jeu.steamAppId) deja.steamAppId = jeu.steamAppId;
       // Même règle que côté Rust : une seule copie possédée suffit à faire du jeu le sien.
       deja.familyShared = !!deja.familyShared && !!jeu.familyShared;
     }

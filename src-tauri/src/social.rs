@@ -660,6 +660,12 @@ pub struct SocialPrefs {
     /// démarrage ; le compte l'accompagne, sans quoi changer de compte laisserait le
     /// nouveau vide pour toujours.
     pub last_library_sync: Option<LastLibrarySync>,
+    /// Envoyer aussi le temps de jeu, pour le retrouver sur ses autres appareils.
+    /// 🔑 Faux par défaut : la synchronisation ne disait jusque-là que ce qu'on possède, et
+    /// ceux qui l'ont activée n'ont pas accepté autre chose. Les amis ne le voient jamais.
+    pub sync_playtime: bool,
+    /// Dernier envoi réussi du temps de jeu : tant qu'on n'a pas joué, rien ne repart.
+    pub last_stats_sync: Option<LastLibrarySync>,
 }
 
 /// Trace du dernier envoi de bibliothèque (cf. `SocialPrefs::last_library_sync`).
@@ -681,6 +687,8 @@ impl Default for SocialPrefs {
             sync_library: false,
             device_id: None,
             last_library_sync: None,
+            sync_playtime: false,
+            last_stats_sync: None,
         }
     }
 }

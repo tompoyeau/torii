@@ -16,12 +16,17 @@ quoi, maintenant »). Base **D1** (SQLite).
 - **Aucun historique de jeu.** La présence porte sa date de péremption et n'est jamais
   archivée. On ne peut pas reconstituer qui a joué à quoi la semaine dernière — c'est
   volontaire, et c'est ce qui rend cette base peu intéressante à voler.
-- **Ce qu'on possède, en revanche, peut être conservé** — et c'est la seule donnée durable
-  du service. Une bibliothèque synchronisée dit ce que quelqu'un **possède**, jamais ce
-  qu'il joue ni quand. Rien n'est envoyé tant que la synchronisation n'est pas activée, et
+- **Ce qu'on possède, en revanche, peut être conservé.** Une bibliothèque synchronisée dit ce
+  que quelqu'un **possède**, pas ce qu'il joue ni quand. Rien n'est envoyé tant que la synchronisation n'est pas activée, et
   aucun ami ne peut la lire tant que le partage ne l'est pas non plus (deux réglages
   distincts, voir plus bas). Tout s'efface d'un appel, et la suppression du compte emporte
   les objets R2 avant les lignes qui y mènent.
+- **Le temps de jeu, seulement sur option.** Éteinte par défaut, l'option « Mon temps de jeu sur
+  mes autres appareils » dépose en plus, pour chaque jeu, le temps total et la date de la dernière
+  session : une valeur par jeu, écrasée à chaque envoi, donc aucun historique. Ils vivent dans un
+  objet à part qu'aucune route ne rend à un ami, et les déposer ne change ni la date ni l'empreinte
+  de la bibliothèque, que les amis voient : ils ne peuvent pas en déduire qu'on vient de jouer.
+  Couper l'option les efface.
 - **Pas d'annuaire.** On ajoute un ami par **code d'ami**, jamais par e-mail : sinon
   tester une liste d'adresses suffirait à savoir qui utilise Torii. Les suggestions par
   SteamID exigent que **les deux** personnes se soient rendues découvrables.
@@ -268,6 +273,9 @@ Les routes privées attendent `Authorization: Bearer <jeton>`.
 | `GET /v1/library/{compte}/{appareil}` | La bibliothèque elle-même. Gère `If-None-Match` → `304`. |
 | `DELETE /v1/library/{appareil}` | Oublie un appareil (objet R2 compris). |
 | `DELETE /v1/library` | Cesser de synchroniser : tout part. |
+| `PUT /v1/library-stats` | Le temps de jeu d'un appareil déjà connu (`{ deviceId, games: [{ key, minutes, lastPlayed }] }`). N'écrit rien dans l'index. |
+| `GET /v1/library-stats/{appareil}` | Le temps de jeu de MES appareils : la route ne prend pas de compte en paramètre. |
+| `DELETE /v1/library-stats` | L'option s'éteint : tout le temps de jeu part, la bibliothèque reste. |
 
 ### Pourquoi `PUT /v1/presence` renvoie les amis
 
@@ -352,7 +360,7 @@ faite côté client. Cinq appareils par compte au maximum.
 ### Ce qui est stocké
 
 Par jeu : la clé cross-launcher (`igdb:1942`, sinon `title:<titre normalisé>` — la même que
-la présence), le titre, les plateformes, la jaquette. **Rien d'autre** : le serveur
+la présence), le titre, les plateformes, la jaquette, l'appid Steam s'il y est possédé. **Rien d'autre** : le serveur
 normalise et tronque tout ce qu'il reçoit, et jette les champs qu'il ne connaît pas. Sans
 ça, une route authentifiée qui écrit dans R2 devient un hébergement de fichiers gratuit.
 

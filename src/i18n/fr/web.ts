@@ -21,6 +21,10 @@ export default {
   reglages: {
     langueNavigateur: "Suivre le navigateur",
     regionNavigateur: "Suivre le navigateur ({pays})",
-    revendeursLocaux: "Cette liste vaut pour ce navigateur seulement.",
+    revendeursLocaux: "Cette liste suit ton compte, sur tous tes appareils.",
+  },
+  fiche: {
+    voirPrix: "Voir les prix",
+    sansTempsDeJeu: "Pour retrouver ici ton temps de jeu, active l'option dans Torii sur ton PC : Paramètres → Réseau Torii.",
   },
 } as const;

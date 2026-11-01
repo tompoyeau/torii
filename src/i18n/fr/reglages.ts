@@ -239,6 +239,10 @@ export default {
       partageSous:
         "Tes amis voient ce que tu possèdes, Steam ou non. Éteint, ta bibliothèque ne sert " +
         "qu'à toi et à tes propres appareils.",
+      tempsDeJeu: "Mon temps de jeu sur mes autres appareils",
+      tempsDeJeuSous:
+        "Envoie aussi ton temps de jeu et ta dernière session, tels que Steam, Epic ou GOG les donnent, " +
+        "pour les retrouver sur le web et sur ton téléphone. Tes amis ne les voient jamais. Le couper les efface du serveur.",
       partageSansSynchro:
         "Active d'abord la synchronisation : sans elle, il n'y a rien à montrer.",
       envoye: "{n} jeu envoyé depuis « {appareil} », {quand}. | {n} jeux envoyés depuis « {appareil} », {quand}.",

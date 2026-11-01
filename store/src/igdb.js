@@ -177,6 +177,42 @@ export async function metaTitre(ctx, titre) {
   return proche ? lireMeta(proche, ctx.langue) : null;
 }
 
+// --- Le lien avec Steam ---------------------------------------------------------------
+
+/**
+ * L'identifiant Steam commun aux entrées dont le nom correspond exactement, DLC et éditions écartés.
+ *
+ * 🔑 UN SEUL, sinon aucun. IGDB connaît deux « Hades », dont un seul est sur Steam : c'est celui-là.
+ * Deux jeux du même nom tous deux sur Steam ne donnent aucun lien : le deviner, c'est risquer
+ * d'afficher la fiche d'un autre jeu.
+ */
+export function appidUnique(jeux, cible) {
+  const ids = new Set();
+  for (const g of jeux) {
+    if (g?.parent_game != null || g?.version_parent != null || !nomCorrespond(g, cible)) continue;
+    for (const e of tableau(g.external_games)) {
+      if (e?.external_game_source !== STEAM_SOURCE) continue;
+      const uid = chaine(e.uid);
+      if (uid && /^\d+$/.test(uid)) ids.add(Number(uid));
+    }
+  }
+  return ids.size === 1 ? [...ids][0] : null;
+}
+
+/** L'appid Steam d'un jeu acheté ailleurs, d'après IGDB, sur un nom exact. `null` : pas de lien sûr. */
+export async function lienSteam(ctx, titre) {
+  const propre = titrePropre(titre);
+  if (!propre) return null;
+  const jeux = await requete(
+    ctx,
+    "games",
+    "fields name, alternative_names.name, parent_game, version_parent, external_games.uid, " +
+      "external_games.external_game_source; " +
+      `where name ~ "${propre}" | alternative_names.name ~ "${propre}"; limit 10;`,
+  );
+  return appidUnique(tableau(jeux), norm(propre));
+}
+
 // --- Le lien à partager ---------------------------------------------------------------
 
 /**

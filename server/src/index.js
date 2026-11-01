@@ -28,7 +28,9 @@ import {
   clearPresence, invite, listFriends, publishPresence, removeFriend, respond,
   rotateCode, suggestions,
 } from "./social.js";
-import { forgetAll, forgetLibrary, libraryIndex, readLibrary, uploadLibrary } from "./library.js";
+import {
+  forgetAll, forgetLibrary, forgetStats, libraryIndex, readLibrary, readStats, uploadLibrary, uploadStats,
+} from "./library.js";
 import { releverGithub, releverStats } from "./releves.js";
 import { relayerVersUmami } from "./umami.js";
 
@@ -78,6 +80,8 @@ const PRIVATE = {
   "PUT /v1/library": uploadLibrary,
   "GET /v1/library": libraryIndex,
   "DELETE /v1/library": forgetAll,
+  "PUT /v1/library-stats": uploadStats,
+  "DELETE /v1/library-stats": forgetStats,
 };
 
 /**
@@ -96,6 +100,7 @@ const DYNAMIC = [
     handler: readLibrary,
   },
   { method: "DELETE", pattern: /^\/v1\/library\/([A-Za-z0-9_-]{1,40})$/, handler: forgetLibrary },
+  { method: "GET", pattern: /^\/v1\/library-stats\/([A-Za-z0-9_-]{1,40})$/, handler: readStats },
 ];
 
 /** 429 avec `Retry-After` : le client sait quand revenir au lieu de marteler. */

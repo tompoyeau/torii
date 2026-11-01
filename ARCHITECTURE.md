@@ -853,8 +853,14 @@ demander en ligne.
   **serveur** (`accounts.share_library`, éteint par défaut) qui ouvre la lecture aux amis
   acceptés. Sa propre bibliothèque se lit toujours, partage éteint ou non.
 - ⚠️ **Première donnée durable du service** : la promesse « aucun historique » ne couvre que
-  la présence. Ici on sait ce que les gens **possèdent** — jamais ce qu'ils jouent ni quand.
-  Le README du serveur a été réécrit en conséquence, ne pas le laisser mentir.
+  la présence. Ici on sait ce que les gens **possèdent**, pas ce qu'ils jouent ni quand, sauf sur
+  option (voir plus bas). Le README du serveur a été réécrit en conséquence, ne pas le laisser mentir.
+- 🔑 **Le temps de jeu, sur option et à part** (`SocialPrefs::sync_playtime`, éteinte par défaut :
+  ceux qui ont activé la synchronisation n'ont pas accepté plus que la liste). Une valeur par jeu,
+  écrasée à chaque envoi, dans un objet R2 distinct : la route de lecture ne prend pas de compte en
+  paramètre, un ami ne peut donc pas l'atteindre. ⚠️ L'envoi ne touche pas à l'index : la date et
+  l'empreinte de la bibliothèque sont visibles des amis, et les faire bouger trahirait qu'on vient
+  de jouer, présence éteinte ou non. D'où `jouer_ne_change_pas_l_empreinte_de_la_bibliotheque`.
 - 🔑 **Le Worker est l'unique porte** : le bucket R2 est privé (aucun domaine `r2.dev`), un
   objet n'en sort qu'après vérification jeton + amitié + partage.
 - 🔑 **Ordre des suppressions** : l'objet R2 part AVANT sa ligne d'index (l'index est la
@@ -1954,12 +1960,21 @@ synchronisée et la Boutique, depuis n'importe quel navigateur.
 - **La session est dans le `localStorage`** : pas de cookie, l'API et la page n'étant pas sur le même
   site. Un 401 efface le jeton et recharge la page : rien du compte précédent ne reste en mémoire.
 - **La bibliothèque** est l'union des appareils du compte (`scan_library` → `lib/libraries.ts`),
-  convertie en `GameDto` pour passer par `mergeDuplicates` comme un scan. ⚠️ Le serveur ne connaît ni le
-  temps de jeu, ni la dernière partie, ni ce qui est installé (la liste est lisible par les amis) : pas
-  de tri, de catégories ni de vedette, et un jeu s'ouvre sur sa fiche Boutique.
+  convertie en `GameDto` pour passer par `mergeDuplicates` comme un scan. ⚠️ Le serveur ne sait pas ce
+  qui est installé (la liste est lisible par les amis) : pas de tri, de catégories ni de vedette.
+- **Un jeu s'ouvre sur sa fiche** (`GameDetail.vue`, la même que sur PC), sans jouer, installer ni
+  options, et « Voir les prix » mène à la Boutique. Le temps de jeu vient de `GET /v1/library-stats`
+  s'il a été autorisé. Le reste passe par le Worker : `owned_game_sheet` (Steam et annonces, par
+  l'appid que le PC envoie, sinon par un nom exact sur IGDB), `enrich_game` (IGDB, pour un jeu que
+  Steam ne connaît pas). **Pas de succès ni de contenus possédés** : ils supposent le cookie Steam,
+  qui reste sur le PC.
+- **Les revendeurs masqués suivent le compte** (`accounts.hidden_stores`), sur le PC comme sur le
+  web, par un seul module : `useRevendeursCompte`, appuyé sur `lib/revendeurs.ts` (`npm test`).
+  L'interface lit et écrit toujours la liste locale, que ce module tient alignée. La première
+  rencontre entre un appareil et un compte additionne les deux listes ; ensuite le compte a raison,
+  sauf changement local pas encore parti. Sur le web, la liste part au Worker à chaque appel (`exclus`).
 - **Pas sur le web, faute de PC** : lancer ou installer un jeu, connecter un launcher, ajouter un jeu.
-  **Pas encore** : wishlist (les cœurs sont masqués par `html.web`), amis, favoris, jeux masqués. Les
-  revendeurs masqués valent pour le navigateur, et partent au Worker à chaque appel (`exclus`).
+  **Pas encore** : wishlist (les cœurs sont masqués par `html.web`), amis, favoris, jeux masqués.
 - **Sur téléphone, sous 820 px** : la barre latérale cède la place à `BarreMobile.vue` (Boutique,
   Bibliothèque, Paramètres), et ses filtres à `FiltresMobile.vue`, tous deux sur les compteurs de
   `useFiltresBibliotheque`. `--barre-mobile` (`style.css`) vaut sa hauteur, 0 ailleurs : fiches,

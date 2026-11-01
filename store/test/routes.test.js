@@ -217,6 +217,38 @@ test("région et langue : une valeur inattendue retombe sur les défauts de l'ap
   assert.ok(urls[0].includes("country=US"));
 });
 
+test("fiche d'un jeu possédé : il faut un jeu, et l'absence de lien est une réponse, pas une panne", async () => {
+  const { proxy } = installerReseau(() => reponseJson([]));
+  const env = environnement({ PROXY: proxy });
+  assert.equal((await appeler(env, "/v1/owned")).status, 400);
+  const r = await appeler(env, "/v1/owned?titre=VALORANT");
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { fiche: null });
+});
+
+test("un appid connu passe directement, sans interroger IGDB", async () => {
+  const { appels } = installerReseau((url) =>
+    url.includes("GetNewsForApp") ? reponseJson({ appnews: { newsitems: [] } }) : reponseJson({ response: { store_items: [] } }),
+  );
+  const r = await appeler(environnement(), "/v1/owned?appId=620");
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).fiche.appId, 620);
+  assert.ok(!appels.some((a) => a.url.includes("igdb") || a.corps));
+});
+
+test("descriptif et joueurs en ce moment passent eux aussi par la session", async () => {
+  const { proxy } = installerReseau((url) =>
+    url.includes("GetNumberOfCurrentPlayers")
+      ? reponseJson({ response: { result: 1, player_count: 12 } })
+      : reponseJson([{ id: 1, name: "VALORANT", summary: "Un jeu de tir." }]),
+  );
+  const env = environnement({ PROXY: proxy });
+  assert.equal((await appeler(env, "/v1/meta")).status, 400);
+  assert.equal((await appeler(env, "/v1/players/1", { jeton: null })).status, 401);
+  assert.equal((await (await appeler(env, "/v1/meta?titre=VALORANT")).json()).meta.description, "Un jeu de tir.");
+  assert.equal((await (await appeler(env, "/v1/players/1")).json()).joueurs, 12);
+});
+
 test("une erreur interne ne décrit rien au client", async () => {
   const env = environnement({
     RL_COMPTE: {

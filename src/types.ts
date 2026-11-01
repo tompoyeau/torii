@@ -598,6 +598,11 @@ export interface SocialPrefs {
    * quitte pas la machine tant qu'on ne l'a pas demandé.
    */
   syncLibrary: boolean;
+  /**
+   * Envoyer aussi le temps de jeu, pour le retrouver sur ses autres appareils. Faux par défaut,
+   * et jamais visible des amis.
+   */
+  syncPlaytime?: boolean;
   /** Identifiant de CET appareil sur le serveur (créé au premier envoi). */
   deviceId?: string | null;
   /** Dernier envoi réussi : compte visé et empreinte du contenu. */
@@ -615,6 +620,15 @@ export interface LibGame {
   /** Le jeu vient du **partage familial Steam** : la personne y a accès, mais il ne lui
       appartient pas. Absent = possédé, le cas courant. */
   familyShared?: boolean;
+  /** L'appid Steam quand le jeu y est possédé (envoyé par les versions récentes du PC). */
+  steamAppId?: number;
+}
+
+/** Le temps de jeu d'un jeu, lisible par son seul propriétaire (`GET /v1/library-stats/…`). */
+export interface StatsJeu {
+  key: string;
+  minutes?: number;
+  lastPlayed?: number;
 }
 
 /** Une ligne d'index : un appareil, à moi ou à un ami qui partage sa bibliothèque. */

@@ -23,20 +23,7 @@ import PageWeb from "./PageWeb.vue";
 
 const { filtered, games, loading, echec, reload } = useLibrary();
 const { section, filter, query, sort, setSort, listView, installedOnly, toggleInstalledOnly, categories, clearCategories, openGame, selectedGameId, showStore } = useUi();
-const { selectedGameId: produitOuvert, openForTitle } = useStore();
-
-/**
- * Sur le web, un jeu s'ouvre sur sa fiche Boutique : le serveur ne connaît de lui que son titre,
- * ses launchers et sa jaquette, et rien n'y est à lancer ni à installer. Faute de fiche exacte,
- * `openForTitle` a lancé une recherche : c'est dans la Boutique qu'elle s'affiche.
- */
-async function ouvrirJeu(jeu: Game) {
-  if (!MODE_WEB) {
-    openGame(jeu.id);
-    return;
-  }
-  if (!(await openForTitle(jeu.title))) showStore();
-}
+const { selectedGameId: produitOuvert } = useStore();
 
 /**
  * Une fiche (jeu, Boutique) recouvre le contenu, à droite de la barre latérale : ce qu'elle
@@ -134,7 +121,7 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
       </div>
 
       <div class="grid" :class="{ list: listView }">
-        <GameCard v-for="g in shownGames" :key="g.id" :game="g" :actions="!MODE_WEB" @open="ouvrirJeu(g)" />
+        <GameCard v-for="g in shownGames" :key="g.id" :game="g" :actions="!MODE_WEB" @open="openGame(g.id)" />
       </div>
       <div v-if="!shownGames.length && categories.length && avantCategories.length" class="empty">
         <p>{{ t("bibliotheque.grille.aucunAvecCategories") }}</p>
