@@ -61,6 +61,13 @@ impl IdSet {
         self.save(config_dir, &HashSet::new())?;
         Ok(Vec::new())
     }
+
+    /// Remplace toute la liste ; renvoie la liste triée à jour.
+    pub fn replace(self, config_dir: &Path, ids: Vec<String>) -> Result<Vec<String>, String> {
+        let set: HashSet<String> = ids.into_iter().collect();
+        self.save(config_dir, &set)?;
+        Ok(sorted(&set))
+    }
 }
 
 /// Liste triée (ordre stable sur disque comme dans la réponse au front).

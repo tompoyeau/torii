@@ -5,6 +5,7 @@ import {
   clearExcludedStores as clearExcludedStoresBackend,
   getExcludedStores,
   modeDemo,
+  replaceExcludedStores,
   setStoreExcluded,
   storeDeals,
   storeGame,
@@ -106,11 +107,26 @@ async function toggleStoreExcluded(name: string) {
   const res = await setStoreExcluded(name, excluded);
   if (res) excludedStores.value = res;
   onExclusionChanged();
+  surModification?.(excludedStores.value);
 }
 /** Vide la liste d'exclusion (réaffiche toutes les boutiques). */
 async function clearExcludedStores() {
   excludedStores.value = [];
   await clearExcludedStoresBackend();
+  onExclusionChanged();
+  surModification?.([]);
+}
+
+/** Prévient `useRevendeursCompte` d'un changement fait ici : il le reporte sur le compte. */
+let surModification: ((liste: string[]) => void) | null = null;
+export function surRevendeursModifies(rappel: (liste: string[]) => void) {
+  surModification = rappel;
+}
+
+/** Une liste arrivée du compte : elle remplace la liste locale, sans repartir vers le serveur. */
+export async function appliquerRevendeurs(liste: string[]) {
+  excludedStores.value = liste;
+  await replaceExcludedStores(liste);
   onExclusionChanged();
 }
 

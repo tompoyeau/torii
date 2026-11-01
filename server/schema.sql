@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS accounts (
   -- retrouver sa bibliothèque sur son propre mobile et ne dépend pas de ce drapeau ; ce
   -- drapeau n'ouvre que la lecture par les amis (voir src/library.js).
   share_library      INTEGER NOT NULL DEFAULT 0,
-  created_at         INTEGER NOT NULL
+  created_at         INTEGER NOT NULL,
+  -- Revendeurs masqués du comparatif de prix, en liste JSON : le même choix sur tous les
+  -- appareils. Le compte en est la référence dès qu'on est connecté.
+  hidden_stores      TEXT NOT NULL DEFAULT '[]'
 );
 -- 🔑 UNIQUE, et pas seulement un index de recherche. Deux comptes Torii portant le même
 -- SteamID rendaient les suggestions ambiguës (deux propositions pour une personne), la

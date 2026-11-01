@@ -254,6 +254,7 @@ Les routes privées attendent `Authorization: Bearer <jeton>`.
 | `DELETE /v1/sessions/{id}` | Déconnecte un appareil. |
 | `DELETE /v1/sessions` | Déconnecte tous les **autres** appareils, jamais celui-ci. |
 | `PATCH /v1/me` | Nom affiché, SteamID, découvrabilité. |
+| `PUT /v1/me/hidden-stores` | Les revendeurs masqués du comparatif, en entier (`{ stores: [...] }`). `GET /v1/me` les rend dans `hiddenStores`. |
 | `GET /v1/friends` | Amis (avec présence), demandes reçues, demandes envoyées. |
 | `POST /v1/friends/invite` | `{ friendCode }`. Inviter quelqu'un qui nous a déjà invité vaut acceptation. |
 | `POST /v1/friends/respond` | `{ accountId, accept }`. |

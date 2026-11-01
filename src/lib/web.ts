@@ -1,5 +1,6 @@
 import { t } from "../i18n";
 import { fusionnerAppareils } from "./libraries";
+import { CLE_A_ENVOYER, CLE_COMPTE } from "./revendeurs";
 import type {
   GameDto, LibGame, LibraryIndex, LibrarySnapshot, PlatformId, ToriiAccount, ToriiDevice, ToriiSignIn,
 } from "../types";
@@ -54,6 +55,19 @@ function ecrireJeton(jeton: string | null) {
 /** Une session existe-t-elle dans ce navigateur ? Sans appel réseau. */
 export const sessionPresente = () => lireJeton() !== null;
 
+/**
+ * Fin de session : le jeton, et ce qui appartient au compte. Sur un navigateur partagé, les
+ * choix du compte précédent ne doivent pas se mêler à ceux du suivant.
+ */
+function oublierLaSession() {
+  ecrireJeton(null);
+  try {
+    for (const cle of [CLE_EXCLUS, CLE_COMPTE, CLE_A_ENVOYER]) localStorage.removeItem(cle);
+  } catch {
+    // Sans stockage, il n'y a rien à oublier.
+  }
+}
+
 /** Le nom de cet appareil dans « Mes appareils » : à défaut de mieux, son système. */
 function nomAppareil(): string {
   const ua = navigator.userAgent;
@@ -96,7 +110,7 @@ async function appel<T>(base: string, chemin: string, init: RequestInit = {}): P
   // 🔑 Session expirée ou fermée depuis un autre appareil : on repart de l'écran de connexion.
   // Recharger est le seul moyen sûr de ne rien laisser en mémoire du compte précédent.
   if (reponse.status === 401 && jeton) {
-    ecrireJeton(null);
+    oublierLaSession();
     window.location.reload();
   }
   // Le serveur n'écrit qu'en français : ces deux-là s'affichent sur le web, dans la langue de l'interface.
@@ -118,9 +132,9 @@ let locale = { langue: "en", region: "US" };
 const CLE_EXCLUS = "torii.revendeursMasques";
 
 /**
- * Revendeurs masqués, dans ce navigateur pour l'instant : ils ne suivent pas encore d'un appareil
- * à l'autre. La fiche produit reçoit toutes les offres et filtre elle-même ; le reste passe
- * par le Worker, seul à pouvoir choisir la meilleure offre.
+ * Revendeurs masqués : ceux du compte, gardés ici pour partir à chaque appel (`useRevendeursCompte`
+ * les tient alignés). La fiche produit reçoit toutes les offres et filtre elle-même ; le reste
+ * passe par le Worker, seul à pouvoir choisir la meilleure offre.
  */
 function lireExclus(): string[] {
   try {
@@ -224,7 +238,7 @@ const COMMANDES: Record<string, (a: Args) => Promise<unknown>> = {
     try {
       await envoyer("/v1/auth/logout", {});
     } finally {
-      ecrireJeton(null);
+      oublierLaSession();
     }
   },
   torii_set_profile: async ({ displayName }) =>
@@ -259,6 +273,8 @@ const COMMANDES: Record<string, (a: Args) => Promise<unknown>> = {
     return ecrireExclus(excluded ? [...reste, String(name)] : reste);
   },
   clear_excluded_stores: async () => ecrireExclus([]),
+  replace_excluded_stores: async ({ stores }) => ecrireExclus(stores as string[]),
+  torii_set_hidden_stores: ({ stores }) => envoyer("/v1/me/hidden-stores", { stores }, "PUT"),
 };
 
 /** Cette commande existe-t-elle sur le web ? */

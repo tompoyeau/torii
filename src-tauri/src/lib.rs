@@ -1500,6 +1500,13 @@ fn clear_excluded_stores(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     platforms::id_set::EXCLUDED_STORES.clear(&dir)
 }
 
+/// Remplace toute la liste d'exclusion : celle du compte, reçue d'un autre appareil.
+#[tauri::command]
+fn replace_excluded_stores(app: tauri::AppHandle, stores: Vec<String>) -> Result<Vec<String>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::id_set::EXCLUDED_STORES.replace(&dir, stores)
+}
+
 /// Lance un jeu selon sa plateforme et sa cible.
 #[tauri::command]
 fn launch_game(platform: String, target: String) -> Result<(), String> {
@@ -1677,6 +1684,13 @@ async fn torii_me(app: tauri::AppHandle) -> Result<Option<social::Account>, Stri
 async fn torii_logout(app: tauri::AppHandle) -> Result<(), String> {
     let dir = social_dir(&app)?;
     Ok(offload!(social::logout(&dir))?)
+}
+
+/// Enregistre la liste d'exclusion sur le compte Torii.
+#[tauri::command]
+async fn torii_set_hidden_stores(app: tauri::AppHandle, stores: Vec<String>) -> Result<(), String> {
+    let dir = social_dir(&app)?;
+    Ok(offload!(social::set_hidden_stores(&dir, stores))?)
 }
 
 #[tauri::command]
@@ -2131,6 +2145,8 @@ pub fn run() {
             get_excluded_stores,
             set_store_excluded,
             clear_excluded_stores,
+            replace_excluded_stores,
+            torii_set_hidden_stores,
             launch_game,
             install_game,
             record_launch,

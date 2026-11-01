@@ -4,6 +4,7 @@ import { useUi } from "./composables/useUi";
 import { useLibrary } from "./composables/useLibrary";
 import { useNavigation } from "./composables/useNavigation";
 import { installerRaccourcis } from "./composables/useRaccourcis";
+import { suivreRevendeursDuCompte } from "./composables/useRevendeursCompte";
 import { onGameDetected, onGameExited, onGameLaunched, onLibraryUpdated } from "./lib/tauri";
 import { startWishlistNotifier } from "./composables/useWishlistNotifier";
 import { useTorii } from "./composables/useTorii";
@@ -75,6 +76,7 @@ onMounted(async () => {
   window.addEventListener("mouseup", onMouseUp);
   window.addEventListener("contextmenu", onContextMenu);
   retirerRaccourcis = installerRaccourcis();
+  suivreRevendeursDuCompte();
   unlistenGameExit = await onGameExited((id) => openGame(id));
   // Une partie détectée (même lancée depuis Steam ou le bureau) remonte aussitôt dans
   // « Récemment joué », sans attendre une resynchronisation.

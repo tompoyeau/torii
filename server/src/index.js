@@ -22,7 +22,7 @@
 import { CORS, fail, json } from "./lib.js";
 import {
   authenticate, deleteMe, listSessions, logout, me, menage, requestCode,
-  revokeOtherSessions, revokeSession, signup, updateMe, verifyCode,
+  revokeOtherSessions, revokeSession, setHiddenStores, signup, updateMe, verifyCode,
 } from "./auth.js";
 import {
   clearPresence, invite, listFriends, publishPresence, removeFriend, respond,
@@ -64,6 +64,7 @@ const PRIVATE = {
   "GET /v1/me": me,
   "PATCH /v1/me": updateMe,
   "DELETE /v1/me": deleteMe,
+  "PUT /v1/me/hidden-stores": setHiddenStores,
   "POST /v1/auth/logout": logout,
   "GET /v1/sessions": listSessions,
   "DELETE /v1/sessions": revokeOtherSessions,

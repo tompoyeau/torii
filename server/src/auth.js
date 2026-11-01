@@ -239,7 +239,7 @@ export async function verifyCode(request, env) {
   await env.DB.prepare("DELETE FROM login_codes WHERE email = ?").bind(email).run();
 
   let account = await env.DB.prepare(
-    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library
+    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library, hidden_stores
        FROM accounts WHERE email = ?`,
   )
     .bind(email)
@@ -334,7 +334,7 @@ export async function signup(request, env) {
   // Un laissez-passer rejoué, ou deux fenêtres ouvertes en même temps : le compte déjà
   // créé l'emporte, et on se contente d'ouvrir une session dessus. Jamais de doublon.
   let account = await env.DB.prepare(
-    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library
+    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library, hidden_stores
        FROM accounts WHERE email = ?`,
   )
     .bind(email)
@@ -493,7 +493,7 @@ export async function authenticate(request, env) {
   const tokenHash = await hash(token, env.PEPPER);
   const row = await env.DB.prepare(
     `SELECT s.token_hash, s.account_id, s.last_seen_at, a.id, a.email, a.display_name,
-            a.friend_code, a.steam_id, a.steam_discoverable, a.share_library
+            a.friend_code, a.steam_id, a.steam_discoverable, a.share_library, a.hidden_stores
        FROM sessions s JOIN accounts a ON a.id = s.account_id
       WHERE s.token_hash = ?`,
   )
@@ -606,7 +606,7 @@ export async function updateMe(request, env, session) {
   }
 
   const fresh = await env.DB.prepare(
-    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library
+    `SELECT id, email, display_name, friend_code, steam_id, steam_discoverable, share_library, hidden_stores
        FROM accounts WHERE id = ?`,
   )
     .bind(session.accountId)
@@ -626,5 +626,50 @@ export function publicAccount(row) {
     // Mes amis peuvent-ils consulter ma bibliothèque ? Ne dit rien de la synchronisation
     // elle-même, qui est une préférence locale du client (cf. src/library.js).
     shareLibrary: !!row.share_library,
+    hiddenStores: lireRevendeurs(row.hidden_stores),
   };
+}
+
+/** Revendeurs retenus par compte. Au-delà, c'est un client qui boucle, pas un choix. */
+const MAX_REVENDEURS = 200;
+const MAX_NOM_REVENDEUR = 80;
+
+/** La liste stockée. Une colonne illisible ne doit pas priver quelqu'un de son compte. */
+function lireRevendeurs(texte) {
+  try {
+    const liste = JSON.parse(texte || "[]");
+    return Array.isArray(liste) ? liste : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Ce qu'on accepte de stocker : des noms bornés, sans doublon, toujours dans le même ordre.
+ * Le serveur ne les compare à rien : un revendeur inconnu aujourd'hui peut exister demain.
+ */
+export function normaliserRevendeurs(liste) {
+  const noms = liste
+    .filter((n) => typeof n === "string")
+    .map((n) => n.trim().slice(0, MAX_NOM_REVENDEUR))
+    .filter(Boolean);
+  return [...new Set(noms)].sort().slice(0, MAX_REVENDEURS);
+}
+
+/**
+ * `PUT /v1/me/hidden-stores` — les revendeurs masqués du compte, en entier.
+ *
+ * 🔑 La liste entière plutôt qu'un ajout ou un retrait : le dernier appareil qui parle a raison,
+ * et un appel rejoué après une coupure réseau ne change rien.
+ */
+export async function setHiddenStores(request, env, session) {
+  const data = await body(request);
+  if (!Array.isArray(data?.stores)) {
+    return fail(400, "requete_invalide", "Il manque la liste des revendeurs.");
+  }
+  const stores = normaliserRevendeurs(data.stores);
+  await env.DB.prepare("UPDATE accounts SET hidden_stores = ? WHERE id = ?")
+    .bind(JSON.stringify(stores), session.accountId)
+    .run();
+  return json({ stores });
 }

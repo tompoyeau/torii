@@ -47,6 +47,11 @@ pub struct Account {
     /// synchronisation elle-même, qui est une préférence locale (cf. `libsync`).
     #[serde(default)]
     pub share_library: bool,
+    /// Revendeurs masqués du comparatif, les mêmes sur tous les appareils du compte. C'est le
+    /// front qui les aligne sur la liste locale (`useRevendeursCompte`). Absent de la réponse
+    /// d'un serveur plus ancien : le front s'en tient alors à la liste locale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden_stores: Option<Vec<String>>,
 }
 
 /// Un ami et sa présence. `status` vaut `in-game`, `online`, `away` ou `offline` —
@@ -399,6 +404,13 @@ pub fn me(config_dir: &Path) -> Option<Account> {
     }
     let w: Wrapper = call(config_dir, "GET", "/v1/me", None).ok()?;
     Some(w.account)
+}
+
+/// Enregistre sur le compte la liste entière des revendeurs masqués.
+pub fn set_hidden_stores(config_dir: &Path, stores: Vec<String>) -> Result<(), String> {
+    let corps = serde_json::json!({ "stores": stores });
+    let _: serde_json::Value = call(config_dir, "PUT", "/v1/me/hidden-stores", Some(corps))?;
+    Ok(())
 }
 
 /// Met à jour le profil. Chaque champ absent est laissé tel quel côté serveur.

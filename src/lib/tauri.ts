@@ -777,6 +777,16 @@ export async function clearExcludedStores(): Promise<string[] | null> {
   return await call<string[] | null>("clear_excluded_stores", undefined, null);
 }
 
+/** Remplace toute la liste : celle du compte, reçue d'un autre appareil. */
+export async function replaceExcludedStores(stores: string[]): Promise<string[] | null> {
+  return await call<string[] | null>("replace_excluded_stores", { stores }, null);
+}
+
+/** Enregistre la liste sur le compte. Lève en cas d'échec : l'envoi sera retenté. */
+export async function toriiSetHiddenStores(stores: string[]): Promise<void> {
+  await social<unknown>("torii_set_hidden_stores", { stores });
+}
+
 /** Ouvre un lien externe (achat) dans le navigateur par défaut, hors de l'app. */
 export async function openExternal(url: string): Promise<void> {
   try {

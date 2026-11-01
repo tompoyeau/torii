@@ -9,6 +9,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "build:web": "vue-tsc --noEmit && vite build --mode web --outDir dist-web --emptyOutDir",
     "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs",
     "tauri": "tauri",
     "build:demo": "vite build --base=./ --outDir site/demo --emptyOutDir",
     "build:notes": "node scripts/notes-de-version.mjs"

@@ -524,6 +524,8 @@ export interface ToriiAccount {
    * son mobile sans la montrer à personne.
    */
   shareLibrary: boolean;
+  /** Revendeurs masqués du comparatif. Absent : le serveur ne connaît pas encore cette liste. */
+  hiddenStores?: string[];
 }
 
 /**
