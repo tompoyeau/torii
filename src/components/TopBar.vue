@@ -73,8 +73,8 @@ function openMyAccount() {
 const { peutReculer, peutAvancer, libellePrecedent, libelleSuivant, reculer, avancer, quitterLesSurcouches, coucheDuDessus } = useNavigation();
 
 /**
- * Une fiche (jeu, Boutique) est ouverte : la barre passe PAR-DESSUS, fond plein, pour changer
- * de section ou revenir en arrière.
+ * Une fiche (jeu, Boutique) est ouverte : la barre passe PAR-DESSUS, en verre dépoli, pour
+ * changer de section ou revenir en arrière.
  */
 const surFiche = computed(() => {
   const couche = coucheDuDessus();
@@ -260,7 +260,26 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 /* Par-dessus les fiches (100 et 110), sous les Paramètres (200). Elle glisse en place ou hors
    de l'écran ; `visibility` suit en fin de glissement, pour ne pas couper l'animation. */
 .topbar { transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s; }
-.topbar.sur-fiche { z-index: 150; background: var(--bg); }
+/* Sur une fiche : du verre, comme le bouton retour de la fiche (`.detail-back`, même teinte
+   et même liseré), la bannière et le texte passent dessous en flou. Flou plus fort que le
+   bouton : derrière une barre entière, c'est du texte qui défile. */
+.topbar.sur-fiche {
+  z-index: 150;
+  background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="light"] .topbar.sur-fiche { background: rgba(255, 255, 255, 0.6); border-bottom-color: var(--border); }
+/* Les commandes de la barre laissent voir le verre au lieu de faire des pavés opaques. */
+.topbar.sur-fiche :is(.icon-btn, .search input, .onglets, .me) {
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+:root[data-theme="light"] .topbar.sur-fiche :is(.icon-btn, .search input, .onglets, .me) { border-color: var(--border); }
+/* Firefox (version web) n'a pas de flou (`style.css`) : une teinte plus dense garde la barre lisible. */
+@supports (-moz-appearance: none) {
+  .topbar.sur-fiche { background: rgba(12, 8, 18, 0.88); }
+  :root[data-theme="light"] .topbar.sur-fiche { background: rgba(255, 255, 255, 0.9); }
+}
 .topbar.effacee { transform: translateY(-100%); opacity: 0; visibility: hidden; pointer-events: none; }
 .logo {
   width: 38px; height: 38px; border-radius: 11px; flex: none;
