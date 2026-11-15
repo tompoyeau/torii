@@ -63,9 +63,9 @@ const game = computed(() => byId(selectedGameId.value));
 useScrollLock(computed(() => !!game.value));
 
 /**
- * Le panneau recouvre la page, mais pas la barre latérale : le focus y entre à
- * l'ouverture et revient au bouton d'origine à la fermeture, sans y être enfermé. La
- * bibliothèque cachée derrière, elle, sort de la tabulation (`inert`, `AppShell.vue`).
+ * Le panneau recouvre la page : le focus y entre à l'ouverture et revient au bouton
+ * d'origine à la fermeture, sans y être enfermé. La page cachée derrière, elle, sort de la
+ * tabulation (`inert`, `AppShell.vue`).
  */
 const panneau = ref<HTMLElement | null>(null);
 useFocusTrap(panneau, computed(() => !!game.value), { boucle: false });
@@ -837,10 +837,10 @@ function retour() {
 </template>
 
 <style scoped>
-/* À droite de la barre latérale, qui reste visible : la fiche est un écran de l'application,
-   pas une fenêtre posée par-dessus. */
+/* Toute la fenêtre, barre du bas exceptée : la fiche est un écran de l'application, pas une
+   fenêtre posée par-dessus. */
 .detail {
-  position: fixed; inset: 0 0 var(--barre-mobile) var(--largeur-laterale); z-index: 100; background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 100; background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
   opacity: 0; visibility: hidden; transition: opacity 0.28s;
 }
 .detail.open { opacity: 1; visibility: visible; }

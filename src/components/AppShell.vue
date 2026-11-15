@@ -8,8 +8,7 @@ import type { Game, SortKey } from "../types";
 import { etiquetteIntl, t } from "../i18n";
 import { MODE_WEB } from "../lib/mode";
 import CategoryFilter from "./CategoryFilter.vue";
-import FiltresMobile from "./FiltresMobile.vue";
-import Sidebar from "./Sidebar.vue";
+import FiltresBibliotheque from "./FiltresBibliotheque.vue";
 import TopBar from "./TopBar.vue";
 import HeroFeatured from "./HeroFeatured.vue";
 import GameCard from "./GameCard.vue";
@@ -26,9 +25,8 @@ const { section, filter, query, sort, setSort, listView, installedOnly, toggleIn
 const { selectedGameId: produitOuvert } = useStore();
 
 /**
- * Une fiche (jeu, Boutique) recouvre le contenu, à droite de la barre latérale : ce qu'elle
- * cache sort de la tabulation et des lecteurs d'écran (`inert`). La barre, visible, reste
- * joignable — c'est pourquoi les fiches n'enferment plus le focus.
+ * Une fiche (jeu, Boutique) recouvre le contenu : ce qu'elle cache sort de la tabulation et
+ * des lecteurs d'écran (`inert`), barre du haut comprise.
  */
 const contenuRecouvert = computed(
   () => produitOuvert.value != null || (selectedGameId.value != null && games.value.some((g) => g.id === selectedGameId.value)),
@@ -76,7 +74,6 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 
 <template>
   <div class="shell">
-    <Sidebar />
     <main class="main" :class="{ 'sur-page': section === 'web' }" :inert="contenuRecouvert">
       <TopBar />
 
@@ -89,12 +86,10 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
       <WishlistView v-else-if="section === 'wishlist'" />
       <template v-else>
       <HeroFeatured v-if="!MODE_WEB" />
-      <FiltresMobile v-if="MODE_WEB" />
 
-      <div class="sec-head">
-        <h2>{{ titreFiltre(filter) }}</h2>
-        <span class="n">{{ t("bibliotheque.jeux", { n: shownGames.length }) }}</span>
-        <span class="spacer" />
+      <!-- Le titre reste pour la structure de la page ; à l'écran, la puce active le dit. -->
+      <h2 class="cache">{{ titreFiltre(filter) }}</h2>
+      <FiltresBibliotheque :affiches="shownGames.length">
         <CategoryFilter v-if="!MODE_WEB" :games="avantCategories" />
         <button
           v-if="isPlatformView && !MODE_WEB"
@@ -118,7 +113,7 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
             {{ s.label }}
           </button>
         </template>
-      </div>
+      </FiltresBibliotheque>
 
       <div class="grid" :class="{ list: listView }">
         <GameCard v-for="g in shownGames" :key="g.id" :game="g" :actions="!MODE_WEB" @open="openGame(g.id)" />
@@ -145,14 +140,14 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 </template>
 
 <style scoped>
-.shell { display: grid; grid-template-columns: var(--largeur-laterale) 1fr; }
 .main { min-width: 0; padding: 0 34px 60px; }
 /* La page web prend toute la hauteur sous la barre : pas de marge qui ferait défiler. */
 .main.sur-page { padding-bottom: 0; }
-.sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
-.sec-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
-.sec-head .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.sec-head .spacer { flex: 1; }
+/* Lu par les lecteurs d'écran, invisible à l'écran. */
+.cache {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
 /* Base `.chip` dans style.css (partagée avec la Boutique, les Amis, la Wishlist). */
 .chip.toggle { display: inline-flex; align-items: center; gap: 6px; }
 .chip.toggle svg { width: 14px; height: 14px; }
@@ -183,7 +178,6 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 .invitation p { max-width: 52ch; margin-inline: auto; line-height: 1.5; color: var(--text-dim); }
 
 @media (max-width: 820px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
   .main {
     padding: 0 max(18px, env(safe-area-inset-right, 0px)) calc(40px + var(--barre-mobile)) max(18px, env(safe-area-inset-left, 0px));
   }

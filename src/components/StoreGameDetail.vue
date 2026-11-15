@@ -461,8 +461,8 @@ const detailOffre = (p: StorePrice) =>
 </template>
 
 <style scoped>
-/* À droite de la barre latérale, comme la fiche d'un jeu de la bibliothèque. */
-.sd { position: fixed; inset: 0 0 var(--barre-mobile) var(--largeur-laterale); z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
+/* Toute la fenêtre, comme la fiche d'un jeu de la bibliothèque. */
+.sd { position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
 .sd.open { opacity: 1; visibility: visible; }
 .sd-banner { position: relative; height: 40vh; min-height: 300px; overflow: hidden; }
 .sd-banner-art { position: absolute; inset: 0; }

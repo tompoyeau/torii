@@ -324,14 +324,11 @@ html.web .wish-dot { display: none; }
   transition: none !important;
 }
 
-/* --- Barre latérale -----------------------------------------------------------
-   Sa largeur, partagée par la grille de l'application et par les fiches (jeu, Boutique)
-   qui s'ouvrent À SA DROITE : la barre reste visible et cliquable partout. Nulle quand
-   elle passe au-dessus du contenu (fenêtre étroite : démo web sur téléphone). */
-:root { --largeur-laterale: 262px; --barre-mobile: 0px; }
+/* --- Barre du bas (téléphone) ---------------------------------------------------
+   Sa hauteur, que les fiches et les messages laissent libre. Elle ne paraît que sur la
+   version web, sous 820 px : ailleurs, les onglets de la barre du haut font ce travail. */
+:root { --barre-mobile: 0px; }
 @media (max-width: 820px) {
-  :root { --largeur-laterale: 0px; }
-  /* La barre du bas (`BarreMobile`), qui remplace la latérale sur la version web. */
   html.web { --barre-mobile: calc(58px + env(safe-area-inset-bottom, 0px)); }
 }
 

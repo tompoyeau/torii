@@ -5,8 +5,8 @@ import { MODE_WEB } from "../lib/mode";
 import type { LibraryFilter, PlatformId } from "../types";
 
 /**
- * Les filtres de la bibliothèque et leurs compteurs : la barre latérale les liste, et sur
- * téléphone, où elle disparaît, une rangée de puces prend le relais (`FiltresMobile`).
+ * Les filtres de la bibliothèque et leurs compteurs, que `FiltresBibliotheque` affiche en
+ * puces au-dessus de la grille.
  */
 export function useFiltresBibliotheque() {
   const { games } = useLibrary();

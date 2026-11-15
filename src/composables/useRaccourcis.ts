@@ -23,7 +23,7 @@ const nav = useNavigation();
 /** Demandée à la première resynchronisation au clavier, pas au chargement du module. */
 let bibliotheque: ReturnType<typeof useLibrary> | null = null;
 
-/** Ctrl + chiffre : les grandes sections, dans l'ordre de la barre latérale. */
+/** Ctrl + chiffre : les grandes sections, dans l'ordre des onglets de la barre du haut. */
 const SECTIONS: Record<string, () => void> = {
   "1": () => ui.showLibrary(),
   "2": () => ui.showStore(),
