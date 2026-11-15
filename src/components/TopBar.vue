@@ -252,34 +252,32 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 </template>
 
 <style scoped>
+/* Du verre dépoli sur toute sa hauteur, sur toutes les vues : la même teinte et le même liseré
+   que le bouton retour des fiches (`.detail-back`). Ce qui défile dessous passe en flou ; flou
+   plus fort que le bouton, car derrière une barre entière, c'est souvent du texte. */
 .topbar {
   position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px;
   padding: 18px 34px 16px;
-  background: linear-gradient(var(--bg) 60%, transparent); backdrop-filter: blur(6px);
+  background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="light"] .topbar { background: rgba(255, 255, 255, 0.6); border-bottom-color: var(--border); }
+/* Les commandes de la barre laissent voir le verre au lieu de faire des pavés opaques. */
+.topbar :is(.icon-btn, .search input, .onglets, .me) {
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+:root[data-theme="light"] .topbar :is(.icon-btn, .search input, .onglets, .me) { border-color: var(--border); }
+.topbar :is(.icon-btn, .me):hover { border-color: var(--border-strong); }
+/* Firefox (version web) n'a pas de flou (`style.css`) : une teinte plus dense garde la barre lisible. */
+@supports (-moz-appearance: none) {
+  .topbar { background: rgba(12, 8, 18, 0.88); }
+  :root[data-theme="light"] .topbar { background: rgba(255, 255, 255, 0.9); }
 }
 /* Par-dessus les fiches (100 et 110), sous les Paramètres (200). Elle glisse en place ou hors
    de l'écran ; `visibility` suit en fin de glissement, pour ne pas couper l'animation. */
 .topbar { transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s; }
-/* Sur une fiche : du verre, comme le bouton retour de la fiche (`.detail-back`, même teinte
-   et même liseré), la bannière et le texte passent dessous en flou. Flou plus fort que le
-   bouton : derrière une barre entière, c'est du texte qui défile. */
-.topbar.sur-fiche {
-  z-index: 150;
-  background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(16px) saturate(140%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-:root[data-theme="light"] .topbar.sur-fiche { background: rgba(255, 255, 255, 0.6); border-bottom-color: var(--border); }
-/* Les commandes de la barre laissent voir le verre au lieu de faire des pavés opaques. */
-.topbar.sur-fiche :is(.icon-btn, .search input, .onglets, .me) {
-  background: color-mix(in srgb, var(--surface) 45%, transparent);
-  border-color: rgba(255, 255, 255, 0.16);
-}
-:root[data-theme="light"] .topbar.sur-fiche :is(.icon-btn, .search input, .onglets, .me) { border-color: var(--border); }
-/* Firefox (version web) n'a pas de flou (`style.css`) : une teinte plus dense garde la barre lisible. */
-@supports (-moz-appearance: none) {
-  .topbar.sur-fiche { background: rgba(12, 8, 18, 0.88); }
-  :root[data-theme="light"] .topbar.sur-fiche { background: rgba(255, 255, 255, 0.9); }
-}
+.topbar.sur-fiche { z-index: 150; }
 .topbar.effacee { transform: translateY(-100%); opacity: 0; visibility: hidden; pointer-events: none; }
 .logo {
   width: 38px; height: 38px; border-radius: 11px; flex: none;
@@ -411,7 +409,10 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 @media (max-width: 820px) {
   /* Les mêmes marges que la page (`.main`, `AppShell.vue`). */
   .topbar { padding-inline: max(18px, env(safe-area-inset-left, 0px)) max(18px, env(safe-area-inset-right, 0px)); }
-  .topbar.web { position: static; gap: 8px; padding-block: 12px; background: none; backdrop-filter: none; }
+  /* La barre défile avec la page : pas de verre, il n'y aurait rien dessous. */
+  .topbar.web, :root[data-theme="light"] .topbar.web {
+    position: static; gap: 8px; padding-block: 12px; background: none; backdrop-filter: none; border-bottom: none;
+  }
   .topbar.web .marque { display: block; width: 34px; height: 34px; flex: none; }
   .topbar .logo,
   .topbar .onglets,
