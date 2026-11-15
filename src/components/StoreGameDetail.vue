@@ -7,6 +7,7 @@ import { useStoreCategories } from "../composables/useStoreCategories";
 import { partagerJeu } from "../lib/partage";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
+import { suivreHautDeFiche } from "../composables/useHautDeFiche";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { useUi } from "../composables/useUi";
 import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
@@ -40,6 +41,7 @@ useScrollLock(open);
 /** Même raison que la fiche de la bibliothèque : le panneau recouvre la page. */
 const panneau = ref<HTMLElement | null>(null);
 useFocusTrap(panneau, open, { boucle: false });
+suivreHautDeFiche("produit", panneau, open);
 
 /** Un montant dans la devise de l'offre qui le porte. */
 const price = (montant: number, offre: StorePrice) => formatPrix(montant, offre.currency);
@@ -461,8 +463,9 @@ const detailOffre = (p: StorePrice) =>
 </template>
 
 <style scoped>
-/* Sous la barre du haut, comme la fiche d'un jeu de la bibliothèque. */
-.sd { position: fixed; inset: var(--hauteur-barre, 0px) 0 var(--barre-mobile) 0; z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
+/* Toute la fenêtre, comme la fiche d'un jeu de la bibliothèque : la barre du haut s'efface
+   tout en haut et revient par-dessus dès qu'on descend. */
+.sd { position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
 .sd.open { opacity: 1; visibility: visible; }
 .sd-banner { position: relative; height: 40vh; min-height: 300px; overflow: hidden; }
 .sd-banner-art { position: absolute; inset: 0; }
@@ -617,8 +620,6 @@ const detailOffre = (p: StorePrice) =>
   .sd-prices { position: static; }
 }
 @media (max-width: 820px) {
-  /* Sur téléphone, la barre du haut défile avec la page : la fiche part du haut de l'écran. */
-  .sd { top: 0; }
   .sd-header, .sd-body { padding-left: 22px; padding-right: 22px; }
   /* Comparer les prix passe avant de lire la description. */
   .sd-prices { order: -1; }

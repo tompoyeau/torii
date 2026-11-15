@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
+import { useHautDeFiche } from "../composables/useHautDeFiche";
 import { useUi } from "../composables/useUi";
 import { useLibrary } from "../composables/useLibrary";
 import { useFriends } from "../composables/useFriends";
@@ -72,26 +73,22 @@ function openMyAccount() {
 const { peutReculer, peutAvancer, libellePrecedent, libelleSuivant, reculer, avancer, quitterLesSurcouches, coucheDuDessus } = useNavigation();
 
 /**
- * Les fiches (jeu, Boutique) s'ouvrent SOUS la barre, qui reste là pour changer de section ou
- * revenir en arrière. Elles se calent sur sa hauteur réelle (`--hauteur-barre`), mesurée :
- * elle change avec le zoom, la police, et le jour où la barre passe sur deux lignes.
+ * Une fiche (jeu, Boutique) est ouverte : la barre passe PAR-DESSUS, fond plein, pour changer
+ * de section ou revenir en arrière.
  */
-const barre = ref<HTMLElement | null>(null);
-let observateur: ResizeObserver | null = null;
-onMounted(() => {
-  if (!barre.value) return;
-  observateur = new ResizeObserver(([entree]) => {
-    const hauteur = Math.round(entree.borderBoxSize?.[0]?.blockSize ?? entree.target.getBoundingClientRect().height);
-    document.documentElement.style.setProperty("--hauteur-barre", `${hauteur}px`);
-  });
-  observateur.observe(barre.value);
-});
-onBeforeUnmount(() => observateur?.disconnect());
-
-/** Une fiche est ouverte sous la barre : fond plein, la page ne doit pas transparaître. */
 const surFiche = computed(() => {
   const couche = coucheDuDessus();
   return couche === "jeu" || couche === "produit";
+});
+
+/**
+ * …sauf tout en haut de la fiche : la barre s'efface pour laisser la bannière en plein écran,
+ * et revient dès qu'on descend. Là-haut, la fiche a son propre bouton retour.
+ */
+const { jeu: jeuEnHaut, produit: produitEnHaut } = useHautDeFiche();
+const effacee = computed(() => {
+  const couche = coucheDuDessus();
+  return (couche === "jeu" && jeuEnHaut.value) || (couche === "produit" && produitEnHaut.value);
 });
 
 /**
@@ -150,7 +147,7 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 </script>
 
 <template>
-  <div ref="barre" class="topbar" :class="{ web: MODE_WEB, 'sur-fiche': surFiche }">
+  <div class="topbar" :class="{ web: MODE_WEB, 'sur-fiche': surFiche, effacee }" :inert="effacee">
     <!-- Sur téléphone, la barre latérale et son logo ne sont plus là. -->
     <img v-if="MODE_WEB" class="marque" src="/torii.svg" alt="Torii" />
     <div class="logo" aria-hidden="true">
@@ -260,7 +257,11 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   padding: 18px 34px 16px;
   background: linear-gradient(var(--bg) 60%, transparent); backdrop-filter: blur(6px);
 }
-.topbar.sur-fiche { background: var(--bg); }
+/* Par-dessus les fiches (100 et 110), sous les Paramètres (200). Elle glisse en place ou hors
+   de l'écran ; `visibility` suit en fin de glissement, pour ne pas couper l'animation. */
+.topbar { transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s; }
+.topbar.sur-fiche { z-index: 150; background: var(--bg); }
+.topbar.effacee { transform: translateY(-100%); opacity: 0; visibility: hidden; pointer-events: none; }
 .logo {
   width: 38px; height: 38px; border-radius: 11px; flex: none;
   background: linear-gradient(140deg, var(--accent), #ff9a6b); color: var(--accent-ink);

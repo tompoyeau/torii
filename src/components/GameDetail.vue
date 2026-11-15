@@ -13,6 +13,7 @@ import { ouvrirPage } from "../composables/usePageWeb";
 import { partagerJeu } from "../lib/partage";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
+import { suivreHautDeFiche } from "../composables/useHautDeFiche";
 import { estHorsLauncher, platformName } from "../data/platforms";
 import { libelleAvis, nombre, pageSteam, tonAvis } from "../lib/boutique";
 import { installSource, launchSource, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
@@ -63,12 +64,14 @@ const game = computed(() => byId(selectedGameId.value));
 useScrollLock(computed(() => !!game.value));
 
 /**
- * Le panneau recouvre la page, mais pas la barre du haut : le focus y entre à l'ouverture
- * et revient au bouton d'origine à la fermeture, sans y être enfermé. La page cachée
- * derrière, elle, sort de la tabulation (`inert`, `AppShell.vue`).
+ * Le panneau recouvre toute la page ; la barre du haut revient par-dessus dès qu'on le fait
+ * défiler (`useHautDeFiche`). Le focus y entre à l'ouverture et revient au bouton d'origine
+ * à la fermeture, sans y être enfermé. La page cachée derrière, elle, sort de la
+ * tabulation (`inert`, `AppShell.vue`).
  */
 const panneau = ref<HTMLElement | null>(null);
 useFocusTrap(panneau, computed(() => !!game.value), { boucle: false });
+suivreHautDeFiche("jeu", panneau, computed(() => !!game.value));
 
 const friendById = computed(() => new Map(friends.value.map((f) => [f.steamId, f])));
 
@@ -837,10 +840,11 @@ function retour() {
 </template>
 
 <style scoped>
-/* Sous la barre du haut, qui reste visible (`--hauteur-barre`, mesurée par `TopBar.vue`) : la
-   fiche est un écran de l'application, pas une fenêtre posée par-dessus. */
+/* Toute la fenêtre, barre du bas exceptée : la fiche est un écran de l'application, pas une
+   fenêtre posée par-dessus. Tout en haut, la bannière occupe l'écran entier ; la barre du
+   haut revient par-dessus dès qu'on descend (`TopBar.vue`). */
 .detail {
-  position: fixed; inset: var(--hauteur-barre, 0px) 0 var(--barre-mobile) 0; z-index: 100; background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 100; background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
   opacity: 0; visibility: hidden; transition: opacity 0.28s;
 }
 .detail.open { opacity: 1; visibility: visible; }
@@ -1086,8 +1090,6 @@ function retour() {
   .detail-aside { position: static; }
 }
 @media (max-width: 820px) {
-  /* Sur téléphone, la barre du haut défile avec la page : la fiche part du haut de l'écran. */
-  .detail { top: 0; }
   .detail-header, .detail-body { padding-left: 22px; padding-right: 22px; }
 }
 @media (max-width: 620px) {
