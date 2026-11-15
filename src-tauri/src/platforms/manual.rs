@@ -322,6 +322,20 @@ pub fn add(config_dir: &Path, input: ManualInput) -> Result<Vec<GameDto>, String
     Ok(games)
 }
 
+/// Ajoute plusieurs jeux d'un coup (« Trouvés sur ce PC »). Chacun passe les mêmes
+/// contrôles qu'un ajout seul ; un refus n'empêche pas les suivants. Renvoie la liste à
+/// jour et un message par jeu refusé.
+pub fn add_plusieurs(config_dir: &Path, inputs: Vec<ManualInput>) -> (Vec<GameDto>, Vec<String>) {
+    let mut refus = Vec::new();
+    for input in inputs {
+        let titre = input.title.trim().to_string();
+        if let Err(e) = add(config_dir, input) {
+            refus.push(format!("{titre} : {e}"));
+        }
+    }
+    (scan(config_dir), refus)
+}
+
 /// Met à jour un jeu manuel existant (édition de sa fiche) et renvoie la liste à jour.
 pub fn update(config_dir: &Path, id: &str, input: ManualInput) -> Result<Vec<GameDto>, String> {
     let mut games = scan(config_dir);

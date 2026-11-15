@@ -684,6 +684,56 @@ export async function searchGameSheets(title: string): Promise<GameSheet[]> {
   return await callOrThrow<GameSheet[]>("search_game_sheets", { title });
 }
 
+/** Un jeu trouvé sur ce PC, proposé dans « Ajouter un jeu ». */
+export interface Suggestion {
+  title: string;
+  launchTarget: string;
+  installDir?: string | null;
+  /** `dossier` : un sous-dossier d'un dossier de jeux ; `windows` : la liste de la Game Bar. */
+  source: "dossier" | "windows";
+}
+
+/** Les propositions du moment, les dossiers de jeux retenus, le nombre de refus. */
+export interface Propositions {
+  jeux: Suggestion[];
+  dossiers: string[];
+  ignores: number;
+}
+
+const AUCUNE_PROPOSITION: Propositions = { jeux: [], dossiers: [], ignores: 0 };
+
+/** Jeux trouvés sur ce PC que la bibliothèque n'a pas (rien hors Tauri). */
+export async function gameSuggestions(): Promise<Propositions> {
+  if (!(await inTauri())) return AUCUNE_PROPOSITION;
+  return await callOrThrow<Propositions>("game_suggestions");
+}
+
+/** Ajoute ou retire un dossier de jeux ; rend les propositions à jour. L'erreur remonte. */
+export async function setGameFolder(path: string, retenu: boolean): Promise<Propositions> {
+  if (!(await inTauri())) return AUCUNE_PROPOSITION;
+  return await callOrThrow<Propositions>("set_game_folder", { path, retenu });
+}
+
+/** « Ignorer » une proposition : elle ne revient plus. */
+export async function ignoreGameSuggestion(exe: string): Promise<void> {
+  await call<void>("ignore_game_suggestion", { exe }, undefined);
+}
+
+/** Réaffiche les propositions ignorées ; rend les propositions à jour. */
+export async function resetIgnoredSuggestions(): Promise<Propositions> {
+  if (!(await inTauri())) return AUCUNE_PROPOSITION;
+  return await callOrThrow<Propositions>("reset_ignored_suggestions");
+}
+
+/**
+ * Ajoute plusieurs jeux d'un coup. Rend la liste à jour des jeux manuels et un message
+ * par jeu refusé (introuvable, déjà présent…) ; `null` hors Tauri.
+ */
+export async function addManualGames(inputs: ManualInput[]): Promise<{ jeux: GameDto[]; refus: string[] } | null> {
+  if (!(await inTauri())) return null;
+  return await callOrThrow<{ jeux: GameDto[]; refus: string[] }>("add_manual_games", { inputs });
+}
+
 /**
  * Fichiers déposés sur la fenêtre depuis l'Explorateur. `survol` suit l'entrée et la
  * sortie du glisser, `depose` reçoit les chemins. Renvoie la fonction de désabonnement

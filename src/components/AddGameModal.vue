@@ -6,20 +6,27 @@ import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
 import {
   displayableCover,
+  gameSuggestions,
+  ignoreGameSuggestion,
   inspectGameTarget,
   onFileDrop,
   pickFile,
   pickFolder,
+  resetIgnoredSuggestions,
   searchGameSheets,
+  setGameFolder,
   type ManualInput,
   type ManualSheet,
+  type Propositions,
+  type Suggestion,
 } from "../lib/tauri";
 import { gradientFor } from "../lib/covers";
+import { showToast } from "../composables/useToast";
 import type { GameSheet } from "../types";
 import { t } from "../i18n";
 
 const { addGameOpen, editGameId, closeAddGame, openGame } = useUi();
-const { addManual, updateManual, byId } = useLibrary();
+const { addManual, addManualMany, updateManual, byId } = useLibrary();
 
 useScrollLock(addGameOpen);
 
@@ -113,6 +120,9 @@ watch(addGameOpen, (open) => {
   erreurRecherche.value = null;
   jaquetteDeFiche.value = estUneJaquetteDeFiche(coverUrl.value) ? coverUrl.value : null;
   jaquetteRatee.value = null;
+  coches.value = new Set();
+  erreurTrouves.value = null;
+  if (!g) void chargerTrouves();
   // Après le piège à focus, qui vise le premier bouton venu (la croix de fermeture).
   void nextTick(() => nextTick(() => (g ? champTitre.value : boutonChoisir.value)?.focus()));
 });
@@ -259,6 +269,121 @@ function versFiche(f: GameSheet): ManualSheet {
   };
 }
 
+// --- Trouvés sur ce PC (dossiers de jeux, liste de Windows) -------------------------
+
+/** Les propositions ; `null` avant la première réponse. */
+const propositions = ref<Propositions | null>(null);
+const chargement = ref(false);
+const erreurTrouves = ref<string | null>(null);
+/** Propositions cochées, par cible de lancement. */
+const coches = ref<Set<string>>(new Set());
+/** Numéro de la demande en cours : une réponse arrivée trop tard est ignorée. */
+let tourTrouves = 0;
+const boutonDossier = ref<HTMLButtonElement | null>(null);
+const listeTrouves = ref<HTMLElement | null>(null);
+
+/**
+ * Rend le focus après un bouton qui disparaît (croix d'un dossier, « Ignorer »,
+ * « Réafficher ») : la case de la proposition au rang donné s'il en reste une, sinon
+ * « Ajouter un dossier de jeux ». Sans ça, il retombait sur la page derrière la modale.
+ */
+async function rendreLeFocus(rang?: number) {
+  await nextTick();
+  const cases = listeTrouves.value ? [...listeTrouves.value.querySelectorAll<HTMLInputElement>("input")] : [];
+  const cible = rang != null && cases.length ? cases[Math.min(rang, cases.length - 1)] : boutonDossier.value;
+  cible?.focus();
+}
+
+/**
+ * (Re)demande les propositions — ou fait d'abord l'action donnée, qui les rend à jour
+ * (dossier ajouté ou retiré, ignorés réaffichés). Rien ne part en ligne : parcours des
+ * dossiers et lecture du registre seulement.
+ */
+async function chargerTrouves(action: () => Promise<Propositions> = gameSuggestions) {
+  const moi = ++tourTrouves;
+  chargement.value = true;
+  erreurTrouves.value = null;
+  try {
+    const p = await action();
+    if (moi !== tourTrouves) return;
+    propositions.value = p;
+    // On ne garde cochées que les propositions encore à l'écran.
+    const encore = new Set(p.jeux.map((s) => s.launchTarget));
+    coches.value = new Set([...coches.value].filter((c) => encore.has(c)));
+  } catch (e) {
+    if (moi === tourTrouves) erreurTrouves.value = String(e);
+  } finally {
+    if (moi === tourTrouves) chargement.value = false;
+  }
+}
+
+async function ajouterDossier() {
+  const dossier = await pickFolder(t("comptes.ajout.choisirDossierJeux"));
+  if (dossier) await chargerTrouves(() => setGameFolder(dossier, true));
+}
+
+async function retirerDossier(dossier: string) {
+  await chargerTrouves(() => setGameFolder(dossier, false));
+  await rendreLeFocus();
+}
+
+function basculer(s: Suggestion) {
+  const suivant = new Set(coches.value);
+  if (!suivant.delete(s.launchTarget)) suivant.add(s.launchTarget);
+  coches.value = suivant;
+}
+
+/** « Ignorer » : retirée tout de suite de l'écran, et pour de bon. */
+function ignorerProposition(s: Suggestion) {
+  if (!propositions.value) return;
+  const rang = propositions.value.jeux.findIndex((x) => x.launchTarget === s.launchTarget);
+  void ignoreGameSuggestion(s.launchTarget);
+  propositions.value = {
+    ...propositions.value,
+    jeux: propositions.value.jeux.filter((x) => x.launchTarget !== s.launchTarget),
+    ignores: propositions.value.ignores + 1,
+  };
+  const suivant = new Set(coches.value);
+  suivant.delete(s.launchTarget);
+  coches.value = suivant;
+  // ⚠️ Après la mise à jour : appelé avant, `nextTick` passait avant que la ligne ne
+  // disparaisse, et le focus partait sur la case même qu'on retirait.
+  void rendreLeFocus(rang);
+}
+
+async function reafficher() {
+  await chargerTrouves(resetIgnoredSuggestions);
+  await rendreLeFocus(0);
+}
+
+/**
+ * Ajoute les jeux cochés. Un refus (fichier disparu, déjà présent) n'empêche pas les
+ * autres : la modale reste alors ouverte sur le message, avec la liste à jour.
+ */
+async function ajouterCoches() {
+  if (!propositions.value || !coches.value.size || saving.value) return;
+  saving.value = true;
+  erreurTrouves.value = null;
+  const inputs: ManualInput[] = propositions.value.jeux
+    .filter((s) => coches.value.has(s.launchTarget))
+    .map((s) => ({ title: s.title, launchTarget: s.launchTarget, installDir: s.installDir ?? null }));
+  try {
+    const { ajoutes, refus } = await addManualMany(inputs);
+    if (ajoutes.length) showToast(t("comptes.ajout.ajoutsFaits", { n: ajoutes.length }));
+    if (refus.length) {
+      erreurTrouves.value = refus.join("\n");
+      await chargerTrouves();
+      return;
+    }
+    closeAddGame();
+    if (ajoutes.length === 1) openGame(ajoutes[0].id);
+  } catch (e) {
+    erreurTrouves.value = String(e);
+  } finally {
+    saving.value = false;
+  }
+}
+
 // --- Aperçu de la jaquette ----------------------------------------------------------
 
 const apercuSrc = computed(() => {
@@ -347,8 +472,9 @@ onBeforeUnmount(() => nePlusEcouter?.());
         {{ editing ? t("comptes.ajout.introModif") : t("comptes.ajout.introAjout") }}
       </p>
 
-      <!-- Étape 1 (création) : désigner le fichier. -->
-      <div v-if="etape === 'choix'" class="depot" :class="{ survol }">
+      <!-- Étape 1 (création) : désigner le fichier, ou cocher un jeu trouvé sur ce PC. -->
+      <template v-if="etape === 'choix'">
+      <div class="depot" :class="{ survol }">
         <svg class="depot-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
           <path d="M12 15V4m0 0L8 8m4-4l4 4" /><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
         </svg>
@@ -360,6 +486,73 @@ onBeforeUnmount(() => nePlusEcouter?.());
         <button type="button" class="lien" @click="saisirALaMain">{{ t("comptes.ajout.saisirALaMain") }}</button>
         <p v-if="error" class="modal-error" role="alert">{{ error }}</p>
       </div>
+
+      <section class="trouves" aria-labelledby="ajout-trouves" :aria-busy="chargement">
+        <div class="trouves-tete">
+          <h4 id="ajout-trouves">{{ t("comptes.ajout.trouves") }}</h4>
+          <span v-if="chargement" class="field-hint" role="status">{{ t("comptes.ajout.rechercheJeux") }}</span>
+        </div>
+        <p class="field-hint">
+          {{ propositions && !propositions.dossiers.length ? t("comptes.ajout.aucunDossier") : t("comptes.ajout.trouvesAide") }}
+        </p>
+
+        <div class="dossiers">
+          <span v-for="d in propositions?.dossiers ?? []" :key="d" class="dossier">
+            <span class="dossier-nom" :title="d">{{ d }}</span>
+            <button
+              type="button"
+              class="dossier-retirer"
+              :aria-label="t('comptes.ajout.retirerDossier', { dossier: d })"
+              :title="t('comptes.ajout.retirerDossier', { dossier: d })"
+              @click="retirerDossier(d)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </span>
+          <button ref="boutonDossier" type="button" class="btn-browse petit" @click="ajouterDossier">{{ t("comptes.ajout.ajouterDossier") }}</button>
+        </div>
+
+        <p v-if="erreurTrouves" class="modal-error" role="alert">{{ erreurTrouves }}</p>
+
+        <ul v-if="propositions?.jeux.length" ref="listeTrouves" class="trouves-liste">
+          <li v-for="s in propositions.jeux" :key="s.launchTarget" class="trouve">
+            <label class="trouve-case">
+              <input type="checkbox" :checked="coches.has(s.launchTarget)" @change="basculer(s)" />
+              <span class="trouve-texte">
+                <b>{{ s.title }}</b>
+                <small :title="s.launchTarget">{{ s.launchTarget }}</small>
+              </span>
+            </label>
+            <span class="trouve-source">
+              {{ s.source === "dossier" ? t("comptes.ajout.sourceDossier") : t("comptes.ajout.sourceWindows") }}
+            </span>
+            <button
+              type="button"
+              class="lien"
+              :aria-label="t('comptes.ajout.ignorerJeu', { titre: s.title })"
+              :title="t('comptes.ajout.ignorerJeu', { titre: s.title })"
+              @click="ignorerProposition(s)"
+            >
+              {{ t("comptes.ajout.ignorer") }}
+            </button>
+          </li>
+        </ul>
+        <p v-else-if="propositions && !chargement && propositions.dossiers.length" class="field-hint">
+          {{ t("comptes.ajout.aucunTrouve") }}
+        </p>
+
+        <div v-if="propositions?.ignores || coches.size" class="trouves-pied">
+          <button v-if="propositions?.ignores" type="button" class="lien" @click="reafficher">
+            {{ t("comptes.ajout.reafficher", { n: propositions.ignores }) }}
+          </button>
+          <!-- Pas désactivé pendant l'ajout : `ajouterCoches` ignore un second clic, et le
+               focus resterait sinon sur la page. -->
+          <button v-if="coches.size" type="button" class="btn-save" :aria-busy="saving" @click="ajouterCoches">
+            {{ saving ? t("comptes.ajout.enregistrement") : t("comptes.ajout.ajouterSelection", { n: coches.size }) }}
+          </button>
+        </div>
+      </section>
+      </template>
 
       <!-- Étape 2 : le jeu, sa fiche, son fichier. -->
       <form v-else class="modal-form" @submit.prevent="save">
@@ -524,6 +717,44 @@ onBeforeUnmount(() => nePlusEcouter?.());
 }
 .lien:hover { color: var(--text); }
 .depot .modal-error { align-self: stretch; text-align: left; }
+
+/* Étape 1 : les jeux trouvés sur ce PC. */
+.trouves { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.trouves-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.trouves h4 { margin: 0; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
+.dossiers { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dossier {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 3px 4px 3px 10px;
+  border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 11.5px; color: var(--text-dim);
+}
+.dossier-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dossier-retirer {
+  flex: none; width: 22px; height: 22px; border-radius: 99px; display: grid; place-items: center;
+  background: none; border: none; color: var(--text-faint); cursor: pointer;
+}
+.dossier-retirer:hover { color: var(--text); background: var(--surface-3); }
+.dossier-retirer svg { width: 12px; height: 12px; }
+.btn-browse.petit { padding: 6px 12px; font-size: 12px; }
+.trouves-liste {
+  list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px;
+  max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg);
+}
+.trouve { display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 8px; border-radius: 9px; }
+.trouve:hover { background: var(--surface-2); }
+.trouve-case { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; padding: 3px 0; }
+.trouve-case input { flex: none; width: 16px; height: 16px; accent-color: var(--accent); }
+.trouve-texte { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.trouve-texte b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trouve-texte small {
+  font-family: var(--mono); font-size: 11px; color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.trouve-source { flex: none; font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.trouve .lien { flex: none; }
+.trouves-pied { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.trouves-pied .btn-save { margin-left: auto; }
+.trouves .modal-error { white-space: pre-line; }
 
 /* Étape 2 : aperçu à gauche, champs à droite. */
 .modal-form { display: flex; flex-direction: column; gap: 16px; }

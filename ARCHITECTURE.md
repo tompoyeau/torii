@@ -17,6 +17,7 @@ cargo test --lib                     # tests unitaires (parseurs)
 cargo run --example scan             # jeux installés détectés
 cargo run --example community        # jeux possédés + famille (via session stockée)
 cargo run --example raccourci        # ce que l'ajout manuel tire d'un fichier ou des raccourcis du PC
+cargo run --example suggestions      # les jeux que « Trouvés sur ce PC » proposerait
 ```
 
 ⚠️ **`cargo` n'est pas dans le PATH par défaut** dans un shell frais :
@@ -1426,9 +1427,52 @@ fermait sans rien ajouter ni rien dire.
 - ⚠️ **Limite connue** : le suivi de session rattache un process à un jeu par son dossier.
   Plusieurs jeux d'un même émulateur partagent ce dossier, donc la partie est attribuée au
   premier d'entre eux.
-- **Reste à faire** : proposer les jeux à ajouter (lot « jeux trouvés sur ce PC »). La liste
-  de la Game Bar ne suffit pas (sur la machine de dev, un seul jeu absent de la
-  bibliothèque) : piste d'un dossier de jeux à parcourir, à cadrer.
+
+### Trouvés sur ce PC — `platforms/suggestions.rs` (fait)
+
+Sous la zone de dépôt de « Ajouter un jeu », la liste des jeux présents sur la machine que
+la bibliothèque n'a pas : cases à cocher, « Ajouter les n jeux cochés », « Ignorer ». Rien
+n'est ajouté sans qu'on coche, et rien ne part en ligne.
+
+- **Deux sources, choisies sur mesure** (machine de dev) :
+  - les **dossiers de jeux** désignés par l'utilisateur (`game_folders.json`, pastilles dans
+    la modale) : chaque sous-dossier est un jeu possible. Sur 22 sous-dossiers réels :
+    11 déjà connus, 8 sans exécutable (restes de désinstallation, installeurs, ROM), 3 jeux ;
+  - la **liste de la Game Bar** (`detected::executables_de_la_game_bar` + `identify`) : les
+    jeux que Windows a vus tourner, y compris avant l'installation de Torii. Le surveillant
+    ne les adopte qu'à leur prochain lancement ; ici on peut les ajouter tout de suite.
+  - ⚠️ **Pas les raccourcis du Bureau et du menu Démarrer** : 197 vers un `.exe`, 115 après
+    filtrage, dont une demi-douzaine de jeux. Rien de fiable n'y distingue un jeu d'Office.
+- **Déjà connu** (`Connus`) : un sous-dossier qui contient le dossier d'un jeu de la
+  bibliothèque ou vit dans le sien ; un exécutable sous le dossier d'un jeu connu ; un titre
+  identique. 🔑 Pour la Game Bar, un titre **contenu** dans celui d'un jeu connu suffit
+  (6 lettres au moins de part et d'autre) : son titre est deviné, et « Rainbow Six » y est le
+  sosie de « Tom Clancy's Rainbow Six Siege » installé ailleurs par Ubisoft Connect. Les jeux
+  manuels et détectés sont relus sur le disque en plus du dernier relevé : un ajout tout
+  frais disparaît des propositions avant même que le relevé ne suive.
+- **L'exécutable d'un dossier** (`executable_principal`) : jusqu'à 4 niveaux, 4 000 entrées
+  au plus, sans les dossiers annexes (`_CommonRedist`, `Redist`, `MD5`…) ni les outils
+  (`peut_etre_un_jeu` + `QuickSFV`, `config`, `benchmark`…). Préférence : un nom qui parle du
+  jeu (comparé au dossier), puis **le moins profond** — le lanceur à la racine, que vise le
+  raccourci de l'éditeur, plutôt que le binaire caché dans `bin\` —, puis le plus gros.
+  Un dossier sans exécutable est tu, pas proposé « à compléter ».
+- **Titre** : le nom de l'exécutable quand le dossier le contient avec du bruit en plus
+  (`LanternKeeperX7k2\Lantern Keeper.exe` → « Lantern Keeper » : un exécutable est nommé par
+  l'éditeur, un dossier souvent par une archive), sinon la devinette de la détection.
+- **Ajout** : `add_manual_games` → `manual::add_plusieurs` (mêmes contrôles qu'un ajout seul,
+  un refus n'empêche pas les autres, un message par refus), puis **une seule** publication.
+  Les fiches arrivent par la passe IGDB habituelle, qui cherche douze titres par appel :
+  aucun appel de plus que pour un jeu ajouté autrement.
+- **Ignorer** : `suggestions_ignored.json` (exécutables normalisés), « Réafficher les n jeux
+  ignorés » vide la liste. Un exécutable retiré de la bibliothèque après détection
+  (`detected_ignored.json`) n'est pas reproposé non plus.
+- Front : focus rendu après chaque bouton qui disparaît (croix d'un dossier, « Ignorer »,
+  « Réafficher ») — la case suivante, sinon « Ajouter un dossier de jeux ». ⚠️ Pour
+  « Ignorer », après la mise à jour de la liste : `nextTick` appelé avant passait avant que la
+  ligne ne disparaisse, et le focus partait sur la case retirée.
+- Coût mesuré : 70 à 160 ms pour deux dossiers de jeux et la Game Bar, à chaque ouverture de
+  la modale (hors thread principal).
+- Diagnostic : `cargo run --example suggestions [-- <dossier>…]`, sans rien écrire.
 
 ## Durcissement du proxy — cache, limites par IP, listes blanches (fait)
 

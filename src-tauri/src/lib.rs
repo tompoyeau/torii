@@ -1620,6 +1620,79 @@ async fn search_game_sheets(title: String) -> Result<Vec<metadata::igdb::Candida
         .map_err(|e| e.to_string())?
 }
 
+/// Bibliothèque connue à cet instant : le dernier relevé publié, à défaut le cache disque
+/// (la modale peut s'ouvrir avant la fin du premier relevé).
+fn bibliotheque_connue(app: &tauri::AppHandle, dir: &std::path::Path) -> Vec<GameDto> {
+    let derniere = app.state::<LastScan>().0.lock().map(|g| g.clone()).unwrap_or_default();
+    if derniere.is_empty() {
+        platforms::library_cache::load(dir)
+    } else {
+        derniere
+    }
+}
+
+/// Jeux trouvés sur ce PC (dossiers de jeux, liste de Windows) que la bibliothèque n'a pas,
+/// avec les dossiers retenus et le nombre de propositions ignorées.
+#[tauri::command]
+async fn game_suggestions(app: tauri::AppHandle) -> Result<platforms::suggestions::Propositions, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    // Parcours de dossiers et lecture du registre : hors thread principal.
+    tauri::async_runtime::spawn_blocking(move || {
+        let connus = bibliotheque_connue(&app, &dir);
+        platforms::suggestions::proposer(&dir, &connus)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Ajoute (`retenu = true`) ou retire un dossier de jeux, puis rend les propositions à jour.
+#[tauri::command]
+async fn set_game_folder(
+    app: tauri::AppHandle,
+    path: String,
+    retenu: bool,
+) -> Result<platforms::suggestions::Propositions, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::suggestions::retenir_dossier(&dir, &path, retenu)?;
+    game_suggestions(app).await
+}
+
+/// « Ignorer » une proposition : elle ne revient plus.
+#[tauri::command]
+fn ignore_game_suggestion(app: tauri::AppHandle, exe: String) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::suggestions::ignorer(&dir, &exe)
+}
+
+/// Réaffiche toutes les propositions ignorées, et rend les propositions à jour.
+#[tauri::command]
+async fn reset_ignored_suggestions(app: tauri::AppHandle) -> Result<platforms::suggestions::Propositions, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    platforms::suggestions::ne_plus_ignorer(&dir)?;
+    game_suggestions(app).await
+}
+
+/// Ce que rend un ajout groupé : la liste des jeux manuels à jour, et un message par refus.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AjoutGroupe {
+    jeux: Vec<GameDto>,
+    refus: Vec<String>,
+}
+
+/// Ajoute plusieurs jeux d'un coup (« Trouvés sur ce PC »), puis publie une seule fois.
+#[tauri::command]
+async fn add_manual_games(app: tauri::AppHandle, inputs: Vec<ManualInput>) -> Result<AjoutGroupe, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (jeux, refus) = platforms::manual::add_plusieurs(&dir, inputs);
+        libwatch::hors_launcher_modifie(&app);
+        AjoutGroupe { jeux, refus }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Ajoute un jeu manuel et renvoie la liste des jeux manuels à jour.
 #[tauri::command]
 async fn add_manual_game(app: tauri::AppHandle, input: ManualInput) -> Result<Vec<GameDto>, String> {
@@ -2257,6 +2330,11 @@ pub fn run() {
             open_install_dir,
             inspect_game_target,
             search_game_sheets,
+            game_suggestions,
+            set_game_folder,
+            ignore_game_suggestion,
+            reset_ignored_suggestions,
+            add_manual_games,
             add_manual_game,
             update_manual_game,
             remove_manual_game,

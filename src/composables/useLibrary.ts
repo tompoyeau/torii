@@ -4,6 +4,7 @@ import { estHorsLauncher } from "../data/platforms";
 import { relativeTime } from "../lib/covers";
 import {
   addManualGame,
+  addManualGames,
   enrichGame,
   enrichIgdb,
   installGame,
@@ -402,6 +403,23 @@ export function useLibrary() {
   }
 
   /**
+   * Ajoute plusieurs jeux d'un coup (« Trouvés sur ce PC »). Rend les jeux ajoutés et un
+   * message par jeu refusé : un refus n'empêche pas les autres.
+   */
+  async function addManualMany(inputs: ManualInput[]): Promise<{ ajoutes: Game[]; refus: string[] }> {
+    const r = await addManualGames(inputs);
+    if (!r) return { ajoutes: [], refus: [] };
+    const known = new Set(games.value.map((g) => g.id));
+    const ajoutes = r.jeux.filter((d) => !known.has(d.id)).map(fromDto);
+    if (ajoutes.length) {
+      games.value = [...games.value, ...ajoutes];
+      // Jaquettes, descriptions et catégories : la passe IGDB cherche douze titres par appel.
+      void fillIgdb();
+    }
+    return { ajoutes, refus: r.refus };
+  }
+
+  /**
    * Met à jour un jeu hors launcher (persisté côté Rust + rafraîchi dans le store, sans
    * re-scanner).
    *
@@ -556,6 +574,7 @@ export function useLibrary() {
     setHidden,
     setFavorite,
     addManual,
+    addManualMany,
     updateManual,
     removeManual,
     markPlayed,

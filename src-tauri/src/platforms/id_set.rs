@@ -20,6 +20,12 @@ pub const FAVORITES: IdSet = IdSet("favorites.json");
 /// certains jeux ne regardent personne.
 pub const PRESENCE_MUTED: IdSet = IdSet("presence_muted.json");
 
+/// Dossiers où l'utilisateur range ses jeux : Torii y cherche ceux qu'aucun launcher ne
+/// connaît, pour les proposer dans « Ajouter un jeu » (`platforms::suggestions`).
+pub const GAME_FOLDERS: IdSet = IdSet("game_folders.json");
+/// Exécutables proposés puis écartés (« Ignorer ») : on ne les repropose plus.
+pub const SUGGESTIONS_IGNORED: IdSet = IdSet("suggestions_ignored.json");
+
 /// Revendeurs masqués du comparatif de prix (choix perso, distinct de la
 /// catégorisation officiel/revendeur qui, elle, est factuelle).
 pub const EXCLUDED_STORES: IdSet = IdSet("excluded_stores.json");

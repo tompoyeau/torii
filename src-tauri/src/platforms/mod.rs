@@ -8,6 +8,7 @@ pub mod playhistory;
 pub mod raccourci;
 pub mod riot;
 pub mod steam;
+pub mod suggestions;
 pub mod ubisoft;
 pub mod wishlist;
 

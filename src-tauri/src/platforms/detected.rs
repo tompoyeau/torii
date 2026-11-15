@@ -487,6 +487,30 @@ fn game_bar_entries() -> HashMap<String, FicheGameBar> {
     HashMap::new()
 }
 
+/// Exécutables que la Game Bar tient pour des jeux, avec leur chemin **tel que Windows
+/// l'écrit** (l'index de [`game_bar_entries`] est en minuscules : bon pour comparer, pas
+/// pour afficher ni pour lancer).
+#[cfg(windows)]
+pub(crate) fn executables_de_la_game_bar() -> Vec<String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let Ok(children) = RegKey::predef(HKEY_CURRENT_USER).open_subkey(r"System\GameConfigStore\Children") else {
+        return Vec::new();
+    };
+    children
+        .enum_keys()
+        .flatten()
+        .filter_map(|child| children.open_subkey(&child).ok()?.get_value::<String, _>("MatchedExeFullPath").ok())
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
+#[cfg(not(windows))]
+pub(crate) fn executables_de_la_game_bar() -> Vec<String> {
+    Vec::new()
+}
+
 // --- Titre et dossier du jeu ------------------------------------------------------
 
 /// Devine le nom du jeu et son dossier racine à partir du chemin de l'exécutable.
