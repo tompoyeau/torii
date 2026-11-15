@@ -1,5 +1,5 @@
 /**
- * Cadre de l'application et bibliothèque : barre latérale, barre du haut, grille, cartes,
+ * Cadre de l'application et bibliothèque : onglets et barre du haut, filtres, grille, cartes,
  * vedette, menu contextuel.
  */
 export default {
@@ -25,12 +25,18 @@ export default {
     mesJeux: "Mes jeux",
     famille: "Famille",
     enCommun: "En commun",
+    contacts: "Contacts",
     favoris: "Favoris",
     installes: "Installés",
     decouvrir: "Découvrir",
     boutique: "Boutique",
     wishlist: "Wishlist",
     plateformes: "Plateformes",
+    // Barre d'outils de la grille : vues courtes, menus Plateforme et Tri.
+    tousCourt: "Tous",
+    plateforme: "Plateforme",
+    toutesPlateformes: "Toutes les plateformes",
+    trier: "Trier",
     gererConnexions: "Gérer les connexions",
     connecterLauncher: "Connecter un launcher",
   },
@@ -41,6 +47,7 @@ export default {
     actualisation: "Actualisation…",
     ajouterJeu: "Ajouter un jeu manuellement",
     ajouter: "Ajouter",
+    ajouterUnJeu: "Ajouter un jeu",
     amis: "Amis",
     resynchroniser: "Resynchroniser",
     theme: "Thème clair / sombre",

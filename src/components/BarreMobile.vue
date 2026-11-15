@@ -5,7 +5,7 @@ import { useNavigation } from "../composables/useNavigation";
 import { t } from "../i18n";
 
 /**
- * La navigation sur téléphone : la barre latérale disparaît sous 820 px. Comme elle, cette
+ * La navigation sur téléphone : les onglets du haut disparaissent sous 820 px. Comme eux, cette
  * barre reste à l'écran quand une fiche est ouverte, et aller ailleurs referme la fiche en
  * une seule étape : le retour y ramène.
  */

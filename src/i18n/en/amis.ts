@@ -34,6 +34,9 @@ const en: Forme<typeof fr> = {
   toriiFerme: "Torii closed",
   pasEncore: "No friends on Torii yet",
   pasEncoreAide: "Give someone your code, or enter theirs with “Add a friend”.",
+  personneEnJeu: "None of your friends is playing right now.",
+  tonCode: "Your friend code",
+  tonCodeAide: "Give it to your friends so they can add you on Torii.",
   listePrivee: "Your Steam friends list may be private.",
 
   etats: {

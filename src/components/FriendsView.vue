@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from "vue";
 import { useFriends } from "../composables/useFriends";
 import { useFriendList, type UnifiedFriend } from "../composables/useFriendList";
 import { offlineHintOf, sourcesOf } from "../lib/friendPresence";
@@ -10,53 +10,42 @@ import { useFriendLibrary } from "../composables/useFriendLibrary";
 import { showToast } from "../composables/useToast";
 import ToriiPanel from "./ToriiPanel.vue";
 import LibraryInvite from "./LibraryInvite.vue";
+import AjoutAmiModal from "./AjoutAmiModal.vue";
 import { t } from "../i18n";
 
 const { loaded, steamConnected, refresh } = useFriends();
 const { inGame, online, offline, activeCount, loading } = useFriendList();
 const {
   account, circle, connected: toriiConnected, presenceMode,
-  refresh: refreshTorii, invite, respond, setPresenceMode,
+  refresh: refreshTorii, respond, setPresenceMode,
 } = useTorii();
 const { launchOrInstall } = useLibrary();
 const { openSettings, openGame, showFriendProfile } = useUi();
 const { refreshIndex } = useFriendLibrary();
 
-/** La présence Torii arrive seule (battement de cœur) ; seul Steam doit être sondé. */
+/**
+ * La présence Torii arrive seule (battement de cœur) ; seul Steam doit être sondé.
+ *
+ * L'écran reste en mémoire entre deux onglets (`<KeepAlive>`, AppShell) : on rafraîchit en
+ * arrivant (`onActivated`, appelé aussi au premier affichage) sans effacer la liste déjà là,
+ * et le sondage de Steam s'arrête quand on part (`onDeactivated`).
+ */
 let timer: ReturnType<typeof setInterval> | undefined;
-onMounted(() => {
+onActivated(() => {
   void refresh();
   void refreshTorii();
   // Un ami a pu activer le partage depuis le démarrage : on relit l'index en arrivant
   // ici, plutôt que de le sonder en boucle pour une donnée qui bouge une fois par mois.
   void refreshIndex();
+  clearInterval(timer);
   timer = setInterval(() => void refresh(), 60_000);
 });
+onDeactivated(() => clearInterval(timer));
 onBeforeUnmount(() => clearInterval(timer));
 
-/* ── Ajout d'un ami ────────────────────────────────────────────────────────── */
+/* ── Ajout d'un ami : la fenêtre `AjoutAmiModal` ───────────────────────────── */
 
 const addOpen = ref(false);
-const friendCode = ref("");
-const addBusy = ref(false);
-const addError = ref<string | null>(null);
-
-async function onInvite() {
-  const code = friendCode.value.trim();
-  if (!code || addBusy.value) return;
-  addBusy.value = true;
-  addError.value = null;
-  try {
-    await invite(code);
-    friendCode.value = "";
-    addOpen.value = false;
-    showToast(t("amis.demandeEnvoyee"));
-  } catch (e) {
-    addError.value = e instanceof Error ? e.message : String(e);
-  } finally {
-    addBusy.value = false;
-  }
-}
 
 async function copyCode() {
   if (!account.value) return;
@@ -170,7 +159,7 @@ onBeforeUnmount(() => {
   <div class="friends">
     <header class="head">
       <div class="head-title">
-        <h2>{{ t("amis.titre") }}</h2>
+        <h1>{{ t("bibliotheque.laterale.contacts") }}</h1>
         <span class="count">{{ t("amis.enLigneCompte", { n: activeCount }) }}</span>
         <span v-if="loading" class="spin" :title="t('amis.actualisation')" />
       </div>
@@ -208,7 +197,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-        <button v-if="toriiConnected" class="btn-add" @click="addOpen = !addOpen">
+        <button v-if="toriiConnected" class="btn-add" aria-haspopup="dialog" @click="addOpen = true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
           {{ t("amis.ajouterAmi") }}
         </button>
@@ -218,33 +207,8 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <!-- Ajout : le code d'ami n'apparaît qu'ici, au moment où il sert -->
-    <div v-if="addOpen && toriiConnected" class="add-panel">
-      <form class="add-form" @submit.prevent="onInvite">
-        <label class="add-label" for="friend-code">{{ t("amis.sonCode") }}</label>
-        <div class="add-row">
-          <input
-            id="friend-code"
-            v-model="friendCode"
-            placeholder="ABCD2345"
-            maxlength="12"
-            spellcheck="false"
-            autocomplete="off"
-          />
-          <button type="submit" class="btn-primary" :disabled="addBusy || !friendCode.trim()">
-            {{ addBusy ? t("amis.envoi") : t("amis.envoyer") }}
-          </button>
-        </div>
-        <p v-if="addError" class="add-error">{{ addError }}</p>
-      </form>
-      <div class="add-mine">
-        <span class="add-label">{{ t("amis.leTien") }}</span>
-        <button class="code-chip" :title="t('amis.copier')" @click="copyCode">
-          {{ account?.friendCode }}
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
-        </button>
-      </div>
-    </div>
+    <!-- Ajout d'un ami : dans une fenêtre, la page ne bouge pas. -->
+    <AjoutAmiModal :ouvert="addOpen && toriiConnected" @fermer="addOpen = false" />
 
     <!-- Connexion Torii : proposée seulement tant qu'il n'y a pas de compte -->
     <ToriiPanel v-if="!toriiConnected" />
@@ -274,11 +238,15 @@ onBeforeUnmount(() => {
       <p>{{ t("amis.recuperation") }}</p>
     </div>
 
-    <template v-else>
+    <!-- Deux colonnes : ce qui se passe (qui joue, à quoi jouer ensemble) au centre, les
+         gens à droite. Les jeux en commun arrivent par le slot (`CommonView`, `AppShell`). -->
+    <div v-else class="disposition">
+     <div class="principal">
       <!-- ── En jeu : la section qui répond à « avec qui je joue ? » ── -->
-      <section v-if="inGame.length" class="block">
-        <h3 class="block-title ingame">{{ t("amis.enJeu") }} <span>{{ inGame.length }}</span></h3>
-        <div class="cards">
+      <section class="block">
+        <h3 class="block-title ingame">{{ t("amis.enJeu") }} <span v-if="inGame.length">{{ inGame.length }}</span></h3>
+        <p v-if="!inGame.length" class="calme">{{ t("amis.personneEnJeu") }}</p>
+        <div v-else class="cards">
           <div v-for="f in inGame" :key="f.key" class="card" :class="{ same: f.ownedGame }">
             <button class="card-who" @click="openProfile(f)">
               <span class="avatar lg">
@@ -316,6 +284,10 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
+      <slot />
+     </div>
+
+     <aside class="cote">
       <!-- ── Disponibles ── -->
       <section v-if="disponibles.length" class="block">
         <h3 class="block-title">{{ t("amis.disponibles") }} <span>{{ disponibles.length }}</span></h3>
@@ -369,21 +341,24 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <!-- ── Aucun ami : c'est ICI que le code d'ami est utile ── -->
-      <div v-if="!inGame.length && !disponibles.length && !offline.length" class="empty">
+      <!-- ── Aucun ami ── -->
+      <div v-if="!inGame.length && !disponibles.length && !offline.length" class="vide-cote">
         <p class="empty-title">{{ t("amis.pasEncore") }}</p>
-        <template v-if="toriiConnected">
-          <p>{{ t("amis.pasEncoreAide") }}</p>
-          <button class="code-chip big" :title="t('amis.copier')" @click="copyCode">
-            {{ account?.friendCode }}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
-          </button>
-        </template>
-        <p v-else-if="steamConnected" class="dim">
-          {{ t("amis.listePrivee") }}
-        </p>
+        <p v-if="toriiConnected">{{ t("amis.pasEncoreAide") }}</p>
+        <p v-else-if="steamConnected" class="dim">{{ t("amis.listePrivee") }}</p>
       </div>
-    </template>
+
+      <!-- ── Ton code d'ami : toujours sous la main, c'est lui qui fait grandir la liste ── -->
+      <div v-if="toriiConnected && account" class="carte-code">
+        <span class="add-label">{{ t("amis.tonCode") }}</span>
+        <button class="code-chip" :title="t('amis.copier')" @click="copyCode">
+          {{ account.friendCode }}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+        </button>
+        <p>{{ t("amis.tonCodeAide") }}</p>
+      </div>
+     </aside>
+    </div>
   </div>
 </template>
 
@@ -396,7 +371,32 @@ onBeforeUnmount(() => {
   gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
 }
 .head-title { display: flex; align-items: center; gap: 12px; }
-.head-title h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+.head-title h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+
+/* ── Disposition : l'activité au centre, les gens à droite ── */
+.disposition { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 34px; align-items: start; }
+.principal { min-width: 0; }
+.cote { min-width: 0; display: flex; flex-direction: column; }
+.cote .row { padding: 8px 10px; gap: 10px; }
+.calme { margin: 0; font-size: 13.5px; color: var(--text-faint); }
+.vide-cote { padding: 4px 2px 20px; font-size: 13px; color: var(--text-faint); line-height: 1.5; }
+.vide-cote p { margin: 0 0 4px; }
+.vide-cote .empty-title { font-size: 14.5px; }
+.carte-code {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  padding: 14px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border);
+}
+.carte-code .add-label { margin-bottom: 4px; }
+.carte-code p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--text-faint); }
+/* Fenêtre étroite (940 px au minimum) : colonne des amis plus mince, mais toujours à côté —
+   en une seule colonne, la liste passait sous tous les jeux en commun, loin de la vue. */
+@media (max-width: 1180px) {
+  .disposition { grid-template-columns: minmax(0, 1fr) 270px; gap: 24px; }
+}
+/* Téléphone (version web) : une seule colonne. */
+@media (max-width: 820px) {
+  .disposition { grid-template-columns: minmax(0, 1fr); }
+}
 .count { font-family: var(--mono); font-size: 13px; color: var(--text-faint); }
 .head-actions { display: flex; align-items: center; gap: 8px; }
 
@@ -455,26 +455,11 @@ onBeforeUnmount(() => {
 .icon-btn:disabled { opacity: 0.5; }
 .icon-btn svg { width: 16px; height: 16px; }
 
-/* ── Ajout d'un ami ──────────────────────────────────── */
-.add-panel {
-  display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start;
-  padding: 16px 18px; margin-bottom: 20px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-}
-.add-form { flex: 1; min-width: 260px; }
+/* Étiquette de la carte « Ton code d'ami ». */
 .add-label {
   display: block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--text-faint); margin-bottom: 7px;
 }
-.add-row { display: flex; gap: 8px; }
-.add-row input {
-  flex: 1; min-width: 0; padding: 9px 13px; border-radius: 10px;
-  background: var(--bg); border: 1px solid var(--border); color: var(--text);
-  font-family: var(--mono); font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase;
-}
-.add-row input:focus { border-color: var(--accent); }
-.add-error { margin: 8px 0 0; font-size: 12.5px; color: #ff6b6b; }
-.add-mine { display: flex; flex-direction: column; }
 
 .code-chip {
   display: inline-flex; align-items: center; gap: 9px; cursor: pointer;

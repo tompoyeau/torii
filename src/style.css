@@ -103,6 +103,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* 🔑 La place de la barre de défilement est réservée en permanence. Sans ça, une vue trop
+   courte pour défiler (des favoris peu nombreux, une plateforme à un jeu) gagnait ses 10 px,
+   et à certaines largeurs de fenêtre la grille passait à une colonne de plus : toutes les
+   jaquettes rétrécissaient d'un coup (210 → 179 px à 1440 px). Même effet évité quand une
+   fiche bloque le défilement de la page. */
+html { scrollbar-gutter: stable; }
+
 ::selection { background: var(--accent); color: var(--accent-ink); }
 
 button { font-family: inherit; cursor: pointer; }
@@ -331,6 +338,17 @@ html.web .wish-dot { display: none; }
 @media (max-width: 820px) {
   html.web { --barre-mobile: calc(58px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* --- Commandes de la fenêtre -------------------------------------------------------
+   Réduire / agrandir / fermer (`ControlesFenetre.vue`) occupent le coin haut droit, à la place
+   exacte de Windows (3 × 46 px sur 32 px de haut). Cette bande du haut porte aussi l'état du
+   joueur, à gauche (`EtatJoueur.vue`) ; le contenu de la barre passe en dessous, sur toute la
+   largeur. Une seule ligne pour tout s'est révélée trop serrée.
+   ⚠️ Ici et pas dans les composants : dans un `<style scoped>`, `:global(html.x) .topbar`
+   devient `html.x` tout court — la règle partait sur la page entière. */
+html.fenetre-perso { --hauteur-titre: 32px; }
+html.fenetre-perso .topbar { padding-top: calc(var(--hauteur-titre) + 6px); }
+html.fenetre-perso .lb-close { top: calc(var(--hauteur-titre) + 16px); }
 
 /* --- Barre du haut au-dessus des fiches ------------------------------------------
    Ce que la barre couvre en haut d'une fiche : sa hauteur réelle (`--hauteur-barre`, posée

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useUi } from "../composables/useUi";
 import { useLibrary } from "../composables/useLibrary";
 import { useFriends } from "../composables/useFriends";
@@ -27,7 +27,7 @@ const { section, query, openAddGame, showFriends, openSettings, settingsOpen } =
  * amis et ceux que tu convoites — deux jeux de données que le magasin de la bibliothèque
  * ne contient pas. Chacune a désormais **sa propre** recherche, comme la Boutique.
  */
-const SANS_RECHERCHE = ["store", "friendLibrary", "friendProfile", "common", "wishlist", "web"];
+const SANS_RECHERCHE = ["store", "friends", "friendLibrary", "friendProfile", "common", "wishlist", "web"];
 const chercheDansLaBiblio = computed(() => !SANS_RECHERCHE.includes(section.value));
 
 /**
@@ -66,10 +66,10 @@ function openMyAccount() {
 }
 
 /**
- * Précédent / suivant, comme dans un navigateur. L'infobulle dit où mène chaque flèche
- * (« Revenir à : Boutique ») : les deux piles ne se voient pas autrement.
+ * Pas de flèches précédent / suivant dans la barre : on recule avec Alt+←, les boutons
+ * latéraux de la souris (`App.vue`) et le bouton retour des fiches.
  */
-const { peutReculer, peutAvancer, libellePrecedent, libelleSuivant, reculer, avancer, quitterLesSurcouches, coucheDuDessus } = useNavigation();
+const { quitterLesSurcouches, coucheDuDessus } = useNavigation();
 
 /**
  * Une fiche (jeu, Boutique) est ouverte : la barre reste PAR-DESSUS, en verre dépoli, la
@@ -97,6 +97,30 @@ onMounted(() => {
 onBeforeUnmount(() => observateur?.disconnect());
 
 /**
+ * Le verre seulement quand quelque chose passe dessous. Au repos (page ou fiche tout en
+ * haut), la barre n'a pas de fond : sur une page, elle se fond dans l'arrière-plan ; sur une
+ * fiche, la bannière s'étend jusqu'en haut de la fenêtre, et seuls ses boutons sont en verre.
+ *
+ * Le défilement qui compte est celui de la fiche du dessus (`data-defilement`, `useNavigation`)
+ * ou, sans fiche, celui de la page. `scroll` ne remonte pas : on l'écoute en capture.
+ */
+const vitre = ref(false);
+function releverDefilement() {
+  const couche = coucheDuDessus();
+  const fiche = couche === "jeu" || couche === "produit"
+    ? document.querySelector<HTMLElement>(`[data-defilement="${couche}"]`)
+    : null;
+  vitre.value = (fiche ? fiche.scrollTop : window.scrollY) > 4;
+}
+onMounted(() => {
+  document.addEventListener("scroll", releverDefilement, { capture: true, passive: true });
+  releverDefilement();
+});
+onBeforeUnmount(() => document.removeEventListener("scroll", releverDefilement, { capture: true }));
+// Une fiche qui s'ouvre ou se ferme, une section qui change : la position n'est plus la même.
+watch([surFiche, () => coucheDuDessus(), section], () => void nextTick(releverDefilement));
+
+/**
  * Le champ filtre la bibliothèque, cachée sous la fiche : y entrer referme d'abord la fiche,
  * comme Ctrl+F, sinon on taperait sans rien voir changer.
  *
@@ -116,35 +140,26 @@ async function surFocusRecherche() {
  *
  * Changer de section referme d'abord ce qui est ouvert par-dessus (Paramètres…), en une
  * seule étape d'historique : le retour y ramène. Ordre = celui des raccourcis Ctrl + chiffre
- * (`useRaccourcis.ts`). Wishlist et En commun vivent sur le PC : pas sur le web.
+ * (`useRaccourcis.ts`). Wishlist et Contacts vivent sur le PC : pas sur le web.
+ *
+ * Contacts regroupe les amis et les jeux en commun (`ContactsOnglets`), et leurs pages
+ * d'un ami (profil, bibliothèque) : l'onglet reste allumé sur toutes.
  */
+const SECTIONS_CONTACTS = ["friends", "common", "friendProfile", "friendLibrary"];
 const ONGLETS = computed(() => [
-  { id: "library", label: t("bibliotheque.laterale.bibliotheque"), touche: "1", aller: ui.showLibrary, tuto: "bibliotheque" },
-  { id: "store", label: t("bibliotheque.laterale.boutique"), touche: "2", aller: ui.showStore, tuto: "boutique" },
+  { id: "library", label: t("bibliotheque.laterale.bibliotheque"), touche: "1", aller: ui.showLibrary, tuto: "bibliotheque", sections: ["library"] },
+  { id: "store", label: t("bibliotheque.laterale.boutique"), touche: "2", aller: ui.showStore, tuto: "boutique", sections: ["store"] },
   ...(MODE_WEB ? [] : [
-    { id: "wishlist", label: t("bibliotheque.laterale.wishlist"), touche: "3", aller: ui.showWishlist, tuto: "wishlist" },
-    { id: "common", label: t("bibliotheque.laterale.enCommun"), touche: null, aller: ui.showCommon, tuto: null },
+    { id: "wishlist", label: t("bibliotheque.laterale.wishlist"), touche: "3", aller: ui.showWishlist, tuto: "wishlist", sections: ["wishlist"] },
+    { id: "contacts", label: t("bibliotheque.laterale.contacts"), touche: "4", aller: showFriends, tuto: "amis", sections: SECTIONS_CONTACTS },
   ]),
-].map((o) => ({ ...o, titre: o.touche ? avecRaccourci(o.label, ctrl.value, o.touche) : o.label })));
+].map((o) => ({ ...o, on: o.sections.includes(section.value), titre: avecRaccourci(o.label, ctrl.value, o.touche) })));
 
 function allerA(destination: () => void) {
   quitterLesSurcouches();
   destination();
 }
 const ctrl = computed(() => t("reglages.raccourcis.touches.ctrl"));
-const alt = computed(() => t("reglages.raccourcis.touches.alt"));
-const titrePrecedent = computed(() =>
-  avecRaccourci(
-    libellePrecedent.value ? t("bibliotheque.barre.precedentVers", { lieu: libellePrecedent.value }) : t("bibliotheque.barre.precedent"),
-    alt.value, "←",
-  ),
-);
-const titreSuivant = computed(() =>
-  avecRaccourci(
-    libelleSuivant.value ? t("bibliotheque.barre.suivantVers", { lieu: libelleSuivant.value }) : t("bibliotheque.barre.suivant"),
-    alt.value, "→",
-  ),
-);
 
 /** Ce qu'on affiche : le pseudo Torii s'il existe, sinon le nom Steam. */
 const myName = computed(() => toriiAccount.value?.displayName ?? me.value?.name ?? t("bibliotheque.barre.monCompte"));
@@ -152,10 +167,13 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 </script>
 
 <template>
-  <div ref="barre" class="topbar" :class="{ web: MODE_WEB, 'sur-fiche': surFiche }">
-    <!-- Sur téléphone, la barre latérale et son logo ne sont plus là. -->
+  <!-- `data-tauri-drag-region` : la barre tient lieu de barre de titre (`ControlesFenetre`). On
+       déplace la fenêtre en tirant sur son fond, son espace vide ou le logo, et un double-clic
+       l'agrandit ; les boutons, eux, restent des boutons (seule la cible directe compte). -->
+  <div ref="barre" class="topbar" :class="{ web: MODE_WEB, 'sur-fiche': surFiche, vitre }" data-tauri-drag-region>
+    <!-- Sur téléphone (web), les onglets et leur logo ne sont plus là : ce logo-ci prend le relais. -->
     <img v-if="MODE_WEB" class="marque" src="/torii.svg" alt="Torii" />
-    <div class="logo" aria-hidden="true">
+    <div class="logo" aria-hidden="true" data-tauri-drag-region>
       <svg viewBox="0 0 24 24" fill="currentColor">
         <path d="M6.6 7.3 L8.7 7.3 L9.1 19.6 L6.2 19.6 Z" />
         <path d="M15.3 7.3 L17.4 7.3 L17.8 19.6 L14.9 19.6 Z" />
@@ -172,41 +190,22 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
         v-for="o in ONGLETS"
         :key="o.id"
         class="onglet"
-        :class="{ on: section === o.id }"
-        :aria-current="section === o.id ? 'page' : undefined"
-        :aria-label="o.label"
+        :class="{ on: o.on }"
+        :aria-current="o.on ? 'page' : undefined"
+        :aria-label="o.id === 'contacts' && friendsOnline ? `${o.label} (${t('amis.enLigneCompte', { n: friendsOnline })})` : o.label"
         :title="o.titre"
-        :data-tuto="o.tuto ?? undefined"
+        :data-tuto="o.tuto"
         @click="allerA(o.aller)"
       >
         <svg v-if="o.id === 'library'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
         <svg v-else-if="o.id === 'store'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /><path d="M6 14.4V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5.6" /></svg>
         <svg v-else-if="o.id === 'wishlist'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
-        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="8.5" cy="12" r="5.2" /><circle cx="15.5" cy="12" r="5.2" /></svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
         <span class="onglet-nom">{{ o.label }}</span>
+        <!-- Les amis en ligne, sur l'onglet Contacts (toutes sources, dédoublonnés). -->
+        <span v-if="o.id === 'contacts' && friendsOnline" class="pastille" aria-hidden="true">{{ friendsOnline }}</span>
       </button>
     </nav>
-    <!-- Sur une page web, ses propres flèches (dans sa barre) servent les deux historiques. -->
-    <div v-if="section !== 'web'" class="historique">
-      <button
-        class="icon-btn"
-        :disabled="!peutReculer"
-        :title="titrePrecedent"
-        :aria-label="titrePrecedent"
-        @click="reculer()"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 6l-6 6 6 6" /></svg>
-      </button>
-      <button
-        class="icon-btn"
-        :disabled="!peutAvancer"
-        :title="titreSuivant"
-        :aria-label="titreSuivant"
-        @click="avancer()"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6" /></svg>
-      </button>
-    </div>
     <label v-if="chercheDansLaBiblio" class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
       <input ref="champ" v-model="query" data-recherche type="text" @focus="surFocusRecherche" :placeholder="t('bibliotheque.barre.rechercher')" autocomplete="off" />
@@ -223,22 +222,21 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
       </button>
     </label>
-    <div class="topbar-spacer" />
-    <span v-if="loading" class="enrich-pill">
+    <div class="topbar-spacer" data-tauri-drag-region />
+    <!-- Sur le web seulement : dans l'appli, la bande du haut dit déjà « Synchronisation… »
+         (`EtatJoueur`), et la pastille faisait doublon. Le web n'a pas cette bande. -->
+    <span v-if="loading && MODE_WEB" class="enrich-pill">
       <span class="spinner" />{{ t("bibliotheque.barre.actualisation") }}
     </span>
     <button
       v-if="!MODE_WEB"
-      class="icon-btn"
+      class="icon-btn ajout"
       :title="avecRaccourci(t('bibliotheque.barre.ajouterJeu'), ctrl, 'N')"
       :aria-label="t('bibliotheque.barre.ajouterJeu')"
       @click="openAddGame"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
-    </button>
-    <button v-if="!MODE_WEB" class="icon-btn friends-btn" data-tuto="amis" :class="{ active: section === 'friends' }" :title="avecRaccourci(t('bibliotheque.barre.amis'), ctrl, '4')" @click="allerA(showFriends)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
-      <span v-if="friendsOnline" class="friends-badge">{{ friendsOnline }}</span>
+      <span class="ajout-nom">{{ t("bibliotheque.barre.ajouterUnJeu") }}</span>
     </button>
     <button class="icon-btn resynchro" :class="{ 'hors-biblio': !chercheDansLaBiblio }" :title="avecRaccourci(t('bibliotheque.barre.resynchroniser'), 'F5')" :aria-label="t('bibliotheque.barre.resynchroniser')" :disabled="loading" @click="reload()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
@@ -257,16 +255,21 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 </template>
 
 <style scoped>
-/* Du verre dépoli sur toute sa hauteur, sur toutes les vues : la même teinte et le même liseré
-   que le bouton retour des fiches (`.detail-back`). Ce qui défile dessous passe en flou ; flou
-   plus fort que le bouton, car derrière une barre entière, c'est souvent du texte. */
+/* Au repos, sans fond : rien ne passe dessous (`vitre`, dans le script). */
 .topbar {
   position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px;
   padding: 18px 34px 16px;
-  background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(16px) saturate(140%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent; border-bottom: 1px solid transparent;
+  transition: background 0.2s, border-color 0.2s;
 }
-:root[data-theme="light"] .topbar { background: rgba(255, 255, 255, 0.6); border-bottom-color: var(--border); }
+/* Dès que le contenu défile dessous : du verre dépoli sur toute la hauteur, la même teinte
+   et le même liseré que le bouton retour des fiches (`.detail-back`). Flou plus fort que le
+   bouton, car derrière une barre entière, c'est souvent du texte. */
+.topbar.vitre {
+  background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(16px) saturate(140%);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="light"] .topbar.vitre { background: rgba(255, 255, 255, 0.6); border-bottom-color: var(--border); }
 /* Les commandes de la barre laissent voir le verre au lieu de faire des pavés opaques. */
 .topbar :is(.icon-btn, .search input, .onglets, .me) {
   background: color-mix(in srgb, var(--surface) 45%, transparent);
@@ -274,10 +277,19 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 }
 :root[data-theme="light"] .topbar :is(.icon-btn, .search input, .onglets, .me) { border-color: var(--border); }
 .topbar :is(.icon-btn, .me):hover { border-color: var(--border-strong); }
+/* Tout en haut d'une fiche, sans fond de barre : chaque commande devient un bouton de verre
+   posé sur la bannière, exactement comme le bouton retour de la fiche. */
+.topbar.sur-fiche:not(.vitre) :is(.icon-btn, .search input, .onglets, .me) {
+  background: rgba(12, 8, 18, 0.5); backdrop-filter: blur(8px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+:root[data-theme="light"] .topbar.sur-fiche:not(.vitre) :is(.icon-btn, .search input, .onglets, .me) {
+  background: rgba(255, 255, 255, 0.6); border-color: var(--border);
+}
 /* Firefox (version web) n'a pas de flou (`style.css`) : une teinte plus dense garde la barre lisible. */
 @supports (-moz-appearance: none) {
-  .topbar { background: rgba(12, 8, 18, 0.88); }
-  :root[data-theme="light"] .topbar { background: rgba(255, 255, 255, 0.9); }
+  .topbar.vitre { background: rgba(12, 8, 18, 0.88); }
+  :root[data-theme="light"] .topbar.vitre { background: rgba(255, 255, 255, 0.9); }
 }
 /* Par-dessus les fiches (100 et 110), sous les Paramètres (200). */
 .topbar.sur-fiche { z-index: 150; }
@@ -286,7 +298,8 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   background: linear-gradient(140deg, var(--accent), #ff9a6b); color: var(--accent-ink);
   display: grid; place-items: center; box-shadow: 0 6px 18px -6px var(--accent);
 }
-.logo svg { width: 21px; height: 21px; }
+/* Le clic traverse le dessin et tombe sur le logo, qui déplace la fenêtre. */
+.logo svg { width: 21px; height: 21px; pointer-events: none; }
 
 /* Les onglets des sections : une commande segmentée, l'onglet courant en couleur d'accent. */
 .onglets {
@@ -307,7 +320,9 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 @media (max-width: 1180px) {
   .onglet { padding: 0 10px; }
   .onglet-nom { display: none; }
-  .enrich-pill { padding: 6px; font-size: 0; gap: 0; }
+  /* Comme les onglets : le « + » seul, le libellé passe dans l'infobulle. */
+  .ajout-nom { display: none; }
+  .icon-btn.ajout { width: 38px; padding: 0; justify-content: center; }
 }
 /* Base de 420 px, et pas seulement un maximum : à parts égales avec l'espaceur, le champ
    tombait sous les 250 px une fois les flèches ajoutées, et le texte d'invite passait
@@ -348,9 +363,6 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   .search .hint { display: none; }
   .search input { padding-right: 42px; }
 }
-.historique { display: flex; gap: 6px; flex: none; }
-.historique .icon-btn:disabled { opacity: 0.4; cursor: default; }
-.historique .icon-btn:disabled:hover { color: var(--text-dim); border-color: var(--border); }
 .search input:focus { border-color: var(--border-strong); background: var(--surface-2); }
 .topbar-spacer { flex: 1; }
 .enrich-pill {
@@ -371,16 +383,25 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 }
 .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
 .icon-btn svg { width: 17px; height: 17px; }
+/* « + Ajouter un jeu » : le bouton s'élargit pour son libellé. */
+.icon-btn.ajout {
+  display: inline-flex; align-items: center; gap: 7px; width: auto; padding: 0 14px 0 11px;
+  font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap;
+}
 .icon-btn.active {
   color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: var(--accent-soft);
 }
-.friends-btn { position: relative; }
-.friends-badge {
-  position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px;
+/* Amis en ligne sur l'onglet Contacts : le vert de la présence. */
+.onglet { position: relative; }
+.pastille {
+  min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box;
   border-radius: 99px; background: #4bbe6b; color: #08210f; font-size: 10px; font-weight: 700;
   font-family: var(--mono); display: grid; place-items: center;
-  border: 2px solid var(--bg); box-sizing: border-box;
+}
+/* Onglets réduits aux icônes : la pastille passe en coin, sur l'icône. */
+@media (max-width: 1180px) {
+  .pastille { position: absolute; top: -4px; right: -4px; border: 2px solid var(--bg); }
 }
 .me {
   position: relative; flex: none; display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
@@ -418,7 +439,6 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
   .topbar.web .marque { display: block; width: 34px; height: 34px; flex: none; }
   .topbar .logo,
   .topbar .onglets,
-  .topbar.web .historique,
   .topbar.web .hint,
   .topbar.web .reglages,
   .topbar.web .resynchro.hors-biblio,

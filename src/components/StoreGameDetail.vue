@@ -45,7 +45,7 @@ useFocusTrap(panneau, open, { boucle: false });
 const price = (montant: number, offre: StorePrice) => formatPrix(montant, offre.currency);
 
 /**
- * La devise de la fiche, pour l'avertissement en pied de colonne. Celle des offres si
+ * La devise de la fiche, à défaut de celle de la meilleure offre. Celle des offres si
  * elles en portent une, sinon celle attendue pour la région.
  */
 const deviseFiche = computed(
@@ -434,7 +434,6 @@ const detailOffre = (p: StorePrice) =>
             </div>
           </div>
 
-          <p class="disclaimer">{{ t("boutique.produit.avertissement", { devise: deviseFiche }) }}</p>
           <!--
             Hors euros, Instant Gaming est écarté (voir `locale::zone_euro`) : on le dit ici,
             à l'endroit où il manquerait, plutôt que de laisser croire à une offre perdue.
@@ -527,7 +526,8 @@ const detailOffre = (p: StorePrice) =>
 .lien-texte { background: none; border: none; padding: 0; margin-top: 10px; color: var(--accent); font-size: 13px; font-weight: 600; }
 .lien-texte:hover { text-decoration: underline; }
 
-.sd-prices { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px; }
+/* Collée sous la barre du haut, qui passe par-dessus la fiche (`--hauteur-barre-fiche`). */
+.sd-prices { position: sticky; top: calc(var(--hauteur-barre-fiche) + 20px); display: flex; flex-direction: column; gap: 16px; }
 .best { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px; }
 .best-top { display: flex; align-items: center; justify-content: space-between; }
 .best-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); font-weight: 700; }

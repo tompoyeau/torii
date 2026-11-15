@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from "vue";
 import { usePreferences } from "../composables/usePreferences";
 import { useStore } from "../composables/useStore";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
@@ -76,6 +76,10 @@ onBeforeUnmount(() => {
   clearTimeout(minuterie);
   document.removeEventListener("visibilitychange", visibilite);
 });
+// La Boutique reste en mémoire quand on change d'onglet (`<KeepAlive>`, AppShell) : la vedette
+// cesse de tourner tant qu'on ne la voit pas, et reprend au retour.
+onDeactivated(() => clearTimeout(minuterie));
+onActivated(programmer);
 
 function ouvrir() {
   const j = jeu.value;

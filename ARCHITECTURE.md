@@ -27,7 +27,8 @@ cargo run --example suggestions      # les jeux que « Trouvés sur ce PC » pro
 
 - **Front `src/`** : `types.ts`, `data/` (games.ts = fetchGames/enrichGames + mock, platforms.ts),
   `lib/` (tauri.ts pont commandes, covers.ts), `composables/` (useLibrary, useUi, useTheme),
-  `components/` (AppShell, GameCard, GameDetail, Sidebar, TopBar, SettingsView).
+  `components/` (AppShell, TopBar, VueBibliotheque, GameCard, GameDetail, SettingsView,
+  ControlesFenetre, EtatJoueur).
 - **Natif `src-tauri/src/`** : `lib.rs` (commandes + fenêtre login), `models.rs` (GameDto/GameMeta),
   `platforms/` (scan INSTALLÉS : steam/epic/gog/manual + agrégation `scan_all`),
   `accounts/` (POSSÉDÉS : secrets.rs = credentials.json, steam.rs = session/famille),
@@ -976,7 +977,7 @@ familial sont exclus de la vue, des deux côtés, dans `useFriendsCommon` :
   Rust.
 - Ces jeux restent **visibles ailleurs**, là où c'est leur place : dans la bibliothèque
   d'un ami (avec la pastille « Famille Steam ») et dans la sienne propre, sous le filtre
-  « Famille » de la barre latérale. C'est « ce qu'il peut jouer » ; « En commun », c'est
+  « Famille » de la bibliothèque. C'est « ce qu'il peut jouer » ; « En commun », c'est
   « ce que vous possédez ».
 - 💭 Une première version affichait au contraire ces jeux avec des pastilles de provenance
   et un avertissement « une seule licence », en conservant les membres du groupe familial
@@ -1309,8 +1310,8 @@ les amis. Le surveillant l'adopte désormais tout seul.
 ### « Hors launcher » = une catégorie, deux plateformes (fait)
 
 Ajout manuel et détection automatique sont deux façons d'arriver au même endroit — un jeu
-qu'aucun launcher ne fournit. Ils ne font donc plus qu'**une entrée** dans la barre
-latérale, un seul libellé sur les cartes, une seule icône et une seule couleur.
+qu'aucun launcher ne fournit. Ils ne font donc plus qu'**une entrée** dans le menu
+Plateforme, un seul libellé sur les cartes, une seule icône et une seule couleur.
 
 - 🔑 **Fusion d'AFFICHAGE seulement. Les identifiants `manual:` et `detected:` restent
   distincts en base, et il ne faut pas y toucher** : ils décident de qui sait éditer et
@@ -1318,13 +1319,12 @@ latérale, un seul libellé sur les cartes, une seule icône et une seule couleu
   le second inscrit l'exécutable chez les refusés), et un id de jeu détecté ne change
   JAMAIS, sous peine d'orpheliner favoris, historique, présence et jeux muets.
 - `HORS_LAUNCHER` / `estHorsLauncher` (`data/platforms.ts`) : **une seule définition** des
-  membres de la catégorie. La barre latérale, son compteur, le filtre de la grille et les
+  membres de la catégorie. Le menu Plateforme, son compteur, le filtre de la grille et les
   menus « Modifier » / « Retirer » s'y réfèrent tous. Deux listes écrites à la main, et un
   jeu finit par apparaître dans la catégorie sans y être éditable.
-- Le filtre `horsLauncher` n'est **pas** un `PlatformId` : la liste de la barre latérale
-  porte donc un `id` (le filtre) **et** un `icon` (la plateforme dont elle emprunte
-  l'icône). Ils coïncident partout sauf ici. ⚠️ `isPlatformView` (AppShell) reste faux pour
-  cette vue, donc pas de bouton « Installés uniquement » — sans objet, ces jeux le sont tous.
+- Le filtre `horsLauncher` n'est **pas** un `PlatformId` : la liste des plateformes
+  (`useFiltresBibliotheque`) porte donc un `id` (le filtre) **et** un `icon` (la plateforme
+  dont elle emprunte l'icône). Ils coïncident partout sauf ici.
 - Rien à migrer : le filtre courant n'est jamais persisté sur disque (`DefaultFilter` se
   limite à `all` / `recent` / `favorite` / `installed`).
 - ⚠️ Ce qu'on perd, assumé : l'icône radar disait « Torii l'a trouvé tout seul ». C'est une
@@ -2004,8 +2004,8 @@ stats et les liens (page Steam, site officiel, communauté).
 ## Navigation — historique et raccourcis clavier (`useNavigation.ts`, `useRaccourcis.ts`)
 
 - **Un historique à deux piles**, comme un navigateur : précédent (bouton retour de la
-  souris, Alt+←, flèche de la barre du haut, bouton retour des fiches) et suivant (bouton
-  avant, Alt+→, flèche). Une nouvelle navigation vide la pile « suivant ».
+  souris, Alt+←, bouton retour des fiches) et suivant (bouton avant, Alt+→). Pas de flèches
+  dans la barre du haut depuis la 0.29. Une nouvelle navigation vide la pile « suivant ».
 - 🔑 **Une étape = tout ce qui se voit** : section (+ ami consulté), filtre, fiche d'un jeu,
   **fiche Boutique**, pop-in Paramètres. La fiche Boutique vit dans `useStore` et manquait à
   l'ancien historique (`navStack` de `useUi`, supprimé) : un jeu similaire remplaçait la
@@ -2019,13 +2019,14 @@ stats et les liens (page Steam, site officiel, communauté).
 - **Bouton retour d'une fiche = une étape** (fiche B → fiche A), et son libellé nomme la
   destination ; **Échap = sortir de la fiche** (B → vitrine). Échap ne ferme que la
   surcouche du dessus : Paramètres > fiche Boutique > fiche d'un jeu.
-- **Les fiches (jeu, Boutique) s'ouvrent À DROITE de la barre latérale**, qui reste
-  visible (`--largeur-laterale`, `style.css`) : ce sont des écrans, plus des fenêtres
-  posées sur tout. Conséquences : un clic dans la barre referme d'abord les fiches
-  (`quitterLesSurcouches`, une seule étape) ; elles ne sont plus modales — `<main>` passe
-  `inert` derrière elles et `useFocusTrap(…, { boucle: false })` y fait entrer le focus
-  sans l'y enfermer, pour que la barre reste joignable au clavier. Les vraies modales
-  (Paramètres, ajout d'un jeu, visionneuse) couvrent toujours toute la fenêtre.
+- **Les fiches (jeu, Boutique) couvrent toute la fenêtre, la barre du haut restant
+  par-dessus** (voir « Barre du haut et fenêtre ») : ce sont des écrans, pas des fenêtres
+  posées sur tout. Conséquences : un onglet de la barre referme d'abord les fiches
+  (`quitterLesSurcouches`, une seule étape), entrer dans la recherche aussi ; elles ne sont
+  pas modales — `<main>` passe `inert` derrière elles et `useFocusTrap(…, { boucle: false })`
+  y fait entrer le focus sans l'y enfermer, pour que la barre, hors de `<main>`, reste
+  joignable au clavier. Les vraies modales (Paramètres, ajout d'un jeu ou d'un ami,
+  visionneuse) couvrent toujours toute la fenêtre.
 - **Défilement retenu par étape** (page + chacune des deux fiches, repérées par
   `data-defilement`), relevé en continu et restauré au retour, avec quelques images de
   rattrapage le temps que le contenu arrive.
@@ -2037,11 +2038,56 @@ stats et les liens (page Steam, site officiel, communauté).
   montage. Un composant qui consomme Échap (modale, menu, visionneuse) DOIT appeler
   `preventDefault()`, sinon la fiche du dessous se ferme avec lui.
 - **Raccourcis** : Ctrl+F (recherche de l'écran, sinon celle de la bibliothèque — champs
-  marqués `data-recherche`), Ctrl+1…4 (Bibliothèque, Boutique, Wishlist, Amis), Ctrl+N,
+  marqués `data-recherche`), Ctrl+1…4 (Bibliothèque, Boutique, Wishlist, Contacts), Ctrl+N,
   Ctrl+, , F5/Ctrl+R (resynchroniser — **dans l'application seulement**, la démo web garde
   le rechargement), F1 ou ? (Paramètres > Raccourcis clavier, alimenté par
   `listeRaccourcis()`). Les chiffres se lisent par `e.code` (AZERTY : Ctrl+1 = « & ») et
   Ctrl+Alt est écarté (AltGr).
+
+## Barre du haut et fenêtre (0.29 — `TopBar.vue`, `ControlesFenetre.vue`, `EtatJoueur.vue`)
+
+- **Plus de barre latérale.** Les sections sont des onglets dans la barre du haut :
+  Bibliothèque, Boutique, Wishlist, Contacts (icônes seules sous 1180 px, nom en infobulle).
+  Contacts réunit amis et jeux en commun sur une page (`FriendsView`, avec `CommonView` en
+  slot) ; la section `common` y mène et descend jusqu'aux jeux en commun. Le bouton Amis de la
+  barre a disparu : la pastille des amis en ligne est sur l'onglet.
+- **Filtres de la bibliothèque sur une ligne** (`FiltresBibliotheque.vue`) : vues en commande
+  segmentée (Tous, Mes jeux, Famille, Favoris), plateforme et tri en menus déroulants
+  (`MenuChoix.vue`), Catégories, et « Installés uniquement », qui vaut pour **toutes** les vues
+  (il n'y a plus de vue « Installés » ; la préférence de démarrage qui la choisissait ouvre
+  « Tous », bascule allumée). Toujours **un seul filtre** à la fois (`useUi().filter`).
+- **Barre de titre dessinée par Torii** : `decorations: false` (`tauri.conf.json`) et les
+  permissions `core:window:*` correspondantes (`capabilities/default.json`).
+  `ControlesFenetre` pose réduire / agrandir / fermer au coin haut droit, à la place exacte de
+  Windows (46 × 32 px, glyphes Segoe Fluent Icons), au-dessus de tout (z 450). « Fermer »
+  déclenche `CloseRequested` comme la croix de Windows : la règle « fermer = réduire dans la
+  zone de notification » s'applique telle quelle. La barre est la poignée de la fenêtre
+  (`data-tauri-drag-region` sur son fond, son espace vide et le logo ; seule la cible directe
+  compte). ⚠️ Les règles qui dépendent de ces commandes vivent dans `style.css`
+  (`html.fenetre-perso`, `--hauteur-titre`) : dans un `<style scoped>`, `:global(html.x) .y`
+  est réduit par Vue à `html.x`, et la règle s'appliquait à toute la page.
+- **Bande du haut** (32 px) : à gauche l'état du joueur (`EtatJoueur`), à droite les commandes
+  de la fenêtre ; le contenu de la barre passe dessous. Une seule ligne pour tout s'est révélée
+  trop serrée. `EtatJoueur` dit « En jeu · titre · durée » (un clic ouvre la fiche), sinon la
+  présence Torii (un clic ouvre un petit menu des trois modes), et « Synchronisation… ».
+- 🔑 **Une seule règle pour la partie à montrer**, à soi comme aux amis :
+  `procwatch::partie_a_montrer` (commande `jeu_en_cours` pour la bande, battement de cœur de la
+  présence). Elle écarte les jeux réduits au silence et les **logiciels rangés parmi les jeux
+  Steam** (`categories::est_logiciel` : tag Utilitaires 87 ou Logiciel 8013 parmi les cinq plus
+  votés — Steam renvoie `type: "game"` pour Wallpaper Engine). Un jeu écarté laisse la place au
+  suivant. Mesuré sur 911 jeux : seul Wallpaper Engine est concerné.
+- **Barre en verre** : transparente au repos, verre dépoli (teinte et liseré du bouton retour
+  des fiches) dès que la page ou la fiche défile dessous. Tout en haut d'une fiche, seuls ses
+  boutons sont en verre, sur la bannière. Les fiches posent leur bouton retour et leur colonne
+  de droite sous la barre (`--hauteur-barre-fiche`, mesurée par `TopBar`).
+- **Onglets gardés en mémoire** (`<KeepAlive>` dans `AppShell` ; hors cache : la page web et
+  les pages d'un ami). Revenir à la Bibliothèque ne reconstruit plus la grille (mesuré sur 364
+  jeux : ~200 ms → ~6 ms avec `content-visibility: auto` sur les cartes). Ce qui tourne en
+  fond s'arrête quand l'onglet est caché (`onActivated` / `onDeactivated` : sondage Steam des
+  amis, carrousel de la Boutique).
+- `html { scrollbar-gutter: stable }` : une vue trop courte pour défiler ne gagne plus les
+  10 px de la barre de défilement, qui faisaient passer la grille à une colonne de plus (toutes
+  les jaquettes rétrécissaient).
 
 ## Page web intégrée (`page_web.rs`, `PageWeb.vue`, `usePageWeb.ts`)
 
@@ -2150,9 +2196,9 @@ synchronisée et la Boutique, depuis n'importe quel navigateur.
   sauf changement local pas encore parti. Sur le web, la liste part au Worker à chaque appel (`exclus`).
 - **Pas sur le web, faute de PC** : lancer ou installer un jeu, connecter un launcher, ajouter un jeu.
   **Pas encore** : wishlist (les cœurs sont masqués par `html.web`), amis, favoris, jeux masqués.
-- **Sur téléphone, sous 820 px** : la barre latérale cède la place à `BarreMobile.vue` (Boutique,
-  Bibliothèque, Paramètres), et ses filtres à `FiltresMobile.vue`, tous deux sur les compteurs de
-  `useFiltresBibliotheque`. `--barre-mobile` (`style.css`) vaut sa hauteur, 0 ailleurs : fiches,
+- **Sur téléphone, sous 820 px** : les onglets de la barre du haut cèdent la place à
+  `BarreMobile.vue` (Boutique, Bibliothèque, Paramètres) ; les filtres (`FiltresBibliotheque`,
+  sur les compteurs de `useFiltresBibliotheque`) passent à la ligne. `--barre-mobile` (`style.css`) vaut sa hauteur, 0 ailleurs : fiches,
   Paramètres, messages et visionneuse s'arrêtent au-dessus. Ce qui dépend d'elle est limité à
   `html.web` ou à la classe `.web` : la démo, sans barre, garde ses boutons. L'application n'est pas
   concernée : sa fenêtre ne descend pas sous 940 px.

@@ -83,7 +83,6 @@ const voirTout = () => ouvrir({ id: actif.value.tag, nom: nom(actif.value) });
   <div ref="section" class="genres">
     <StoreRow
       :titre="t('boutique.accueil.genres.titre')"
-      :sous-titre="t('boutique.accueil.genres.sousTitre')"
       :nombre="etat.items.length"
     >
       <template #actions>

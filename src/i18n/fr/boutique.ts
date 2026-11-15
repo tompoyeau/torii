@@ -1,7 +1,6 @@
 /** Boutique, fiche produit et wishlist. */
 export default {
   titre: "Boutique",
-  sousTitre: "Découvre et compare les prix sur toutes les boutiques PC.",
   rechercher: "Rechercher un jeu à acheter…",
   effacer: "Effacer",
   lancerRecherche: "Rechercher",
@@ -75,7 +74,6 @@ export default {
     },
     promos: {
       titre: "Promos du moment",
-      sousTitre: "Les offres les plus suivies, toutes boutiques confondues.",
     },
     classements: {
       titre: "Classements",
@@ -85,12 +83,10 @@ export default {
     },
     offerts: {
       titre: "Offerts en ce moment",
-      sousTitre: "Des jeux à récupérer gratuitement avant la date limite.",
       aucun: "Aucun jeu offert en ce moment.",
     },
     genres: {
       titre: "Parcourir par genre",
-      sousTitre: "Les meilleures ventes du genre, au meilleur prix.",
       action: "Action",
       aventure: "Aventure",
       rpg: "RPG",
@@ -104,7 +100,6 @@ export default {
     },
     gratuits: {
       titre: "Free-to-play populaires",
-      sousTitre: "Les jeux gratuits les plus populaires du moment.",
     },
     toutes: {
       titre: "Toutes les offres",
@@ -243,11 +238,6 @@ export default {
       achats: "Achats en jeu",
       achatsAleatoires: "Achats en jeu (objets aléatoires)",
     },
-    // ⚠️ La devise est donnée par son code (EUR, USD) et non par son nom : les noms
-    // renvoyés par `Intl` sont au singulier (« en euro ») et ne s'accordent pas.
-    avertissement:
-      "Prix indicatifs ({devise}). Masque les vendeurs que tu ne veux plus voir avec " +
-      "l'icône œil. L'achat se fait sur la boutique du marchand.",
   },
 
   wishlist: {

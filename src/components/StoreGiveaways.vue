@@ -22,7 +22,6 @@ const { possession } = usePossession();
   <aside class="offerts">
     <div>
       <h2>{{ t("boutique.accueil.offerts.titre") }}</h2>
-      <p class="sous">{{ t("boutique.accueil.offerts.sousTitre") }}</p>
     </div>
     <template v-if="offres.length">
       <button v-for="o in offres.slice(0, 5)" :key="o.gameId" class="cadeau" @click="openProduct(o.gameId)">

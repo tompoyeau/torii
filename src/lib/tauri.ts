@@ -238,6 +238,18 @@ export async function startGameWatch(gameId: string, installDir: string): Promis
   await call<void>("start_game_watch", { gameId, installDir }, undefined);
 }
 
+/** La partie en cours sur ce PC (`since` en secondes Unix), ou `null`. */
+export interface JeuEnCours {
+  id: string;
+  title: string;
+  since: number;
+}
+
+/** Ce qui tourne en ce moment, vu par le surveillant de process. `null` hors Tauri. */
+export async function jeuEnCours(): Promise<JeuEnCours | null> {
+  return await call<JeuEnCours | null>("jeu_en_cours", undefined, null);
+}
+
 /** S'abonne à la fermeture d'un jeu suivi ; renvoie une fonction de désabonnement. */
 export async function onGameLaunched(
   cb: (gameId: string, at: number) => void,

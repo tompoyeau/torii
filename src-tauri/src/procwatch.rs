@@ -336,20 +336,49 @@ fn liberer(app: &tauri::AppHandle, id: &str, titre: Option<&str>) {
     }
 }
 
-/// Partie en cours : `(id, titre, depuis)`. Utilisé par le battement de cœur de la
-/// présence. `None` si aucun jeu ne tourne — ou si plusieurs tournent, auquel cas on
-/// prend celui commencé en dernier (c'est celui devant lequel la personne est).
-pub fn current_game(app: &tauri::AppHandle) -> Option<(String, String, i64)> {
+/// Toutes les parties en cours, de la plus récente (celle devant laquelle la personne est) à
+/// la plus ancienne : `(id, titre, depuis)`. Un jeu au titre encore provisoire est laissé de
+/// côté : on ne montre rien plutôt qu'un nom qui va changer. Le tri de ce qui se montre
+/// (jeux muets, logiciels) est fait par `partie_a_montrer`.
+pub fn running_games(app: &tauri::AppHandle) -> Vec<(String, String, i64)> {
     let state = app.state::<Watch>();
-    let state = state.0.lock().ok()?;
-    let (id, running) = state.running.iter().max_by_key(|(_, r)| r.since)?;
-    let cible = state.targets.iter().find(|t| &t.id == id);
-    // Titre encore provisoire : on ne publie rien plutôt qu'un nom qui va changer.
-    if cible.is_some_and(|t| t.provisoire) {
-        return None;
-    }
-    let title = cible.map(|t| t.title.clone()).unwrap_or_default();
-    Some((id.clone(), title, running.since))
+    let Ok(state) = state.0.lock() else {
+        return Vec::new();
+    };
+    let mut parties: Vec<(String, String, i64)> = state
+        .running
+        .iter()
+        .filter_map(|(id, r)| {
+            let cible = state.targets.iter().find(|t| &t.id == id);
+            if cible.is_some_and(|t| t.provisoire) {
+                return None;
+            }
+            Some((id.clone(), cible.map(|t| t.title.clone()).unwrap_or_default(), r.since))
+        })
+        .collect();
+    parties.sort_by(|a, b| b.2.cmp(&a.2));
+    parties
+}
+
+/// La partie à montrer — à soi dans la bande du haut, aux amis dans la présence :
+/// `(id, titre, depuis)`, la plus récente parmi celles qui tournent, ou `None`.
+///
+/// 🔑 UNE SEULE RÈGLE POUR LES DEUX, sinon on se verrait « en ligne » pendant que les amis
+/// nous voient « en jeu ». Sont écartés :
+/// - les jeux réduits au silence (Paramètres → Réseau Torii, `PRESENCE_MUTED`) ;
+/// - les logiciels rangés parmi les jeux Steam, comme Wallpaper Engine qui tourne en
+///   permanence : il affichait « en jeu depuis 11 h » (`categories::est_logiciel`).
+///
+/// Un jeu écarté laisse la place au suivant : un vrai jeu lancé pendant que Wallpaper Engine
+/// tourne est bien celui qu'on montre.
+pub fn partie_a_montrer(app: &tauri::AppHandle) -> Option<(String, String, i64)> {
+    let dir = app.path().app_config_dir().ok()?;
+    let muets = crate::platforms::id_set::PRESENCE_MUTED.load(&dir);
+    running_games(app).into_iter().find(|(id, _, _)| {
+        !muets.contains(id)
+            && !crate::metadata::categories::appid(id, None)
+                .is_some_and(|a| crate::metadata::categories::est_logiciel(&dir, a))
+    })
 }
 
 /// Secondes écoulées depuis la dernière action clavier/souris de l'utilisateur.

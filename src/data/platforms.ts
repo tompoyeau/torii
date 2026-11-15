@@ -21,7 +21,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
 
 /**
  * Les plateformes qui ne viennent d'aucun launcher. Une seule définition : la catégorie
- * de la barre latérale, son compteur, le filtre de la grille et les menus qui proposent
+ * du menu Plateforme, son compteur, le filtre de la grille et les menus qui proposent
  * « Modifier » ou « Retirer » s'y réfèrent tous. En lister deux fois les membres, c'est
  * s'exposer à ce qu'un jeu apparaisse dans la catégorie sans y être éditable.
  */

@@ -37,6 +37,10 @@ export default {
   toriiFerme: "Torii fermé",
   pasEncore: "Pas encore d'amis sur Torii",
   pasEncoreAide: "Donne ton code à quelqu'un, ou saisis le sien avec « Ajouter un ami ».",
+  // Page Contacts : colonne des amis et carte du code.
+  personneEnJeu: "Aucun ami ne joue en ce moment.",
+  tonCode: "Ton code d'ami",
+  tonCodeAide: "Donne-le à tes amis pour qu'ils t'ajoutent sur Torii.",
   listePrivee: "Ta liste d'amis Steam est peut-être privée.",
 
   etats: {

@@ -24,6 +24,8 @@ import TutoVisite from "./components/TutoVisite.vue";
 import UpdateBanner from "./components/UpdateBanner.vue";
 import Toast from "./components/Toast.vue";
 import SplashScreen from "./components/SplashScreen.vue";
+import ControlesFenetre from "./components/ControlesFenetre.vue";
+import EtatJoueur from "./components/EtatJoueur.vue";
 import DemoBanner from "./components/DemoBanner.vue";
 
 const { openGame } = useUi();
@@ -127,5 +129,8 @@ onBeforeUnmount(() => {
     <Toast />
     <SplashScreen v-if="!MODE_WEB || connected || !compteVerifie" />
     <DemoBanner />
+    <!-- La bande du haut, au-dessus de tout : la barre de Windows est retirée. -->
+    <EtatJoueur />
+    <ControlesFenetre />
   </div>
 </template>

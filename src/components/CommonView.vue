@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onActivated, onMounted, ref, watch } from "vue";
 import { useFriendsCommon } from "../composables/useFriendsCommon";
 import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
@@ -13,7 +13,20 @@ const {
   loading, loaded, steamConnected, refresh, toggleFriend, clearSelection, isSelected,
 } = useFriendsCommon();
 const { games: libGames } = useLibrary();
-const { openSettings, openGame } = useUi();
+const { openSettings, openGame, section } = useUi();
+
+/**
+ * Cette liste vit dans la page Contacts, sous les amis en jeu (`FriendsView`, slot). Y venir
+ * par la section `common` (historique, raccourci) descend jusqu'à elle.
+ */
+const racine = ref<HTMLElement | null>(null);
+const descendre = () => {
+  if (section.value === "common") void nextTick(() => racine.value?.scrollIntoView({ block: "start" }));
+};
+// Passage d'Amis à En commun sur la page affichée…
+watch(section, descendre);
+// …ou retour sur la page gardée en mémoire (`<KeepAlive>`), déjà sur En commun.
+onActivated(descendre);
 
 onMounted(() => {
   if (!loaded.value) void refresh();
@@ -83,7 +96,7 @@ const visibles = computed(() => {
 </script>
 
 <template>
-  <div class="common">
+  <section ref="racine" class="common">
     <div class="sec-head">
       <h2>{{ t("amis.commun.titre") }}</h2>
       <span class="n">{{ t("bibliotheque.jeux", { n: visibles.length }) }}</span>
@@ -186,12 +199,14 @@ const visibles = computed(() => {
         </div>
       </div>
     </template>
-  </div>
+  </section>
 </template>
 
 <style scoped>
-.common { min-width: 0; }
-.sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+/* Une section de la page Contacts, sous les amis en jeu ; la marge garde son titre visible
+   sous la barre du haut quand on y descend. */
+.common { min-width: 0; margin-top: 12px; scroll-margin-top: calc(var(--hauteur-barre, 74px) + 16px); }
+.sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 .sec-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
 .sec-head .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); }
 .sec-head .spacer { flex: 1; }

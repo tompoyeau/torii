@@ -2,6 +2,23 @@ import type { Forme } from "../index";
 import type fr from "../fr/systeme";
 
 const en: Forme<typeof fr> = {
+  fenetre: {
+    titre: "Window",
+    reduire: "Minimize",
+    agrandir: "Maximize",
+    restaurer: "Restore",
+    fermer: "Close",
+  },
+  etat: {
+    enJeu: "Playing",
+    enLigne: "Online",
+    invisible: "Invisible",
+    synchro: "Syncing…",
+    minutes: "{m} min",
+    heures: "{h} h {m}",
+    ouvrirFiche: "Open {titre}'s page",
+    changer: "{etat} — change what your friends see",
+  },
   demo: {
     pastille: "Demo",
     texte: "You're trying Torii in your browser, on a made-up library.",

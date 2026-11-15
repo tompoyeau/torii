@@ -194,7 +194,7 @@ export type LibraryFilter =
   | "installed"
   | "hidden"
   // Ajout manuel et detection automatique reunis : deux plateformes, une seule
-  // categorie dans la barre laterale (cf. `HORS_LAUNCHER`).
+  // categorie dans le menu Plateforme (cf. `HORS_LAUNCHER`).
   | "horsLauncher"
   | PlatformId;
 

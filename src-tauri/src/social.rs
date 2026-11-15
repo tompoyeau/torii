@@ -8,7 +8,6 @@
 
 use crate::accounts::secrets;
 use crate::journal;
-use crate::platforms::id_set;
 use crate::procwatch;
 use crate::toast;
 use std::collections::HashMap;
@@ -783,9 +782,10 @@ pub fn spawn_heartbeat(app: tauri::AppHandle) {
 }
 
 /// L'identifiant du jeu en cours sur cette machine, ou `None`. Sert uniquement à repérer
-/// un changement local entre deux battements.
+/// un changement local entre deux battements — la même partie que celle qu'on publie
+/// (`procwatch::partie_a_montrer`), sinon Wallpaper Engine qui démarre presserait le rythme.
 fn jeu_courant(app: &tauri::AppHandle) -> Option<String> {
-    procwatch::current_game(app).map(|(id, _, _)| id)
+    procwatch::partie_a_montrer(app).map(|(id, _, _)| id)
 }
 
 /// Ce qu'un battement laisse derrière lui : l'état de publication, et le rythme du suivant.
@@ -889,9 +889,10 @@ fn beat(
         return Battement { publie: false, cadence: cadence_pour(false, lu.as_ref()) };
     }
 
-    // Un jeu réduit au silence est traité comme si rien ne tournait.
-    let muted = id_set::PRESENCE_MUTED.load(&dir);
-    let game = procwatch::current_game(app).filter(|(id, _, _)| !muted.contains(id));
+    // La partie à publier : ni un jeu réduit au silence, ni un logiciel comme Wallpaper
+    // Engine (`partie_a_montrer`). Un jeu écarté laisse la place au suivant au lieu de
+    // tout masquer — c'est ce que faisait l'ancien filtre sur la seule partie la plus récente.
+    let game = procwatch::partie_a_montrer(app);
     let je_joue = game.is_some();
 
     let Some(mut presence) = presence_for(&prefs, game, procwatch::idle_seconds()) else {

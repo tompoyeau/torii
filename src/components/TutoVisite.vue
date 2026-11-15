@@ -24,7 +24,7 @@ const ETAPES = computed(() =>
   })),
 );
 
-/** Une fenêtre trop étroite cache la barre latérale : on saute ce qu'on ne peut pas montrer. */
+/** Une fenêtre trop étroite cache les onglets : on saute ce qu'on ne peut pas montrer. */
 const elementDe = (cible: string) => {
   const el = document.querySelector<HTMLElement>(`[data-tuto="${cible}"]`);
   return el && el.offsetParent !== null ? el : null;

@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { usePossession } from "../composables/usePossession";
 import { useStore } from "../composables/useStore";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
+import { useImagesWishlist } from "../composables/useImagesWishlist";
 import { libelleFin } from "../lib/boutique";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
@@ -11,7 +12,7 @@ import { t } from "../i18n";
 import type { StoreItem } from "../types";
 import StorePossede from "./StorePossede.vue";
 
-/** Carte paysage d'une offre du comparateur (carrousel « Promos du moment »). */
+/** Carte paysage d'une offre du comparateur (carrousels « Promos du moment », wishlist). */
 const props = defineProps<{ offre: StoreItem }>();
 
 const { openProduct } = useStore();
@@ -21,7 +22,9 @@ const { isWishlisted, toggle } = useToriiWishlist();
 const etat = computed(() => possession(props.offre.title));
 const fin = computed(() => libelleFin(props.offre.expiry));
 const prix = (montant: number) => formatPrix(montant, props.offre.currency);
-const { src, onError } = useImageCascade(() => [props.offre.bannerUrl, props.offre.coverUrl]);
+// En dernier recours, les images de la wishlist si le jeu y est (`useImagesWishlist`).
+const imagesWishlist = useImagesWishlist();
+const { src, onError } = useImageCascade(() => [props.offre.bannerUrl, props.offre.coverUrl, ...imagesWishlist(props.offre.gameId)]);
 </script>
 
 <template>

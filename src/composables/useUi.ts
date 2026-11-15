@@ -52,11 +52,13 @@ const state = reactive<UiState>({
   friendProfileKey: null,
   friendLibraryId: null,
   pageWeb: null,
-  filter: MODE_WEB ? "all" : initialPrefs.defaultFilter,
+  // « Installés » n'est plus une vue mais la bascule « Installés uniquement », valable sur
+  // toutes : la préférence de démarrage qui le choisit ouvre « Tous », bascule allumée.
+  filter: MODE_WEB || initialPrefs.defaultFilter === "installed" ? "all" : initialPrefs.defaultFilter,
   query: "",
   sort: MODE_WEB ? "alpha" : initialPrefs.defaultSort,
   listView: initialPrefs.listView,
-  installedOnly: false,
+  installedOnly: !MODE_WEB && initialPrefs.defaultFilter === "installed",
   categories: [],
   settingsOpen: false,
   settingsCategory: "general",

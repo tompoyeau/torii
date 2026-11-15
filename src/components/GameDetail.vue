@@ -739,6 +739,16 @@ function retour() {
             @steam="ouvrirSteam"
           />
 
+          <!-- Ce qu'est le jeu avant ce qui s'y passe : « À propos » passe devant les actualités. -->
+          <div v-if="description" class="detail-section">
+            <div class="titre-ligne">
+              <h4>{{ t("fiche.apropos") }}</h4>
+              <span v-if="description.anglais" class="etiquette">{{ t("fiche.enAnglais") }}</span>
+            </div>
+            <p class="detail-desc" :lang="description.anglais ? 'en' : undefined">{{ description.texte }}</p>
+            <StoreSheetBlocs v-if="steam" :key="game.id" :blocs="steam.description" />
+          </div>
+
           <GameDetailNews
             v-if="fiche && fiche.actualites.length"
             class="detail-section"
@@ -762,15 +772,6 @@ function retour() {
             :dlc="fiche.dlc"
             :possedes="fiche.dlcPossedes"
           />
-
-          <div v-if="description" class="detail-section">
-            <div class="titre-ligne">
-              <h4>{{ t("fiche.apropos") }}</h4>
-              <span v-if="description.anglais" class="etiquette">{{ t("fiche.enAnglais") }}</span>
-            </div>
-            <p class="detail-desc" :lang="description.anglais ? 'en' : undefined">{{ description.texte }}</p>
-            <StoreSheetBlocs v-if="steam" :key="game.id" :blocs="steam.description" />
-          </div>
 
           <StoreSheetFacts v-if="steam" class="detail-section" :steam="steam" :hors-steam="!steamAppid" />
 
@@ -1043,8 +1044,7 @@ function retour() {
   border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(14, 10, 20, 0.55);
   color: #fff; backdrop-filter: blur(8px); cursor: pointer;
 }
-.lb-close { top: 20px; right: 22px; width: 42px; height: 42px; }
-.lb-close svg { width: 20px; height: 20px; }
+.lb-close { top: 20px; right: 22px; width: 42px; height: 42px; }.lb-close svg { width: 20px; height: 20px; }
 .lb-nav { top: 50%; transform: translateY(-50%); width: 48px; height: 48px; }
 .lb-nav.prev { left: 20px; }
 .lb-nav.next { right: 20px; }
@@ -1055,7 +1055,8 @@ function retour() {
   font-family: var(--mono); font-size: 12.5px; color: rgba(255, 255, 255, 0.85);
   padding: 5px 12px; border-radius: 99px; background: rgba(14, 10, 20, 0.55); backdrop-filter: blur(8px);
 }
-.detail-aside { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px; }
+/* Collée sous la barre du haut, qui passe par-dessus la fiche (`--hauteur-barre-fiche`). */
+.detail-aside { position: sticky; top: calc(var(--hauteur-barre-fiche) + 20px); display: flex; flex-direction: column; gap: 16px; }
 .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 22px; }
 .stat-play {
   font-family: var(--mono); font-size: 44px; font-weight: 700; letter-spacing: -0.03em; color: var(--text);

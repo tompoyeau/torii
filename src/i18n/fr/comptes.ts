@@ -1,16 +1,16 @@
 /** Comptes des launchers (Paramètres) et connexion au réseau Torii. */
 export default {
   launchers: {
-    groupe: "Comptes — jeux possédés (installés ou non)",
+    groupe: "Tes launchers",
     // 🔑 Un seul gabarit pour cinq launchers : le nom est interpolé. Les phrases diffèrent
     // pourtant par l'article (« de Steam », « d'Epic Games ») — d'où `fenetre`, où la
     // préposition fait partie de la valeur passée.
     aide:
-      "Connecte-toi à ton compte {nom} pour importer toute ta bibliothèque (installés ou non). Aucun mot de passe transmis à Torii — tu te connectes dans la fenêtre officielle {fenetre}.",
+      "Connecte ton compte {nom} pour retrouver tous tes jeux, installés ou non. Tu te connectes sur la page officielle {fenetre} : Torii ne voit jamais ton mot de passe.",
     aideSteam:
-      "Connecte-toi à ton compte Steam pour importer toute ta bibliothèque (installés ou non) et ta wishlist. Aucune clé, aucun mot de passe transmis à Torii — tu te connectes dans la fenêtre officielle de Steam.",
+      "Connecte ton compte Steam pour retrouver tous tes jeux, installés ou non, et ta wishlist. Tu te connectes sur la page officielle de Steam : Torii ne voit jamais ton mot de passe.",
     aideBattlenet:
-      "Connecte-toi à ton compte Battle.net pour importer ta bibliothèque Blizzard. Aucun mot de passe transmis à Torii — tu te connectes dans la fenêtre officielle de Battle.net.",
+      "Connecte ton compte Battle.net pour retrouver tes jeux Blizzard. Tu te connectes sur la page officielle de Battle.net : Torii ne voit jamais ton mot de passe.",
     fenetreEpic: "d'Epic Games",
     fenetreEa: "d'EA",
     fenetreGog: "de GOG",
@@ -27,7 +27,7 @@ export default {
     cleAvancee: "Utiliser une clé API (avancé)",
     cleChamp: "Clé API Steam (32 caractères)",
     enregistrer: "Enregistrer",
-    stockage: "Les identifiants sont stockés localement, sur cette machine uniquement.",
+    stockage: "Tes connexions restent sur ce PC.",
     etatConnecte: "Connecté",
     etatNonConnecte: "Non connecté",
     resynchroniser: "Resynchroniser",

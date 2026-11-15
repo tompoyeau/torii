@@ -3,7 +3,6 @@ import type fr from "../fr/boutique";
 
 const en: Forme<typeof fr> = {
   titre: "Store",
-  sousTitre: "Discover games and compare prices across every PC store.",
   rechercher: "Search for a game to buy…",
   effacer: "Clear",
   lancerRecherche: "Search",
@@ -75,7 +74,6 @@ const en: Forme<typeof fr> = {
     },
     promos: {
       titre: "Deals right now",
-      sousTitre: "The most-followed deals, across every store.",
     },
     classements: {
       titre: "Charts",
@@ -85,12 +83,10 @@ const en: Forme<typeof fr> = {
     },
     offerts: {
       titre: "Free to keep right now",
-      sousTitre: "Games you can claim for free before the deadline.",
       aucun: "No free games right now.",
     },
     genres: {
       titre: "Browse by genre",
-      sousTitre: "The genre's best sellers, at the best price.",
       action: "Action",
       aventure: "Adventure",
       rpg: "RPG",
@@ -104,7 +100,6 @@ const en: Forme<typeof fr> = {
     },
     gratuits: {
       titre: "Popular free-to-play",
-      sousTitre: "The most popular free games right now.",
     },
     toutes: {
       titre: "All deals",
@@ -242,9 +237,6 @@ const en: Forme<typeof fr> = {
       achats: "In-game purchases",
       achatsAleatoires: "In-game purchases (random items)",
     },
-    avertissement:
-      "Prices are indicative ({devise}). Use the eye icon to hide sellers you don't " +
-      "want to see. Purchases happen on the seller's store.",
   },
 
   wishlist: {

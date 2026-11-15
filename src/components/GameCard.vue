@@ -188,14 +188,14 @@ function toggleFavorite() {
 .card:hover .cover-play { transform: scale(1); }
 .card-meta { display: flex; flex-direction: column; gap: 3px; padding: 0 2px; }
 .card-name { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+/* 🔑 Chaque morceau reste entier (`nowrap`) et c'est la ligne qui passe à la ligne : sinon une
+   carte étroite tassait chacun dans sa propre colonne (« Epic / Games », « 6 / h »,
+   « Non / installé »), dès que la plateforme avait un nom en deux mots. */
 .card-sub {
   font-family: var(--mono); font-size: 11px; color: var(--text-faint);
-  display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; font-variant-numeric: tabular-nums;
 }
-/* Sur deux colonnes étroites, chaque morceau passait à la ligne dans sa propre case. */
-@media (max-width: 620px) {
-  .card-sub { flex-wrap: wrap; gap: 0 6px; }
-}
+.card-sub > span { white-space: nowrap; }
 .card-sub .installed { color: var(--manual); }
 .card-sub .not-installed { color: var(--text-faint); }
 .cover.uninstalled { filter: saturate(0.85) brightness(0.9); }

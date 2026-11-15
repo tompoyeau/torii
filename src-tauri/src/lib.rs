@@ -1761,6 +1761,24 @@ fn start_game_watch(app: tauri::AppHandle, game_id: String, install_dir: String)
     }
 }
 
+/// La partie en cours sur ce PC, telle que la voit le surveillant de process.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JeuEnCours {
+    id: String,
+    title: String,
+    /// Démarrage réel du jeu, en secondes Unix.
+    since: i64,
+}
+
+/// Ce qui tourne en ce moment, pour la bande du haut (« En jeu · Hades II · 1 h 12 ») : la
+/// même partie que celle que voient les amis (`procwatch::partie_a_montrer`, qui écarte les
+/// jeux muets et les logiciels). `None` si rien ne tourne. Lecture seule.
+#[tauri::command]
+fn jeu_en_cours(app: tauri::AppHandle) -> Option<JeuEnCours> {
+    procwatch::partie_a_montrer(&app).map(|(id, title, since)| JeuEnCours { id, title, since })
+}
+
 /* ── Service social : comptes, amis, présence ──────────────────────────────── */
 
 /// Dossier de config — facteur commun de toutes les commandes sociales.
@@ -2387,6 +2405,7 @@ pub fn run() {
             get_window_prefs,
             set_window_prefs,
             start_game_watch,
+            jeu_en_cours,
             log_front_error,
             open_log,
             page_web::page_ouvrir,

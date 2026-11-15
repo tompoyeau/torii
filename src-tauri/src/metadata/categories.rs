@@ -89,6 +89,26 @@ fn ecrire(dir: &Path, cache: &CacheTags) {
     }
 }
 
+/// Tags Steam qui font d'un « jeu » un logiciel : Utilitaires (87) et Logiciel (8013).
+const LOGICIEL: [u64; 2] = [87, 8013];
+
+/// Un logiciel plutôt qu'un jeu (Wallpaper Engine…) ?
+///
+/// 🔑 Le type Steam ne le dit pas : `appdetails` renvoie `"game"` pour Wallpaper Engine. Ce
+/// sont les joueurs qui le classent, par leurs tags : Utilitaires ou Logiciel parmi les cinq
+/// plus votés. Mesuré sur une bibliothèque de 911 jeux en cache (15/11/2026) : seul Wallpaper
+/// Engine répond, aucun vrai jeu n'est pris pour un logiciel.
+///
+/// Lit le cache seul, jamais le réseau : appelé à chaque relevé de la partie en cours.
+pub fn est_logiciel(dir: &Path, appid: u64) -> bool {
+    lire(dir).get(&appid).is_some_and(|e| logiciel_selon(&e.tags))
+}
+
+/// La règle elle-même, sur les tags d'un jeu (du plus voté au moins voté).
+fn logiciel_selon(tags: &[u64]) -> bool {
+    tags.iter().take(5).any(|t| LOGICIEL.contains(t))
+}
+
 /// Oublie les tags d'un jeu (bouton « Actualiser les infos »).
 pub fn oublier(dir: &Path, appid: u64) {
     let _verrou = VERROU.lock();
@@ -416,6 +436,16 @@ mod tests {
         assert_eq!(lire_item(&item), Some((368360, vec![14139, 4486])));
         // Steam n'a pas de fiche : `success` 15, aucun tag.
         assert_eq!(lire_item(&json!({ "appid": 1, "success": 15 })), None);
+    }
+
+    #[test]
+    fn un_logiciel_se_reconnait_a_ses_premiers_tags() {
+        // Wallpaper Engine (431960), tags relevés le 15/11/2026 : Utilitaires en tête.
+        assert!(logiciel_selon(&[87, 4085, 8013, 84, 872, 3839]));
+        // Un jeu dont un tag « Logiciel » traîne loin dans la liste reste un jeu.
+        assert!(!logiciel_selon(&[1662, 1685, 21, 4182, 1774, 8013]));
+        // Sans tags, on ne sait rien : c'est un jeu.
+        assert!(!logiciel_selon(&[]));
     }
 
     #[test]

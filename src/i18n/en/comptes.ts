@@ -3,13 +3,13 @@ import type fr from "../fr/comptes";
 
 const en: Forme<typeof fr> = {
   launchers: {
-    groupe: "Accounts — games you own (installed or not)",
+    groupe: "Your launchers",
     aide:
-      "Sign in to your {nom} account to import your whole library (installed or not). No password is shared with Torii — you sign in through {fenetre} official window.",
+      "Connect your {nom} account to get all your games, installed or not. You sign in on {fenetre} official page: Torii never sees your password.",
     aideSteam:
-      "Sign in to your Steam account to import your whole library (installed or not) and your wishlist. No key and no password are shared with Torii — you sign in through Steam's official window.",
+      "Connect your Steam account to get all your games, installed or not, and your wishlist. You sign in on Steam's official page: Torii never sees your password.",
     aideBattlenet:
-      "Sign in to your Battle.net account to import your Blizzard library. No password is shared with Torii — you sign in through Battle.net's official window.",
+      "Connect your Battle.net account to get your Blizzard games. You sign in on Battle.net's official page: Torii never sees your password.",
     fenetreEpic: "Epic Games'",
     fenetreEa: "EA's",
     fenetreGog: "GOG's",
@@ -26,7 +26,7 @@ const en: Forme<typeof fr> = {
     cleAvancee: "Use an API key (advanced)",
     cleChamp: "Steam API key (32 characters)",
     enregistrer: "Save",
-    stockage: "Credentials are stored locally, on this machine only.",
+    stockage: "Your sign-ins stay on this PC.",
     etatConnecte: "Connected",
     etatNonConnecte: "Not connected",
     resynchroniser: "Sync again",

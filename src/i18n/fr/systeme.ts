@@ -1,5 +1,24 @@
 /** Bandeaux transverses (démo, mise à jour) et messages techniques montrés à l'écran. */
 export default {
+  // Commandes de la fenêtre, dessinées par Torii (`ControlesFenetre`).
+  fenetre: {
+    titre: "Fenêtre",
+    reduire: "Réduire",
+    agrandir: "Agrandir",
+    restaurer: "Restaurer",
+    fermer: "Fermer",
+  },
+  // Ton état, à droite de la bande du haut (`EtatJoueur`).
+  etat: {
+    enJeu: "En jeu",
+    enLigne: "En ligne",
+    invisible: "Invisible",
+    synchro: "Synchronisation…",
+    minutes: "{m} min",
+    heures: "{h} h {m}",
+    ouvrirFiche: "Ouvrir la fiche de {titre}",
+    changer: "{etat} — changer ce que tes amis voient",
+  },
   demo: {
     pastille: "Démo",
     texte: "Tu essaies Torii dans ton navigateur, sur une bibliothèque inventée.",

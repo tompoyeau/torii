@@ -6,12 +6,14 @@ import { useStoreCategories } from "../composables/useStoreCategories";
 import { usePossession } from "../composables/usePossession";
 import { useQuandVisible } from "../composables/useQuandVisible";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
+import { useImagesWishlist } from "../composables/useImagesWishlist";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
 import { MODE_WEB } from "../lib/mode";
-import { etiquetteIntl, t, type Cle } from "../i18n";
+import { etiquetteIntl, t } from "../i18n";
 import type { StoreBrowseSort, StoreItem, StoreSuggestion } from "../types";
 import MenuCategories, { type OptionCategorie } from "./MenuCategories.vue";
+import MenuChoix, { type OptionChoix } from "./MenuChoix.vue";
 import StoreDealCard from "./StoreDealCard.vue";
 import StoreGenres from "./StoreGenres.vue";
 import StoreGiveaways from "./StoreGiveaways.vue";
@@ -62,27 +64,21 @@ const totalCategories = computed(() =>
   t("boutique.categories.total", { n: cats.total.value, nombre: cats.total.value.toLocaleString(etiquetteIntl.value) }),
 );
 
-const SORTS = computed<{ key: StoreSort; label: string }[]>(() => [
-  { key: "featured", label: t("boutique.tris.featured") },
-  { key: "savings", label: t("boutique.tris.savings") },
-  { key: "price", label: t("boutique.tris.price") },
-  { key: "recent", label: t("boutique.tris.recent") },
-  { key: "rating", label: t("boutique.tris.rating") },
+/** Les tris, en menu déroulant (`MenuChoix`) comme dans la bibliothèque. */
+const optionsTrisCategories = computed<OptionChoix<StoreBrowseSort>[]>(() =>
+  TRIS_CATEGORIES.map((tri) => ({ cle: tri, nom: t(`boutique.categories.tris.${tri}`) })),
+);
+const SORTS = computed<OptionChoix<StoreSort>[]>(() => [
+  { cle: "featured", nom: t("boutique.tris.featured") },
+  { cle: "savings", nom: t("boutique.tris.savings") },
+  { cle: "price", nom: t("boutique.tris.price") },
+  { cle: "recent", nom: t("boutique.tris.recent") },
+  { cle: "rating", nom: t("boutique.tris.rating") },
 ]);
+const libelleTri = computed(() => SORTS.value.find((s) => s.cle === sort.value)?.nom ?? "");
 
 // --- Accueil ---
 
-/** Raccourcis vers les rayons, en tête de page (ancres). */
-const NAV: { cle: string; cible: string }[] = [
-  { cle: "promos", cible: "rayon-promos" },
-  { cle: "ventes", cible: "rayon-classements" },
-  { cle: "nouveautes", cible: "rayon-classements" },
-  { cle: "aVenir", cible: "rayon-classements" },
-  { cle: "offerts", cible: "rayon-offerts" },
-  { cle: "genres", cible: "rayon-genres" },
-  { cle: "gratuits", cible: "rayon-gratuits" },
-  { cle: "toutes", cible: "rayon-toutes" },
-];
 function allerA(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -176,9 +172,13 @@ const price = (montant: number, it: StoreItem) => formatPrix(montant, it.currenc
 
 /** Jaquette ITAD si fournie et non cassée, sinon dégradé (géré côté template). */
 const failed = ref(new Set<string>());
+/** Jaquette du comparateur, sinon celles de la wishlist si le jeu y est (`useImagesWishlist`). */
+const imagesWishlist = useImagesWishlist();
 function coverSrc(it: StoreItem): string | null {
-  const url = it.coverUrl || null;
-  return url && !failed.value.has(url) ? url : null;
+  for (const url of [it.coverUrl, ...imagesWishlist(it.gameId)]) {
+    if (url && !failed.value.has(url)) return url;
+  }
+  return null;
 }
 function onCoverError(url: string | null) {
   if (url) failed.value = new Set(failed.value).add(url);
@@ -190,7 +190,6 @@ function onCoverError(url: string | null) {
     <div class="store-head">
       <div class="store-title">
         <h1>{{ t("boutique.titre") }}</h1>
-        <p class="sub">{{ t("boutique.sousTitre") }}</p>
       </div>
       <div class="store-outils">
         <div class="store-search-wrap">
@@ -265,16 +264,18 @@ function onCoverError(url: string | null) {
           <span v-if="cats.etat.value === 'pret'" class="n">{{ totalCategories }}</span>
         </div>
         <span class="spacer" />
-        <button
-          v-for="tri in TRIS_CATEGORIES"
-          :key="tri"
-          class="chip"
-          :class="{ active: cats.tri.value === tri }"
-          :aria-pressed="cats.tri.value === tri"
-          @click="cats.tri.value = tri"
+        <MenuChoix
+          class="a-droite"
+          :options="optionsTrisCategories"
+          :choisie="cats.tri.value"
+          :libelle="t(`boutique.categories.tris.${cats.tri.value}`)"
+          :nom-menu="t('bibliotheque.laterale.trier')"
+          @choisir="(tri) => (cats.tri.value = tri)"
         >
-          {{ t(`boutique.categories.tris.${tri}`) }}
-        </button>
+          <template #icone>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" /></svg>
+          </template>
+        </MenuChoix>
       </div>
 
       <div v-if="cats.etat.value === 'chargement' && !cats.jeux.value.length" class="empty">
@@ -306,14 +307,6 @@ function onCoverError(url: string | null) {
 
     <div v-else class="accueil">
       <template v-if="!activeQuery">
-        <nav class="raccourcis no-scrollbar" :aria-label="t('boutique.accueil.rayons')">
-          <button v-for="n in NAV" :key="n.cle" class="chip" @click="allerA(n.cible)">
-            {{ t(`boutique.accueil.nav.${n.cle}` as Cle) }}
-          </button>
-        </nav>
-
-        <StoreWishlistDeals v-if="!MODE_WEB" />
-
         <StoreHero v-if="vedette.length" :jeux="vedette" />
         <div v-else-if="homeEtat === 'chargement' || homeEtat === 'vide'" class="vedette-fantome" aria-hidden="true">
           <span class="spin" />
@@ -327,7 +320,6 @@ function onCoverError(url: string | null) {
           v-if="promos.length"
           id="rayon-promos"
           :titre="t('boutique.accueil.promos.titre')"
-          :sous-titre="t('boutique.accueil.promos.sousTitre')"
           format="paysage"
           :nombre="promos.length"
         >
@@ -336,6 +328,9 @@ function onCoverError(url: string | null) {
           </template>
           <StoreDealCard v-for="d in promos" :key="d.gameId" :offre="d" />
         </StoreRow>
+
+        <!-- Les promos de sa wishlist, juste sous celles du moment et sous la même forme. -->
+        <StoreWishlistDeals v-if="!MODE_WEB" />
 
         <div id="rayon-classements" class="duo">
           <StoreRanking :ventes="home?.topSellers ?? []" :etat-ventes="homeEtat" />
@@ -347,7 +342,6 @@ function onCoverError(url: string | null) {
         <div id="rayon-gratuits" ref="gratuitsEl">
           <StoreRow
             :titre="t('boutique.accueil.gratuits.titre')"
-            :sous-titre="t('boutique.accueil.gratuits.sousTitre')"
             format="paysage"
             :nombre="gratuits.items.length"
           >
@@ -382,17 +376,19 @@ function onCoverError(url: string | null) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none" /><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none" /></svg>
             {{ randomLoading ? t("boutique.pioche") : t("boutique.auHasard") }}
           </button>
-          <template v-if="!activeQuery">
-            <button
-              v-for="s in SORTS"
-              :key="s.key"
-              class="chip"
-              :class="{ active: sort === s.key && !randomMode }"
-              @click="setSort(s.key)"
-            >
-              {{ s.label }}
-            </button>
-          </template>
+          <MenuChoix
+            v-if="!activeQuery"
+            class="a-droite"
+            :options="SORTS"
+            :choisie="randomMode ? null : sort"
+            :libelle="randomMode ? t('boutique.hasard') : libelleTri"
+            :nom-menu="t('bibliotheque.laterale.trier')"
+            @choisir="setSort"
+          >
+            <template #icone>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" /></svg>
+            </template>
+          </MenuChoix>
         </div>
 
         <div v-if="loading && !items.length" class="empty">
@@ -463,9 +459,8 @@ function onCoverError(url: string | null) {
 
 <style scoped>
 .store { min-width: 0; }
-.store-head { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
+.store-head { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
 .store-title h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
-.store-title .sub { margin: 4px 0 0; font-size: 13.5px; color: var(--text-faint); }
 /* Recherche par titre et catégories : côte à côte, jamais l'une sous l'autre. Base de 420 px : sous
    cette place, l'ensemble passe sous le titre au lieu d'écraser le champ jusqu'à le rendre illisible. */
 .store-outils { display: flex; gap: 8px; margin-left: auto; flex: 1 1 420px; min-width: 320px; max-width: 660px; }
@@ -524,7 +519,6 @@ function onCoverError(url: string | null) {
 /* Accueil : une colonne de rayons. `scroll-margin` : une ancre ne se cache pas sous la barre du haut. */
 .accueil { display: flex; flex-direction: column; gap: 40px; }
 .accueil > * { scroll-margin-top: 90px; }
-.raccourcis { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: -16px; }
 .lien { background: none; border: none; padding: 0 6px; color: var(--accent); font-size: 13px; font-weight: 600; }
 .lien:hover { text-decoration: underline; }
 .duo { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 28px; align-items: start; }
@@ -586,9 +580,6 @@ function onCoverError(url: string | null) {
   .store-search { padding-right: 6px; }
   .store-search .go { display: none; }
   .store-cats :deep(.cat-libelle), .store-cats :deep(.caret) { display: none; }
-  /* Les rayons sur une ligne qui défile : sur trois lignes, ils repoussaient la vedette hors de l'écran. */
-  .raccourcis { flex-wrap: nowrap; overflow-x: auto; margin: 0 -18px -12px; padding: 0 18px; }
-  .raccourcis .chip { flex: none; }
   .accueil { gap: 28px; }
   .accueil > *, #rayon-offerts { scroll-margin-top: 12px; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
