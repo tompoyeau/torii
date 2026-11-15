@@ -5,6 +5,19 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.29.0
+- **Une nouvelle navigation.** Le menu de gauche laisse la place à des onglets en haut de la fenêtre : Bibliothèque, Boutique, Wishlist et Contacts. Tes jeux gagnent toute la largeur, et la barre du haut se pare d'un effet verre quand la page défile dessous.
+- **Torii a sa propre barre de titre.** Réduire, agrandir et fermer restent à leur place habituelle, mais se fondent dans l'application. On déplace la fenêtre en tirant la barre du haut, et un double-clic l'agrandit.
+- **Ton état en un coup d'œil.** En haut à gauche, Torii affiche le jeu en cours et depuis combien de temps (un clic ouvre sa fiche), sinon ce que tes amis voient de toi : un clic suffit pour passer en ligne, montrer ton jeu ou devenir invisible.
+- **Des filtres plus simples.** Les vues tiennent sur une ligne, la plateforme et le tri passent dans des menus, et « Installés uniquement » fonctionne avec toutes les vues, Favoris compris.
+- **Contacts réunit tes amis et vos jeux en commun** sur une seule page : qui joue en ce moment, les jeux que vous partagez, la liste de tes amis et ton code d'ami. Ajouter un ami se fait dans une fenêtre dédiée.
+- **Changer d'onglet est instantané.** Un écran déjà visité revient tel que tu l'as laissé, sans tout recharger, même avec une grande bibliothèque.
+- **Boutique** : « Ta wishlist en promo » devient un rayon comme les autres, sous « Promos du moment », et tes jeux suivis gardent leur jaquette partout. L'accueil est plus épuré, et les tris passent dans des menus.
+- **Wallpaper Engine n'apparaît plus comme un jeu en cours**, ni chez toi ni chez tes amis. Les logiciels rangés parmi les jeux Steam sont reconnus et laissés de côté.
+- **Des jaquettes de la même taille dans toutes les vues** : une vue avec peu de jeux ne les rétrécit plus.
+- **Fiches** : « À propos » passe avant les actualités, et la colonne de droite ne glisse plus sous la barre du haut.
+- **Des Paramètres plus clairs**, avec des explications courtes qui disent ce que chaque réglage change pour toi.
+
 ## 0.28.0
 - **Ajouter un jeu en partant du fichier.** Dépose l'exécutable ou le raccourci du jeu dans « Ajouter un jeu », ou choisis-le : Torii en tire le titre, le dossier et les options de lancement, puis te propose sa fiche (jaquette, description, captures) à choisir parmi les jeux qui portent ce nom.
 - **Les jeux déjà sur ton PC, à cocher.** Indique où tu ranges tes jeux : Torii y trouve ceux qu'aucun launcher ne connaît, avec ceux que Windows a déjà vus tourner, et tu ajoutes ceux que tu veux d'un coup. « Ignorer » ne les repropose plus.

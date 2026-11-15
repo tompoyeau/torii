@@ -5,6 +5,19 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.29.0
+- **A new way to get around.** The left menu makes way for tabs at the top of the window: Library, Store, Wishlist and Contacts. Your games get the full width, and the top bar turns to frosted glass when the page scrolls under it.
+- **Torii has its own title bar.** Minimize, maximize and close stay where you expect them, but blend into the app. Drag the top bar to move the window, and double-click it to maximize.
+- **Your status at a glance.** At the top left, Torii shows the game you're playing and for how long (click to open its page), otherwise what your friends see of you: one click to go online, show your game or turn invisible.
+- **Simpler filters.** Views fit on one line, platform and sorting move into menus, and “Installed only” works with every view, Favorites included.
+- **Contacts brings your friends and your games in common together** on a single page: who's playing right now, the games you share, your friends list and your friend code. Adding a friend happens in its own window.
+- **Switching tabs is instant.** A screen you already visited comes back just as you left it, without reloading, even with a large library.
+- **Store**: “Your wishlist on sale” becomes a shelf like the others, below “Deals right now”, and the games you follow keep their cover everywhere. The home page is cleaner, and sorting moves into menus.
+- **Wallpaper Engine no longer shows up as a game in progress**, for you or your friends. Software listed among Steam games is recognized and left out.
+- **Covers are the same size in every view**: a view with few games no longer shrinks them.
+- **Game pages**: “About” comes before the news, and the right column no longer slides under the top bar.
+- **Clearer Settings**, with short explanations of what each setting changes for you.
+
 ## 0.28.0
 - **Add a game starting from its file.** Drop the game's executable or shortcut into “Add a game”, or choose it: Torii reads the title, the folder and the launch options from it, then offers its sheet (cover, description, screenshots) to pick from the games with that name.
 - **Games already on your PC, ready to check.** Tell Torii where you keep your games: it finds the ones no launcher knows about, along with those Windows has already seen running, and you add the ones you want in one go. “Ignore” stops suggesting them.
