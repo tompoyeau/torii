@@ -5,6 +5,15 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.28.0
+- **Add a game starting from its file.** Drop the game's executable or shortcut into “Add a game”, or choose it: Torii reads the title, the folder and the launch options from it, then offers its sheet (cover, description, screenshots) to pick from the games with that name.
+- **Games already on your PC, ready to check.** Tell Torii where you keep your games: it finds the ones no launcher knows about, along with those Windows has already seen running, and you add the ones you want in one go. “Ignore” stops suggesting them.
+- **Launch options** for a game added by hand (`-windowed`, an emulator's ROM…), in the advanced options.
+- **A desktop shortcut becomes the real game.** Torii reads its target and tracks your sessions in the game's folder, no longer on the desktop. Games already added through a shortcut are fixed on first launch.
+- **No more silent failed additions.** A missing file or a game already in your library is reported, two games with the same title no longer overwrite each other, and editing a game keeps its cover.
+- **A newly added game is tracked right away**: its first session counts in “Recently played” and for your friends, without waiting for the next refresh.
+- **Games detected outside launchers keep their real name.** Torii no longer names them after a DLC or a similar game, and fixes the ones it had.
+
 ## 0.27.0
 - **A welcome on first launch.** A short setup helps you pick your language and region, connect your launchers and create your Torii account if you want one, then a quick tour shows you where everything is. You can skip it all in one click, and see it again in Settings → General.
 - **Torii on your phone.** With a Torii account, find the Store and your library from any browser, at app.torii-app.fr. The site installs on your home screen, and every game has its page. To see your games there, turn on sync in Settings → Torii network.

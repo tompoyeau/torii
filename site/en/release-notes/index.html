@@ -14,7 +14,7 @@
       d'être revisité.
     -->
     <title>Torii release notes — every change, version by version</title>
-    <meta name="description" content="Every new feature and fix in Torii, version by version. Latest: 0.27.0, released November 1, 2026. A unified game library for Windows, free, in English and French." />
+    <meta name="description" content="Every new feature and fix in Torii, version by version. Latest: 0.28.0. A unified game library for Windows, free, in English and French." />
     <link rel="canonical" href="https://torii-app.fr/en/release-notes/" />
     <!-- Réciproques sur les deux pages, comme partout ailleurs sur le site. -->
     <link rel="alternate" hreflang="fr" href="https://torii-app.fr/notes-de-version/" />
@@ -63,11 +63,25 @@
       </div>
 
       <div class="notes">
+        <article class="note-version" id="v0-28-0">
+          <header>
+            <h2><a href="#v0-28-0">Version 0.28.0</a></h2>
+            <span class="etiquette">Latest version</span>
+          </header>
+          <ul>
+            <li><strong>Add a game starting from its file.</strong> Drop the game's executable or shortcut into “Add a game”, or choose it: Torii reads the title, the folder and the launch options from it, then offers its sheet (cover, description, screenshots) to pick from the games with that name.</li>
+            <li><strong>Games already on your PC, ready to check.</strong> Tell Torii where you keep your games: it finds the ones no launcher knows about, along with those Windows has already seen running, and you add the ones you want in one go. “Ignore” stops suggesting them.</li>
+            <li><strong>Launch options</strong> for a game added by hand (<code>-windowed</code>, an emulator's ROM…), in the advanced options.</li>
+            <li><strong>A desktop shortcut becomes the real game.</strong> Torii reads its target and tracks your sessions in the game's folder, no longer on the desktop. Games already added through a shortcut are fixed on first launch.</li>
+            <li><strong>No more silent failed additions.</strong> A missing file or a game already in your library is reported, two games with the same title no longer overwrite each other, and editing a game keeps its cover.</li>
+            <li><strong>A newly added game is tracked right away</strong>: its first session counts in “Recently played” and for your friends, without waiting for the next refresh.</li>
+            <li><strong>Games detected outside launchers keep their real name.</strong> Torii no longer names them after a DLC or a similar game, and fixes the ones it had.</li>
+          </ul>
+        </article>
         <article class="note-version" id="v0-27-0">
           <header>
             <h2><a href="#v0-27-0">Version 0.27.0</a></h2>
             <time datetime="2026-11-01">November 1, 2026</time>
-            <span class="etiquette">Latest version</span>
           </header>
           <ul>
             <li><strong>A welcome on first launch.</strong> A short setup helps you pick your language and region, connect your launchers and create your Torii account if you want one, then a quick tour shows you where everything is. You can skip it all in one click, and see it again in Settings → General.</li>

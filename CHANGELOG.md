@@ -5,6 +5,15 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.28.0
+- **Ajouter un jeu en partant du fichier.** Dépose l'exécutable ou le raccourci du jeu dans « Ajouter un jeu », ou choisis-le : Torii en tire le titre, le dossier et les options de lancement, puis te propose sa fiche (jaquette, description, captures) à choisir parmi les jeux qui portent ce nom.
+- **Les jeux déjà sur ton PC, à cocher.** Indique où tu ranges tes jeux : Torii y trouve ceux qu'aucun launcher ne connaît, avec ceux que Windows a déjà vus tourner, et tu ajoutes ceux que tu veux d'un coup. « Ignorer » ne les repropose plus.
+- **Des options de lancement** pour un jeu ajouté à la main (`-windowed`, la ROM d'un émulateur…), dans les options avancées.
+- **Un raccourci du Bureau devient le vrai jeu.** Torii lit sa cible et suit tes parties dans le dossier du jeu, plus sur le Bureau. Les jeux déjà ajoutés par un raccourci sont corrigés au premier lancement.
+- **Plus d'ajout raté sans prévenir.** Un fichier introuvable ou un jeu déjà dans ta bibliothèque est signalé, deux jeux du même titre ne s'écrasent plus, et modifier un jeu garde sa jaquette.
+- **Un jeu ajouté est suivi tout de suite** : sa première partie compte dans « Récemment joué » et chez tes amis, sans attendre l'actualisation suivante.
+- **Les jeux détectés hors launcher gardent leur vrai nom.** Torii ne les baptise plus d'après un contenu additionnel ou un jeu voisin, et corrige ceux qui l'avaient été.
+
 ## 0.27.0
 - **Un accueil au premier lancement.** Un petit assistant t'aide à choisir ta langue et ta région, à connecter tes launchers et à créer ton compte Torii si tu le souhaites, puis une courte visite te montre où tout se trouve. Tout se passe d'un clic, et il se revoit dans Paramètres → Général.
 - **Torii sur ton téléphone.** Avec un compte Torii, retrouve la Boutique et ta bibliothèque depuis n'importe quel navigateur, sur app.torii-app.fr. Le site s'installe sur l'écran d'accueil, et chaque jeu y a sa fiche. Pour y voir tes jeux, active la synchronisation dans Paramètres → Réseau Torii.
