@@ -2256,6 +2256,15 @@ pub fn run() {
             // Détection des parties (y compris lancées hors de Torii) : un seul fil,
             // qui dort la plupart du temps. Voir `procwatch` pour le coût mesuré.
             procwatch::spawn(app.handle().clone());
+            // Jeux détectés nommés par une ancienne reconnaissance, trop permissive : revus
+            // une fois chacun, en arrière-plan (cf. `procwatch::reverifier_noms`). Le
+            // remplissage des fiches IGDB attend qu'il ait fini (`igdb::attendre_rattrapage`).
+            metadata::igdb::rattrapage_commence();
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                procwatch::reverifier_noms(&handle);
+                metadata::igdb::rattrapage_fini();
+            });
             // Jeux installés, désinstallés ou achetés : la bibliothèque suit sans F5.
             libwatch::spawn(app.handle().clone());
             // Présence : ne publie rien tant qu'aucun compte n'est connecté ET que le

@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
 const PROXY_URL: &str = "https://torii-igdb-proxy.toriiapp.workers.dev";
@@ -31,7 +32,7 @@ const STEAM_CHUNK: usize = 400; // < 500 résultats/requête
 const NONSTEAM_BATCH: usize = 12; // taille des lots émis au front
 
 /// Champs IGDB récupérés pour chaque jeu (partagés entre les deux chemins).
-const FIELDS: &str = "fields id, name, alternative_names.name, parent_game, genres.name, \
+const FIELDS: &str = "fields id, name, alternative_names.name, parent_game, version_parent, genres.name, \
 themes, game_modes, player_perspectives, external_games.uid, external_games.external_game_source, \
 summary, cover.image_id, artworks.image_id, screenshots.image_id, \
 involved_companies.company.name, involved_companies.developer, first_release_date;";
@@ -360,7 +361,7 @@ fn chercher_steam(titre: &str) -> Option<Option<u64>> {
 fn appid_unique(jeux: &[Value], cible: &str) -> Option<u64> {
     let ids: HashSet<u64> = jeux
         .iter()
-        .filter(|g| g["parent_game"].is_null() && g["version_parent"].is_null() && nom_correspond(g, cible))
+        .filter(|g| plein_droit(g) && nom_correspond(g, cible))
         .flat_map(|g| g["external_games"].as_array().into_iter().flatten())
         .filter(|e| e["external_game_source"].as_u64() == Some(STEAM_SOURCE as u64))
         .filter_map(|e| e["uid"].as_str()?.parse().ok())
@@ -775,48 +776,215 @@ fn steam_metas(appids: &[String]) -> PasseSteam {
 ///
 /// Différence avec [`name_meta`], qui exige un nom déjà exact : ici la recherche est
 /// tolérante — « Return To Moria » doit pouvoir tomber sur « The Lord of the Rings:
-/// Return to Moria ». Le garde-fou est l'**inclusion** d'un nom normalisé dans l'autre,
-/// avec un minimum de 5 caractères : sans lui, `search` renverrait toujours quelque
-/// chose et on baptiserait les jeux au hasard.
-pub fn recognize(guess: &str) -> Option<(String, IgdbMeta)> {
+/// Return to Moria ». Les règles sont celles de [`choisir`].
+///
+/// `exe` : nom du fichier lancé (« RainbowSix.exe »), qui départage les jeux d'une même
+/// série. `None` pour un moteur partagé (`javaw.exe` ne désigne aucun jeu).
+pub fn recognize(guess: &str, exe: Option<&str>) -> Option<(String, IgdbMeta)> {
     let clean = clean_title(guess);
     let target = norm(&clean);
-    if target.len() < 5 {
+    if target.len() < INCLUSION_MIN {
         return None;
     }
-
-    let body = format!("search \"{clean}\"; {FIELDS} limit 10;");
-    let Reponse::Corps(Value::Array(arr)) = query("games", &body) else {
+    let Reponse::Corps(Value::Array(arr)) = chercher_devine(&clean) else {
         return None;
     };
-    std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+    let g = choisir(&arr, &target, exe)?;
+    Some((g["name"].as_str()?.to_string(), parse_meta(g)))
+}
 
-    // Nom exact d'abord, puis la première inclusion (les résultats de `search` sont
-    // déjà classés par pertinence).
-    let mut fallback: Option<&Value> = None;
-    for g in &arr {
-        let Some(name) = g["name"].as_str() else { continue };
-        // Le nom alternatif compte ici aussi : un jeu détecté sous son titre commercial
-        // (« Overwatch 2 ») doit tomber sur l'entrée qui le porte en alias.
-        if nom_correspond(g, &target) {
-            return Some((name.to_string(), parse_meta(g)));
-        }
-        // ⚠️ LE REPLI N'ACCEPTE QUE DES JEUX DE PLEIN DROIT. Il se contente d'une
-        // inclusion d'un nom dans l'autre — assez lâche pour qu'un DLC l'emporte : le
-        // normalisé de « Overwatch 2: Invasion Bundle » CONTIENT celui d'« Overwatch 2 »,
-        // et le jeu détecté aurait pris le nom, la jaquette et la description du DLC.
-        // `parent_game` est le marqueur : vérifié chez IGDB, les jeux de base n'en ont
-        // pas, les DLC, extensions et bundles en portent toujours un.
-        if !g["parent_game"].is_null() {
-            continue;
-        }
-        let key = norm(name);
-        if fallback.is_none() && (key.contains(&target) || target.contains(&key)) {
-            fallback = Some(g);
+/// Longueur minimale d'un nom normalisé pour qu'une inclusion désigne quelque chose :
+/// « Doom » ou « Six » sont contenus dans des dizaines de titres.
+const INCLUSION_MIN: usize = 5;
+
+/// La recherche d'un titre deviné, telle que [`recognize`] la fait depuis le début : même
+/// requête, même limite, pour que [`reverifier`] voie ce que la reconnaissance avait vu.
+fn chercher_devine(clean: &str) -> Reponse {
+    let reponse = query("games", &format!("search \"{clean}\"; {FIELDS} limit 10;"));
+    if matches!(reponse, Reponse::Corps(_)) {
+        std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+    }
+    reponse
+}
+
+/// Le jeu qu'une réponse de `search` désigne pour un titre deviné (`cible`, normalisée),
+/// ou `None` si rien ne s'impose. Le jeu garde alors son titre deviné : un nom de dossier
+/// vaut mieux qu'un nom faux.
+///
+/// Dans l'ordre :
+/// 1. **Nom ou alias exact** — un jeu détecté sous son titre commercial (« Overwatch 2 »)
+///    doit tomber sur l'entrée qui le porte en alias.
+/// 2. **Inclusion d'un nom dans l'autre**, parmi les jeux de plein droit, à condition
+///    qu'elle n'en désigne **qu'un**. S'il y en a plusieurs, l'exécutable départage quand
+///    il est l'alias de l'un d'eux ; sinon, rien.
+///
+/// ⚠️ LE REPLI N'ACCEPTE QUE DES JEUX DE PLEIN DROIT (cf. [`plein_droit`]). Une inclusion
+/// est assez lâche pour qu'un DLC l'emporte : le normalisé de « Overwatch 2: Invasion
+/// Bundle » CONTIENT celui d'« Overwatch 2 ».
+///
+/// ⚠️ ET LE PREMIER JEU QUI CONTIENT LE TITRE NE SUFFIT PAS. C'était la règle, et c'était
+/// laisser trancher le classement d'IGDB : pour « Rainbow Six », cinq jeux de plein droit
+/// contiennent le titre (Siege, celui de 1998, Lone Wolf, Extraction, une compilation).
+/// Une règle « le plus court, que tous les autres contiennent » ne vaudrait pas mieux :
+/// « Tom Clancy's Rainbow Six » est contenu dans le nom de toute la série, « The Witcher »
+/// dans celui de ses suites. Réponses réelles du 15/11/2026 reprises dans les tests.
+fn choisir<'a>(jeux: &'a [Value], cible: &str, exe: Option<&str>) -> Option<&'a Value> {
+    if let Some(g) = jeux.iter().find(|g| nom_correspond(g, cible)) {
+        return Some(g);
+    }
+    if cible.len() < INCLUSION_MIN {
+        return None;
+    }
+    let candidats: Vec<&Value> = jeux
+        .iter()
+        .filter(|g| plein_droit(g))
+        .filter(|g| {
+            let Some(cle) = g["name"].as_str().map(norm) else { return false };
+            // Le titre deviné est une partie du nom (« Return To Moria »), ou le nom une
+            // partie du titre deviné (un suffixe de dossier : « Hades II Beta »).
+            cle.contains(cible) || (cle.len() >= INCLUSION_MIN && cible.contains(cle.as_str()))
+        })
+        .collect();
+
+    // 🔑 L'exécutable départage : IGDB range parfois le nom du fichier lancé parmi les
+    // alias (« RainbowSix.exe » chez Siege, « R6-Extraction.exe » chez Extraction). Il ne
+    // sert qu'entre jeux déjà retenus par l'inclusion : un nom de fichier générique
+    // (« Game.exe ») ne doit pas pouvoir baptiser seul un jeu.
+    if let Some(exe) = exe {
+        if let Some(g) = un_seul(candidats.iter().copied().filter(|g| alias_exe(g, exe))) {
+            return Some(g);
         }
     }
-    let g = fallback?;
-    Some((g["name"].as_str()?.to_string(), parse_meta(g)))
+    un_seul(candidats.into_iter())
+}
+
+/// Un jeu de plein droit, ni contenu additionnel ni édition d'un autre.
+///
+/// - `parent_game` : vérifié chez IGDB, les jeux de base n'en ont pas, les DLC, extensions
+///   et saisons en portent toujours un.
+/// - `version_parent` : les éditions (« Return to Moria - Collector's Edition ») ne sont
+///   PAS rattachées par `parent_game`, mais par ce champ. Sans lui, un jeu et son édition
+///   collector compteraient pour deux jeux, et le titre ne désignerait plus rien.
+///   Vérifié le 15/11/2026 : l'édition le porte, les suites (Siege, Extraction) non.
+fn plein_droit(g: &Value) -> bool {
+    g["parent_game"].is_null() && g["version_parent"].is_null()
+}
+
+/// L'unique jeu de la liste (une réponse peut citer deux fois le même), sinon `None`.
+fn un_seul<'a>(jeux: impl Iterator<Item = &'a Value>) -> Option<&'a Value> {
+    let mut seul: Option<&Value> = None;
+    for g in jeux {
+        match seul {
+            Some(s) if s["id"] != g["id"] => return None,
+            Some(_) => {}
+            None => seul = Some(g),
+        }
+    }
+    seul
+}
+
+/// Le jeu porte-t-il le nom de cet exécutable parmi ses alias ? (casse ignorée)
+fn alias_exe(g: &Value, exe: &str) -> bool {
+    g["alternative_names"].as_array().is_some_and(|noms| {
+        noms.iter()
+            .filter_map(|n| n["name"].as_str())
+            .any(|n| n.trim().eq_ignore_ascii_case(exe))
+    })
+}
+
+/// L'adresse est-elle une image d'IGDB ? Distingue une jaquette posée par la
+/// reconnaissance d'une image choisie à la main.
+pub fn image_igdb(url: &str) -> bool {
+    url.starts_with(IMG)
+}
+
+/// Le rattrapage des jeux détectés (`procwatch::reverifier_noms`) est-il en cours ?
+static RATTRAPAGE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+
+/// Au plus, ce que [`fill_metadata`] attend la fin du rattrapage : hors ligne, chaque jeu
+/// à revoir coûte un délai d'expiration, et l'écran attend ses fiches.
+const ATTENTE_RATTRAPAGE: Duration = Duration::from_secs(20);
+
+/// À appeler AVANT de lancer le fil du rattrapage, depuis le fil qui démarre l'application :
+/// ainsi aucun remplissage ne peut passer devant.
+pub fn rattrapage_commence() {
+    if let Ok(mut en_cours) = RATTRAPAGE.0.lock() {
+        *en_cours = true;
+    }
+}
+
+pub fn rattrapage_fini() {
+    if let Ok(mut en_cours) = RATTRAPAGE.0.lock() {
+        *en_cours = false;
+    }
+    RATTRAPAGE.1.notify_all();
+}
+
+/// 🔑 POURQUOI LE REMPLISSAGE ATTEND. Le rattrapage oublie la fiche mémorisée sous l'id d'un
+/// jeu renommé ; or [`fill_metadata`] charge le cache en entrant et le réécrit en sortant.
+/// Lancé en même temps, il remettrait la fiche du mauvais jeu — et l'interface, qui comble
+/// avec elle les champs vides, la réafficherait sur le jeu corrigé, pour toujours.
+fn attendre_rattrapage() {
+    let Ok(en_cours) = RATTRAPAGE.0.lock() else { return };
+    let _ = RATTRAPAGE.1.wait_timeout_while(en_cours, ATTENTE_RATTRAPAGE, |en_cours| *en_cours);
+}
+
+/// Ce qu'il faut faire d'un jeu détecté nommé par une version antérieure de
+/// [`recognize`] (cf. [`reverifier`]).
+pub enum Reverification {
+    /// Son nom tient toujours, ou ne vient pas de la reconnaissance : on n'y touche pas.
+    Garder,
+    /// Les règles actuelles désignent un autre jeu.
+    Renommer(String, IgdbMeta),
+    /// Le nom venait de la reconnaissance, mais plus rien ne s'impose : le jeu reprend
+    /// son titre deviné.
+    Rendre,
+    /// Pas de réponse : on retentera au prochain lancement.
+    Panne,
+    /// Limite du proxy atteinte : comme `Panne`, et il faut arrêter la passe.
+    Limite,
+}
+
+/// Rejoue la reconnaissance d'un jeu détecté dont le titre actuel (`titre`) n'est plus son
+/// titre deviné (`guess`), et dit si ce titre doit changer.
+///
+/// 🔑 UN TITRE QUI N'EST LE NOM D'AUCUN RÉSULTAT N'EST PAS À NOUS. Avant les règles
+/// actuelles, la reconnaissance prenait le nom d'un des jeux de cette même recherche —
+/// « Rainbow Six » était devenu « Take-Down - Missions in Korea », un DLC de 2001. Un
+/// titre qu'on n'y retrouve pas a donc été saisi par quelqu'un : on le garde, même s'il
+/// nous paraît faux.
+///
+/// Aucun appel quand le titre est toujours le titre deviné, ou quand celui-ci est trop
+/// court pour que la reconnaissance l'ait jamais changé.
+pub fn reverifier(guess: &str, exe: Option<&str>, titre: &str) -> Reverification {
+    let clean = clean_title(guess);
+    let target = norm(&clean);
+    let actuel = norm(titre);
+    if target.len() < INCLUSION_MIN || actuel == target {
+        return Reverification::Garder;
+    }
+    match chercher_devine(&clean) {
+        Reponse::Corps(Value::Array(jeux)) => verdict(&jeux, &target, exe, &actuel),
+        Reponse::Corps(_) => Reverification::Garder,
+        Reponse::Panne => Reverification::Panne,
+        Reponse::Limite => Reverification::Limite,
+    }
+}
+
+/// Le verdict de [`reverifier`] sur une réponse déjà reçue (séparé pour les tests).
+fn verdict(jeux: &[Value], cible: &str, exe: Option<&str>, actuel: &str) -> Reverification {
+    let nom = |g: &Value| g["name"].as_str().map(norm);
+    if !jeux.iter().any(|g| nom(g).as_deref() == Some(actuel)) {
+        return Reverification::Garder;
+    }
+    match choisir(jeux, cible, exe) {
+        Some(g) if nom(g).as_deref() == Some(actuel) => Reverification::Garder,
+        Some(g) => match g["name"].as_str() {
+            Some(n) => Reverification::Renommer(n.to_string(), parse_meta(g)),
+            None => Reverification::Garder,
+        },
+        None => Reverification::Rendre,
+    }
 }
 
 /// Une fiche proposée à l'utilisateur quand il ajoute un jeu à la main.
@@ -826,9 +994,10 @@ pub struct Candidat {
     pub name: String,
     /// Le titre cherché est exactement le nom de cette fiche, ou l'un de ses alias.
     pub exact: bool,
-    /// Sans être exact, le titre cherché est contenu dans ce nom (ou l'inverse) : la règle
-    /// qui suffit à [`recognize`] pour baptiser seul un jeu détecté. L'interface présélectionne
-    /// la première fiche exacte ou proche, et rien d'autre.
+    /// Sans être exact, le titre cherché est contenu dans ce nom (ou l'inverse). C'est
+    /// moins que ce qu'exige [`recognize`] pour baptiser seul un jeu détecté (une seule
+    /// famille, cf. [`choisir`]) : l'interface ne présélectionne une fiche proche que si
+    /// elle est la seule.
     pub proche: bool,
     #[serde(flatten)]
     pub meta: IgdbMeta,
@@ -1056,6 +1225,7 @@ pub fn fill_metadata(
     config_dir: &Path,
     emit: impl Fn(&[(String, IgdbMeta)]),
 ) -> Vec<(String, IgdbMeta)> {
+    attendre_rattrapage();
     let mut cache = load_cache(config_dir);
     let mut absences = load_absences(config_dir);
     let t = maintenant();
@@ -1394,6 +1564,135 @@ mod tests {
         let beaucoup: Vec<Value> =
             (0..30).map(|i| serde_json::json!({ "id": 100 + i, "name": format!("Jeu {i}") })).collect();
         assert_eq!(candidats(&beaucoup, "jeu").len(), CANDIDATS_MAX);
+    }
+
+    /// Réponse réelle d'IGDB à `search "Rainbow Six"` (15/11/2026, limite 10), réduite aux
+    /// champs que lit la reconnaissance. Le DLC de 2001 arrive en tête : c'est lui qu'une
+    /// version sans garde-fou avait donné pour nom à Rainbow Six Siege.
+    fn reponse_rainbow_six() -> Vec<Value> {
+        let reponse = serde_json::json!([
+            { "id": 65129, "name": "Tom Clancy's Rainbow Six: Take-Down - Missions in Korea", "parent_game": 22056, "alternative_names": [{ "name": "Take-Down Missions in Korea" }, { "name": "Rainbow Six: Rogue Spear: Take-Down Missions in Korea" }, { "name": "Rogue Spear: Take-Down Missions in Korea" }, { "name": "Rainbow Six: Take-Down: Missions in Korea" }, { "name": "Takedown Missions in Korea" }, { "name": "Tom Clancy's Rainbow Six: Rogue Spear: Takedown Missions in Korea" }, { "name": "Tom Clancy's Rainbow Six: Rogue Spear: Take-Down Missions in Korea" }, { "name": "Rainbow Six: Takedown Missions in Korea" }, { "name": "Rogue Spear: Takedown Missions in Korea" }] },
+            { "id": 7360, "name": "Rainbow Six Siege", "alternative_names": [{ "name": "R6: Siege" }, { "name": "Regenbogen 6 Belagerung" }, { "name": "彩虹六号：围攻" }, { "name": "R6:S" }, { "name": "R6S" }, { "name": "레식" }, { "name": "Rainbow Six Siege" }, { "name": "Tom Clancy's Rainbow Six: Siege" }, { "name": "Tom Clancy's Rainbow Six Siege" }, { "name": "RainbowSix.exe" }, { "name": "RainbowSix.exe" }] },
+            { "id": 1842, "name": "Tom Clancy's Rainbow Six", "alternative_names": [{ "name": "톰클랜시스 레인보우 식스" }, { "name": "彩虹六号" }, { "name": "World Greatest Hits Series Vol. 4: Tom Clancy's Rainbow Six" }, { "name": "Black Ops" }, { "name": "HRT" }, { "name": "Rainbow 6" }] },
+            { "id": 314237, "name": "Rainbow Six: Raven Shield", "parent_game": 908, "alternative_names": [{ "name": "Tom Clancy's Rainbow Six: Raven Shield" }] },
+            { "id": 44989, "name": "Tom Clancy's Rainbow Six: Lone Wolf", "alternative_names": [{ "name": "Rainbow Six: Lone Wolf" }] },
+            { "id": 314292, "name": "Tom Clancy's Rainbow Six: Vegas", "parent_game": 909, "alternative_names": [{ "name": "Tom Clancy's Rainbow Six: Vegas" }] },
+            { "id": 53802, "name": "Tom Clancy's Rainbow Six Collection", "alternative_names": [{ "name": "톰 클랜시의 레인보우 식스 컬렉션" }, { "name": "Tom Clancy's Rainbow Six 컬렉션" }] },
+            { "id": 119262, "name": "Tom Clancy's Rainbow Six Extraction", "alternative_names": [{ "name": "Tom Clancy's Rainbow Six Quarantine" }, { "name": "톰 클랜시의 레인보우 식스 익스트랙션" }, { "name": "R6-Extraction.exe" }] },
+            { "id": 158944, "name": "Tom Clancy's Rainbow Six Siege: North Star", "parent_game": 7360, "alternative_names": [{ "name": "Tom Clancy's Rainbow Six Siege: Year 6 - Season 2" }] },
+            { "id": 198266, "name": "Tom Clancy's Rainbow Six Siege: Demon Veil", "parent_game": 7360, "alternative_names": [{ "name": "Tom Clancy's Rainbow Six Siege: Year 7 - Season 1 " }] },
+        ]);
+        reponse.as_array().unwrap().clone()
+    }
+
+    /// Réponse réelle à `search "Return To Moria"` (15/11/2026), réduite de même.
+    fn reponse_moria() -> Vec<Value> {
+        let reponse = serde_json::json!([
+            { "id": 204460, "name": "The Lord of the Rings: Return to Moria", "alternative_names": [{ "name": "Return to Moria" }] },
+            { "id": 336898, "name": "The Lord of the Rings: Return to Moria - Ent-craft Pack", "parent_game": 204460 },
+            { "id": 413270, "name": "The Lord of the Rings: Return to Moria - Collector's Edition", "version_parent": 204460 },
+            { "id": 357520, "name": "The Lord of the Rings: Return to Moria - Durin's Folk Expansion", "parent_game": 204460 },
+        ]);
+        reponse.as_array().unwrap().clone()
+    }
+
+    fn id_choisi(jeux: &[Value], titre: &str, exe: Option<&str>) -> Option<u64> {
+        choisir(jeux, &norm(titre), exe).and_then(|g| g["id"].as_u64())
+    }
+
+    /// Cinq jeux de plein droit contiennent « Rainbow Six » : sans autre indice, aucun ne
+    /// s'impose, et c'est l'exécutable qui désigne Siege.
+    #[test]
+    fn un_titre_qui_designe_une_serie_ne_baptise_rien() {
+        let jeux = reponse_rainbow_six();
+        assert_eq!(id_choisi(&jeux, "Rainbow Six", Some("RainbowSix.exe")), Some(7360));
+        assert_eq!(id_choisi(&jeux, "Rainbow Six", Some("rainbowsix.EXE")), Some(7360), "casse ignorée");
+        assert_eq!(id_choisi(&jeux, "Rainbow Six", None), None, "le premier venu ne suffit plus");
+        assert_eq!(id_choisi(&jeux, "Rainbow Six", Some("Autre.exe")), None);
+        // Le nom exact passe toujours en premier, quel que soit l'exécutable.
+        assert_eq!(id_choisi(&jeux, "Tom Clancy's Rainbow Six", Some("RainbowSix.exe")), Some(1842));
+        // Le jeu, pas ses saisons (DLC) : par le nom exact pour Siege, par une inclusion
+        // qui ne désigne qu'un jeu pour Extraction.
+        assert_eq!(id_choisi(&jeux, "Rainbow Six Siege", None), Some(7360));
+        assert_eq!(id_choisi(&jeux, "Rainbow Six Extraction", None), Some(119262));
+    }
+
+    /// Un DLC en tête de réponse ne gagne jamais par inclusion, même portant l'exécutable.
+    #[test]
+    fn un_dlc_ne_baptise_pas_un_jeu_detecte() {
+        let mut jeux = reponse_rainbow_six();
+        jeux.retain(|g| g["id"] != 7360);
+        jeux[0]["alternative_names"] = serde_json::json!([{ "name": "RainbowSix.exe" }]);
+        assert_ne!(id_choisi(&jeux, "Rainbow Six", Some("RainbowSix.exe")), Some(65129));
+        assert_eq!(id_choisi(&jeux, "Rainbow Six", Some("RainbowSix.exe")), None);
+    }
+
+    /// Une édition n'est pas un second jeu : le jeu l'emporte.
+    #[test]
+    fn un_jeu_et_ses_editions_designent_le_jeu() {
+        let jeux = reponse_moria();
+        assert_eq!(id_choisi(&jeux, "Return To Moria", None), Some(204460));
+
+        // La même sans l'alias exact : l'inclusion ne désigne qu'un jeu, la « Collector's
+        // Edition » étant écartée par son `version_parent`.
+        let mut sans_alias = jeux.clone();
+        sans_alias[0]["alternative_names"] = Value::Null;
+        assert_eq!(id_choisi(&sans_alias, "Return To Moria", None), Some(204460));
+
+        // Une édition qui ne serait pas marquée comme telle : deux jeux, donc rien.
+        sans_alias[2]["version_parent"] = Value::Null;
+        assert_eq!(id_choisi(&sans_alias, "Return To Moria", None), None);
+
+        // Un doublon dans la réponse ne compte pas pour deux.
+        let mut doublon = reponse_moria();
+        doublon[0]["alternative_names"] = Value::Null;
+        doublon.push(doublon[0].clone());
+        assert_eq!(id_choisi(&doublon, "Return To Moria", None), Some(204460));
+    }
+
+    /// Un nom contenu dans le titre deviné (suffixe de dossier) : il doit être assez long
+    /// pour désigner quelque chose, et être le seul.
+    #[test]
+    fn un_nom_court_ne_suffit_pas_a_reconnaitre() {
+        let jeux = serde_json::json!([
+            { "id": 1, "name": "Six" },
+            { "id": 2, "name": "Hades II" },
+        ]);
+        let jeux = jeux.as_array().unwrap();
+        assert_eq!(id_choisi(jeux, "Rainbow Six", None), None, "« Six » est trop court");
+        assert_eq!(id_choisi(jeux, "Hades II Beta", None), Some(2));
+        // Titre deviné trop court : rien par inclusion, seulement par le nom exact.
+        assert_eq!(id_choisi(jeux, "Six", None), Some(1));
+        assert_eq!(id_choisi(jeux, "Hade", None), None);
+    }
+
+    /// Le rattrapage d'un jeu nommé par une version d'avant ces règles.
+    #[test]
+    fn un_mauvais_nom_d_avant_est_corrige_et_un_nom_saisi_garde() {
+        let jeux = reponse_rainbow_six();
+        let cible = norm("Rainbow Six");
+        let take_down = norm("Tom Clancy's Rainbow Six: Take-Down - Missions in Korea");
+
+        // Le cas réel : l'exécutable désigne Siege.
+        match verdict(&jeux, &cible, Some("RainbowSix.exe"), &take_down) {
+            Reverification::Renommer(nom, meta) => {
+                assert_eq!(nom, "Rainbow Six Siege");
+                assert_eq!(meta.igdb_id, Some(7360));
+            }
+            _ => panic!("Take-Down doit céder la place à Siege"),
+        }
+        // Sans exécutable, plus rien ne s'impose : retour au titre deviné.
+        assert!(matches!(verdict(&jeux, &cible, None, &take_down), Reverification::Rendre));
+        // Un nom que l'utilisateur a saisi n'est pas dans la réponse : on n'y touche pas.
+        assert!(matches!(
+            verdict(&jeux, &cible, Some("RainbowSix.exe"), &norm("Siège arc-en-ciel")),
+            Reverification::Garder
+        ));
+        // Déjà le bon nom : rien à faire.
+        assert!(matches!(
+            verdict(&jeux, &cible, Some("RainbowSix.exe"), &norm("Rainbow Six Siege")),
+            Reverification::Garder
+        ));
     }
 
     /// Réponses réelles d'IGDB (23/10/2026), réduites aux champs lus.

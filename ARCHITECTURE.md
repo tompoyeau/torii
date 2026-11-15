@@ -1256,10 +1256,31 @@ les amis. Le surveillant l'adopte désormais tout seul.
   dossier et exécutable (`…\Ubisoft\r6s\RainbowSix.exe` → « Rainbow Six », pas « r6s »).
   Puis `pretty()` : décollage `motMot`, séparateurs, mots parasites finaux (win64,
   shipping, launcher, vulkan…), MAJUSCULES capitalisées sauf sigle d'un seul mot.
-- **Correction par IGDB** : `igdb::recognize(titre deviné)` (recherche tolérante + garde-fou
-  d'inclusion, ≥ 5 caractères) rend le vrai nom et la jaquette. Tourne sur son propre fil
-  et **renomme aussi la cible en cours**, sinon les amis garderaient le titre deviné
-  jusqu'au prochain démarrage.
+- **Correction par IGDB** : `igdb::recognize(titre deviné, exécutable)` rend le vrai nom et
+  la jaquette. Tourne sur son propre fil et **renomme aussi la cible en cours**, sinon les
+  amis garderaient le titre deviné jusqu'au prochain démarrage. Règles (`igdb::choisir`) :
+  nom ou alias exact, sinon inclusion d'un nom dans l'autre (≥ 5 caractères) parmi les
+  **jeux de plein droit** (ni `parent_game` — DLC, saisons — ni `version_parent` —
+  éditions), à condition qu'elle n'en désigne **qu'un**. Sinon l'exécutable départage
+  s'il est l'alias de l'un d'eux (IGDB en range : « RainbowSix.exe » chez Siege) ; sinon
+  rien, et le jeu garde son titre deviné.
+  ⚠️ « Le premier qui contient le titre » laissait trancher le classement d'IGDB : cinq jeux
+  contiennent « Rainbow Six ». Et sans `version_parent`, « Return to Moria » et sa
+  « Collector's Edition » compteraient pour deux jeux.
+- **Rattrapage des noms d'avant** (`procwatch::reverifier_noms`, au démarrage) : la
+  reconnaissance ne tourne qu'à la découverte, donc un nom donné par une version plus
+  permissive restait pour toujours (0.20.0, sans filtre des DLC : Rainbow Six Siege →
+  « Take-Down - Missions in Korea », DLC de 2001). Chaque jeu détecté est revu une fois
+  (`detected_verifies_v1.json`, dont le `_v1` versionne les règles) : titre deviné
+  retrouvé par `identify`, sinon par le slug de l'id ; aucun appel si le titre n'a pas
+  changé. 🔑 Un titre qui n'est le nom d'**aucun** résultat de la recherche n'a pas été
+  donné par la reconnaissance : saisi à la main, on le garde. Sinon les champs venus
+  d'IGDB sont **écrasés** (jaquette et bannière seulement si ce sont des images IGDB) et
+  les fiches mémorisées sous l'id oubliées. Une panne laisse le jeu à revoir ; une
+  reconnaissance ou une édition à la main le marquent comme revu.
+  ⚠️ `fill_metadata` **attend la fin du rattrapage** (20 s au plus) : il charge le cache
+  IGDB en entrant et le réécrit en sortant, il remettrait donc la fiche du mauvais jeu —
+  que le front, qui comble les champs vides avec elle, réafficherait sur le jeu corrigé.
 - **Cycle de vie** : entrée `detected:<slug>` dans `detected_games.json` (plateforme
   `detected`, « Hors launcher » côté front), reprise par `scan_all`. L'id ne change
   jamais, même quand IGDB corrige le titre (favoris / masqués / historique / présence en

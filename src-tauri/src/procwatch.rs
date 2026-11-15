@@ -218,7 +218,10 @@ fn adopt(
 /// enregistrée, la présence en cours et l'affichage. Tourne sur son propre fil : la
 /// requête réseau n'a rien à faire dans la boucle de surveillance.
 fn resolve_title(app: &tauri::AppHandle, config_dir: std::path::PathBuf, game: GameDto) {
-    let reconnu = crate::metadata::igdb::recognize(&game.title);
+    let exe = detected::executable(&game.launch_target);
+    let reconnu = crate::metadata::igdb::recognize(&game.title, exe.as_deref());
+    // Reconnu ou non, ce titre suit les règles actuelles : le rattrapage n'a pas à le revoir.
+    detected::marquer_verifies(&config_dir, std::slice::from_ref(&game.id));
     // 🔑 Quoi qu'il arrive ensuite — titre reconnu, introuvable, ou panne réseau — la
     // cible cesse d'être provisoire : sinon une recherche infructueuse suffirait à
     // retenir la présence de ce jeu pour toute la session.
@@ -251,6 +254,73 @@ fn resolve_title(app: &tauri::AppHandle, config_dir: std::path::PathBuf, game: G
         &format!("jeu détecté reconnu par IGDB : « {} » → « {} »", game.title, updated.title),
     );
     let _ = app.emit("game-detected", updated);
+}
+
+/// Revoit, une fois, le titre des jeux détectés nommés par une version antérieure de la
+/// reconnaissance (cf. [`detected::a_reverifier`]). Tourne sur son propre fil au démarrage.
+///
+/// Un appel à IGDB par jeu dont le titre n'est plus le titre deviné, une seule fois : le
+/// jeu est ensuite retenu comme vérifié. Une panne laisse le jeu à revoir au prochain
+/// lancement ; la limite du proxy arrête la passe.
+pub fn reverifier_noms(app: &tauri::AppHandle) {
+    use crate::metadata::igdb::{self, Reverification};
+    let Ok(config_dir) = app.path().app_config_dir() else { return };
+    let mut faits: Vec<String> = Vec::new();
+    for game in detected::a_reverifier(&config_dir) {
+        let devine = detected::titre_devine(&game);
+        let exe = detected::executable(&game.launch_target);
+        let (titre, meta) = match igdb::reverifier(&devine, exe.as_deref(), &game.title) {
+            Reverification::Garder => {
+                faits.push(game.id);
+                continue;
+            }
+            Reverification::Renommer(nom, meta) => (nom, Some(meta)),
+            Reverification::Rendre => (devine, None),
+            Reverification::Panne => continue,
+            Reverification::Limite => break,
+        };
+        faits.push(game.id.clone());
+        let Some(updated) = detected::refine(&config_dir, &game.id, |g| {
+            g.title = titre.clone();
+            remplacer_fiche(g, meta.as_ref());
+        }) else {
+            continue;
+        };
+        // La fiche mémorisée sous cet id est celle du mauvais jeu : on la redemandera.
+        crate::metadata::oublier(&config_dir, &game.id);
+        igdb::oublier(&config_dir, &game.id);
+        liberer(app, &updated.id, Some(&updated.title));
+        journal::write(
+            &config_dir,
+            "INFO",
+            &format!("jeu détecté renommé : « {} » → « {} »", game.title, updated.title),
+        );
+        let _ = app.emit("game-detected", updated);
+    }
+    detected::marquer_verifies(&config_dir, &faits);
+}
+
+/// Remplace ce que la reconnaissance avait posé sur un jeu détecté par la fiche `meta`
+/// (ou rien).
+///
+/// ⚠️ Contrairement à [`resolve_title`], qui ne comble que les vides, ici on ÉCRASE : ces
+/// champs viennent tous du mauvais jeu. Sauf une jaquette ou une bannière qui ne vient pas
+/// d'IGDB — choisie sur le disque, elle est à l'utilisateur.
+fn remplacer_fiche(g: &mut GameDto, meta: Option<&crate::metadata::igdb::IgdbMeta>) {
+    let d_igdb = |url: &Option<String>| {
+        url.as_deref().is_none_or(crate::metadata::igdb::image_igdb)
+    };
+    if d_igdb(&g.cover_url) {
+        g.cover_url = meta.and_then(|m| m.cover_url.clone());
+    }
+    if d_igdb(&g.hero_url) {
+        g.hero_url = meta.and_then(|m| m.hero_url.clone());
+    }
+    g.genre = meta.and_then(|m| m.genre.clone());
+    g.description = meta.and_then(|m| m.description.clone());
+    g.developer = meta.and_then(|m| m.developer.clone());
+    g.year = meta.and_then(|m| m.year).map(|y| y as i32);
+    g.screenshots = meta.map(|m| m.screenshots.clone()).unwrap_or_default();
 }
 
 /// Lève la réserve posée sur un jeu fraîchement découvert : sa présence peut circuler,

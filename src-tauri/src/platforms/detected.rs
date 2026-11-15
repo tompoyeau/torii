@@ -108,6 +108,15 @@ fn ignore_path(config_dir: &Path) -> PathBuf {
     config_dir.join("detected_ignored.json")
 }
 
+/// Jeux dont le titre a été établi par les règles de reconnaissance actuelles, ou fixé à
+/// la main : le rattrapage ([`a_reverifier`]) ne les redemande pas.
+///
+/// ⚠️ Le `_v1` est la version des règles de [`crate::metadata::igdb::recognize`] : les
+/// durcir de nouveau, c'est passer en `_v2` pour que les jeux nommés avant soient revus.
+fn verifies_path(config_dir: &Path) -> PathBuf {
+    config_dir.join("detected_verifies_v1.json")
+}
+
 /// Les jeux détectés jusqu'ici (relus à chaque scan de bibliothèque).
 pub fn scan(config_dir: &Path) -> Vec<GameDto> {
     let Ok(text) = fs::read_to_string(store_path(config_dir)) else {
@@ -166,6 +175,72 @@ pub fn refine(config_dir: &Path, id: &str, apply: impl FnOnce(&mut GameDto)) -> 
     Some(updated)
 }
 
+fn verifies(config_dir: &Path) -> HashSet<String> {
+    fs::read_to_string(verifies_path(config_dir))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
+}
+
+/// Jeux détectés dont le titre n'a pas encore été revu avec les règles de reconnaissance
+/// actuelles.
+///
+/// 🔑 POURQUOI UN RATTRAPAGE. La reconnaissance ne tourne qu'une fois, à la découverte du
+/// jeu : un nom donné par une version plus permissive reste donc pour toujours. Torii
+/// 0.20.0 a ainsi baptisé Rainbow Six Siege du nom d'un DLC de 2001, et Genshin Impact de
+/// celui d'une mise à jour.
+pub fn a_reverifier(config_dir: &Path) -> Vec<GameDto> {
+    let faits = verifies(config_dir);
+    scan(config_dir).into_iter().filter(|g| !faits.contains(&g.id)).collect()
+}
+
+/// Retient que ces jeux ont été revus (cf. [`a_reverifier`]).
+pub fn marquer_verifies(config_dir: &Path, ids: &[String]) {
+    let mut faits: Vec<String> = verifies(config_dir).into_iter().collect();
+    let avant = faits.len();
+    for id in ids {
+        if !faits.contains(id) {
+            faits.push(id.clone());
+        }
+    }
+    if faits.len() == avant {
+        return;
+    }
+    faits.sort();
+    if let Ok(text) = serde_json::to_string_pretty(&faits) {
+        let _ = fs::create_dir_all(config_dir);
+        let _ = fs::write(verifies_path(config_dir), text);
+    }
+}
+
+/// Le titre que la détection avait deviné pour ce jeu, avant toute correction.
+///
+/// Redemandé à [`identify`] (même chemin, même fiche de la Game Bar, donc même titre)
+/// tant qu'il retrouve le même jeu ; sinon tiré de l'`id`, qui en est le slug et ne
+/// change jamais (`detected:rainbow-six` → « Rainbow Six »). Le slug perd la ponctuation,
+/// mais la reconnaissance compare des noms normalisés, qui l'ignorent aussi.
+pub fn titre_devine(game: &GameDto) -> String {
+    if let Some(trouve) = identify(&game.launch_target).filter(|t| t.id == game.id) {
+        return trouve.title;
+    }
+    let slug = game.id.strip_prefix("detected:").unwrap_or(&game.id);
+    capitalise(&slug.split('-').filter(|m| !m.is_empty()).collect::<Vec<_>>().join(" "))
+}
+
+/// Nom du fichier lancé (« RainbowSix.exe »), qui aide IGDB à départager les jeux d'une
+/// même série. `None` pour un moteur partagé : `javaw.exe` ne désigne aucun jeu.
+pub fn executable(launch_target: &str) -> Option<String> {
+    if runtime_partage(&normalize(launch_target)) {
+        return None;
+    }
+    // Découpe à la main plutôt que `Path::file_name` : le chemin est Windows, les tests
+    // tournent aussi ailleurs.
+    let file = launch_target.trim().rsplit(['\\', '/']).next()?;
+    file.to_lowercase().ends_with(".exe").then(|| file.to_string())
+}
+
 /// Corrige à la main un jeu détecté (titre deviné à côté de la plaque, jaquette
 /// choisie sur le disque…). Même contrat que [`super::manual::update`] : l'`id` ne
 /// bouge pas, la liste à jour est renvoyée.
@@ -181,6 +256,8 @@ pub fn update(
         .ok_or_else(|| if crate::locale::en() { format!("Detected game not found: {id}") } else { format!("Jeu détecté introuvable : {id}") })?;
     super::manual::appliquer(game, input)?;
     persist(config_dir, &games)?;
+    // Un titre fixé à la main n'a pas à être revu par la reconnaissance.
+    marquer_verifies(config_dir, &[id.to_string()]);
     Ok(games)
 }
 
@@ -668,6 +745,40 @@ fn norm(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Ce que le rattrapage donne à la reconnaissance : le titre deviné d'origine et le
+    /// nom de l'exécutable.
+    #[test]
+    fn le_rattrapage_retrouve_le_titre_devine() {
+        let jeu = GameDto {
+            id: "detected:rainbow-six".into(),
+            title: "Tom Clancy's Rainbow Six: Take-Down - Missions in Korea".into(),
+            // Aucune fiche de la Game Bar pour ce chemin : le titre vient de l'id.
+            launch_target: r"Z:\nulle-part\r6s\RainbowSix.exe".into(),
+            ..Default::default()
+        };
+        assert_eq!(titre_devine(&jeu), "Rainbow Six");
+
+        assert_eq!(executable(&jeu.launch_target).as_deref(), Some("RainbowSix.exe"));
+        // Un moteur partagé ne désigne aucun jeu.
+        assert_eq!(executable(r"C:\Java\bin\javaw.exe"), None);
+        assert_eq!(executable("steam://rungameid/1"), None);
+    }
+
+    #[test]
+    fn le_marqueur_retient_les_jeux_revus() {
+        let dir = std::env::temp_dir().join(format!("torii-verifies-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let jeu = |id: &str| GameDto { id: id.into(), ..Default::default() };
+        persist(&dir, &[jeu("detected:a"), jeu("detected:b")]).unwrap();
+        assert_eq!(a_reverifier(&dir).len(), 2);
+
+        marquer_verifies(&dir, &["detected:a".into()]);
+        marquer_verifies(&dir, &["detected:a".into()]);
+        let restants: Vec<String> = a_reverifier(&dir).into_iter().map(|g| g.id).collect();
+        assert_eq!(restants, ["detected:b"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn devine_titre_et_dossier() {
