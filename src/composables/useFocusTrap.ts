@@ -22,8 +22,7 @@ import { nextTick, onBeforeUnmount, watch, type Ref } from "vue";
  * qui traitent eux-mêmes la touche Tab, et on veut décider avant eux.
  *
  * `boucle: false` garde 1 et 3 sans 2 : pour les fiches (jeu, Boutique). Elles ne sont pas
- * modales — la barre du haut, qui revient par-dessus dès qu'on les fait défiler, doit rester
- * joignable au clavier ; c'est le contenu caché DERRIÈRE elles qui est retiré de la
+ * modales — la barre du haut, qui reste par-dessus, doit rester joignable au clavier ; c'est le contenu caché DERRIÈRE elles qui est retiré de la
  * tabulation (`inert` sur `<main>`, dans `AppShell.vue`).
  */
 const FOCUSABLES = [

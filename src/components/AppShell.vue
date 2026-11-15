@@ -26,9 +26,8 @@ const { selectedGameId: produitOuvert } = useStore();
 
 /**
  * Une fiche (jeu, Boutique) recouvre le contenu : ce qu'elle cache sort de la tabulation et
- * des lecteurs d'écran (`inert`). La barre du haut, hors de `<main>`, revient par-dessus la
- * fiche dès qu'on la fait défiler et reste alors joignable — c'est pourquoi les fiches
- * n'enferment pas le focus.
+ * des lecteurs d'écran (`inert`). La barre du haut, hors de `<main>`, reste par-dessus la
+ * fiche et joignable — c'est pourquoi les fiches n'enferment pas le focus.
  */
 const contenuRecouvert = computed(
   () => produitOuvert.value != null || (selectedGameId.value != null && games.value.some((g) => g.id === selectedGameId.value)),

@@ -7,7 +7,6 @@ import { useStoreCategories } from "../composables/useStoreCategories";
 import { partagerJeu } from "../lib/partage";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
-import { suivreHautDeFiche } from "../composables/useHautDeFiche";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { useUi } from "../composables/useUi";
 import { useModaleDeNavigation, useNavigation } from "../composables/useNavigation";
@@ -41,7 +40,6 @@ useScrollLock(open);
 /** Même raison que la fiche de la bibliothèque : le panneau recouvre la page. */
 const panneau = ref<HTMLElement | null>(null);
 useFocusTrap(panneau, open, { boucle: false });
-suivreHautDeFiche("produit", panneau, open);
 
 /** Un montant dans la devise de l'offre qui le porte. */
 const price = (montant: number, offre: StorePrice) => formatPrix(montant, offre.currency);
@@ -463,16 +461,17 @@ const detailOffre = (p: StorePrice) =>
 </template>
 
 <style scoped>
-/* Toute la fenêtre, comme la fiche d'un jeu de la bibliothèque : la barre du haut s'efface
-   tout en haut et revient par-dessus dès qu'on descend. */
+/* Toute la fenêtre, comme la fiche d'un jeu de la bibliothèque : la barre du haut, en verre,
+   reste par-dessus la bannière. */
 .sd { position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
 .sd.open { opacity: 1; visibility: visible; }
 .sd-banner { position: relative; height: 40vh; min-height: 300px; overflow: hidden; }
 .sd-banner-art { position: absolute; inset: 0; }
 .sd-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; display: block; }
 .sd-scrim { position: absolute; inset: 0; background: linear-gradient(0deg, var(--bg) 1%, rgba(10, 7, 16, 0.25) 45%, rgba(10, 7, 16, 0.55) 100%); }
+/* Sous la barre du haut, qui passe par-dessus la bannière (`--hauteur-barre-fiche`, style.css). */
 .sd-nav {
-  position: absolute; top: 22px; left: 24px; z-index: 5; display: flex; gap: 8px; max-width: calc(100% - 48px);
+  position: absolute; top: calc(var(--hauteur-barre-fiche) + 22px); left: 24px; z-index: 5; display: flex; gap: 8px; max-width: calc(100% - 48px);
 }
 .sd-back, .sd-forward {
   display: inline-flex; align-items: center; gap: 8px; min-width: 0;

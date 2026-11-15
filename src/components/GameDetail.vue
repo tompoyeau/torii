@@ -13,7 +13,6 @@ import { ouvrirPage } from "../composables/usePageWeb";
 import { partagerJeu } from "../lib/partage";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useFocusTrap } from "../composables/useFocusTrap";
-import { suivreHautDeFiche } from "../composables/useHautDeFiche";
 import { estHorsLauncher, platformName } from "../data/platforms";
 import { libelleAvis, nombre, pageSteam, tonAvis } from "../lib/boutique";
 import { installSource, launchSource, openInstallDir, steamAchievements, steamCurrentPlayers, uninstallGame } from "../lib/tauri";
@@ -64,14 +63,12 @@ const game = computed(() => byId(selectedGameId.value));
 useScrollLock(computed(() => !!game.value));
 
 /**
- * Le panneau recouvre toute la page ; la barre du haut revient par-dessus dès qu'on le fait
- * défiler (`useHautDeFiche`). Le focus y entre à l'ouverture et revient au bouton d'origine
- * à la fermeture, sans y être enfermé. La page cachée derrière, elle, sort de la
- * tabulation (`inert`, `AppShell.vue`).
+ * Le panneau recouvre toute la page, la barre du haut restant par-dessus : le focus y entre
+ * à l'ouverture et revient au bouton d'origine à la fermeture, sans y être enfermé. La page
+ * cachée derrière, elle, sort de la tabulation (`inert`, `AppShell.vue`).
  */
 const panneau = ref<HTMLElement | null>(null);
 useFocusTrap(panneau, computed(() => !!game.value), { boucle: false });
-suivreHautDeFiche("jeu", panneau, computed(() => !!game.value));
 
 const friendById = computed(() => new Map(friends.value.map((f) => [f.steamId, f])));
 
@@ -841,8 +838,7 @@ function retour() {
 
 <style scoped>
 /* Toute la fenêtre, barre du bas exceptée : la fiche est un écran de l'application, pas une
-   fenêtre posée par-dessus. Tout en haut, la bannière occupe l'écran entier ; la barre du
-   haut revient par-dessus dès qu'on descend (`TopBar.vue`). */
+   fenêtre posée par-dessus. La barre du haut, en verre, reste par-dessus la bannière. */
 .detail {
   position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 100; background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
   opacity: 0; visibility: hidden; transition: opacity 0.28s;
@@ -865,8 +861,9 @@ function retour() {
 :root[data-theme="light"] .detail-banner-scrim {
   background: linear-gradient(0deg, var(--bg) 1%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
 }
+/* Sous la barre du haut, qui passe par-dessus la bannière (`--hauteur-barre-fiche`, style.css). */
 .detail-nav {
-  position: absolute; top: 22px; left: 24px; z-index: 5; display: flex; gap: 8px; max-width: calc(100% - 48px);
+  position: absolute; top: calc(var(--hauteur-barre-fiche) + 22px); left: 24px; z-index: 5; display: flex; gap: 8px; max-width: calc(100% - 48px);
 }
 .detail-back, .detail-forward {
   display: inline-flex; align-items: center; gap: 8px; min-width: 0;
