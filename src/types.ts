@@ -33,6 +33,8 @@ export interface GameDto {
   coverUrl?: string | null;
   heroUrl?: string | null;
   launchTarget: string;
+  /** Arguments passés à la cible d'un jeu hors launcher. */
+  launchArgs?: string | null;
   lastPlayed?: number | null;
   genre?: string | null;
   description?: string | null;
@@ -41,6 +43,36 @@ export interface GameDto {
   screenshots?: string[];
   hidden?: boolean;
   favorite?: boolean;
+}
+
+/**
+ * Ce que Torii déduit d'un fichier choisi ou déposé dans « Ajouter un jeu » (commande Rust
+ * `inspect_game_target`) : pour un raccourci, la vraie cible et ses arguments.
+ */
+export interface TargetInspection {
+  /** Titre proposé ; vide quand rien ne permet de le deviner (une adresse). */
+  title: string;
+  launchTarget: string;
+  launchArgs?: string | null;
+  /** Dossier du jeu, quand il peut être désigné sans risque pour le suivi de session. */
+  installDir?: string | null;
+}
+
+/** Une fiche proposée à l'ajout d'un jeu (commande Rust `search_game_sheets`). */
+export interface GameSheet {
+  name: string;
+  /** Le titre cherché est exactement le nom de la fiche, ou l'un de ses alias. */
+  exact: boolean;
+  /** Le titre cherché est contenu dans ce nom (ou l'inverse). */
+  proche: boolean;
+  genre?: string | null;
+  description?: string | null;
+  coverUrl?: string | null;
+  heroUrl?: string | null;
+  developer?: string | null;
+  year?: number | null;
+  screenshots?: string[];
+  igdbId?: number | null;
 }
 
 /** Métadonnées enrichies d'un jeu (commande Rust `enrich_game`, camelCase). */
@@ -77,6 +109,7 @@ export interface GameSource {
   id?: string;
   platform: PlatformId;
   launchTarget?: string;
+  launchArgs?: string;
   installed: boolean;
 }
 
@@ -119,6 +152,8 @@ export interface Game {
   recent: boolean;
   /** Cible de lancement transmise à Rust (appid, URI, exe…). */
   launchTarget?: string;
+  /** Arguments passés à la cible d'un jeu hors launcher (`-windowed`, une ROM…). */
+  launchArgs?: string;
   installDir?: string;
   // Métadonnées enrichies — optionnelles (absentes d'un simple scan local).
   sizeGb?: number;

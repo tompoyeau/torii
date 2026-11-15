@@ -390,25 +390,65 @@ export function useLibrary() {
     if (!list) return null;
     // Le backend renvoie tous les jeux manuels ; on n'insère que les nouveaux.
     const known = new Set(games.value.map((g) => g.id));
-    const added = list.filter((d) => !known.has(d.id)).map(fromDto);
+    const added = list
+      .filter((d) => !known.has(d.id))
+      .map(fromDto)
+      .map((g): Game => ({ ...g, descriptionSource: g.description ? "igdb" : undefined }));
     if (added.length) games.value = [...games.value, ...added];
+    // Catégories, et tout ce que la fiche choisie n'a pas apporté : le backend connaît
+    // déjà le jeu (cf. `hors_launcher_modifie`), une passe IGDB le complète.
+    if (added.length) void fillIgdb();
     return added[added.length - 1] ?? null;
   }
 
   /**
-   * Met à jour un jeu manuel (persisté côté Rust + rafraîchi dans le store, sans
-   * re-scanner). Favori et masquage sont conservés : ils vivent dans leurs propres
-   * listes, indexées par l'id — que l'édition ne change jamais.
+   * Met à jour un jeu hors launcher (persisté côté Rust + rafraîchi dans le store, sans
+   * re-scanner).
+   *
+   * 🔑 On ne remplace que ce que le formulaire édite. Le reste de la carte ne vit pas dans
+   * le fichier des jeux manuels — dernière session et favori ont leurs propres listes, les
+   * catégories et les visuels de réserve viennent d'IGDB — et repartir du jeu relu du
+   * fichier les effaçait de l'écran jusqu'au scan suivant.
+   *
+   * Les informations de la fiche (description, studio, captures…) ne bougent que si une
+   * fiche a été choisie ou retirée dans le formulaire.
    */
   async function updateManual(id: string, input: ManualInput): Promise<Game | null> {
     const list = await updateManualGame(id, input);
     const dto = list?.find((d) => d.id === id);
     if (!dto) return null;
     const fresh = fromDto(dto);
-    games.value = games.value.map((g) =>
-      g.id === id ? { ...fresh, favorite: g.favorite, hidden: g.hidden } : g,
-    );
-    return fresh;
+    const titreChange = games.value.find((g) => g.id === id)?.title !== fresh.title;
+    games.value = games.value.map((g) => {
+      if (g.id !== id) return g;
+      const edite: Game = {
+        ...g,
+        title: fresh.title,
+        launchTarget: fresh.launchTarget,
+        launchArgs: fresh.launchArgs,
+        installDir: fresh.installDir,
+        coverUrl: fresh.coverUrl,
+        coverSource: fresh.coverSource,
+      };
+      if (!input.fiche) return edite;
+      return {
+        ...edite,
+        heroUrl: fresh.heroUrl,
+        genre: fresh.genre,
+        description: fresh.description,
+        descriptionSource: fresh.description ? "igdb" : undefined,
+        developer: fresh.developer,
+        year: fresh.year,
+        screenshots: fresh.screenshots,
+        // Catégories et visuels de réserve appartenaient à l'ancienne fiche.
+        tags: undefined,
+        coverAlt: undefined,
+        heroAlt: undefined,
+      };
+    });
+    // Nouveau titre ou nouvelle fiche : le backend a oublié ce qu'IGDB disait de l'ancien.
+    if (titreChange || input.fiche) void fillIgdb();
+    return games.value.find((g) => g.id === id) ?? null;
   }
 
   /** Retire un jeu manuel — ou détecté (le backend route sur l'id). */

@@ -185,6 +185,46 @@ fn verifier_local(app: &AppHandle) {
     publier(app, dir.as_deref(), &games, true);
 }
 
+/// Un jeu hors launcher vient d'être ajouté, corrigé ou retiré à la main.
+///
+/// 🔑 Ces jeux ne font pas partie de l'empreinte locale : la veille ne voit pas leur
+/// fichier changer. Sans cet appel, le jeu ajouté n'était connu ni du surveillant de
+/// process (pas de session, pas de « Récemment joué », pas de présence) ni de
+/// l'enrichissement IGDB avant le relevé en ligne suivant — jusqu'à une demi-heure.
+///
+/// On recompose donc tout de suite, sans rien redemander aux comptes. Si un relevé
+/// tourne, il a peut-être lu les jeux manuels avant l'écriture : on attend qu'il ait fini
+/// dans un fil à part (la commande, elle, répond sans délai) et on publie par-dessus, en
+/// prévenant cette fois l'interface, à qui ce relevé a pu rendre une liste sans le jeu.
+pub fn hors_launcher_modifie(app: &AppHandle) {
+    match RELEVE.try_lock() {
+        Ok(_verrou) => recomposer(app, false),
+        Err(TryLockError::Poisoned(p)) => {
+            let _verrou = p.into_inner();
+            recomposer(app, false)
+        }
+        Err(TryLockError::WouldBlock) => {
+            let app = app.clone();
+            std::thread::spawn(move || {
+                let _verrou = RELEVE.lock().unwrap_or_else(|p| p.into_inner());
+                recomposer(&app, true);
+            });
+        }
+    }
+}
+
+/// Recompose la bibliothèque avec les possédés du dernier relevé en ligne et la publie.
+/// À appeler en tenant [`RELEVE`].
+fn recomposer(app: &AppHandle, vers_l_interface: bool) {
+    // Pas encore de relevé en ligne : le premier scan lira les fichiers à jour.
+    let Some(en_ligne) = memoire().en_ligne.clone() else { return };
+    let dir = app.path().app_config_dir().ok();
+    let local = ReleveLocal::lire(dir.as_deref());
+    memoire().empreinte = local.empreinte();
+    let games = platforms::assembler(local, &en_ligne, dir.as_deref());
+    publier(app, dir.as_deref(), &games, vers_l_interface);
+}
+
 /// Ce qui a changé entre deux empreintes, pour le journal (« +steam:620, -gog:1207 »).
 fn changements(avant: &Empreinte, apres: &Empreinte) -> String {
     let avant: BTreeSet<_> = avant.iter().collect();

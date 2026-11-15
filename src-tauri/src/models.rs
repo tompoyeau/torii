@@ -42,6 +42,10 @@ pub struct GameDto {
     pub hero_url: Option<String>,
     /// Cible de lancement : appid Steam, AppName Epic, chemin d'exécutable…
     pub launch_target: String,
+    /// Arguments passés à la cible d'un jeu hors launcher (`-windowed`, la ROM d'un
+    /// émulateur…). Absent partout ailleurs, et alors omis du JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_args: Option<String>,
     /// Horodatage Unix de la dernière partie, si connu.
     #[serde(default)]
     pub last_played: Option<i64>,

@@ -179,10 +179,7 @@ pub fn update(
         .iter_mut()
         .find(|g| g.id == id)
         .ok_or_else(|| if crate::locale::en() { format!("Detected game not found: {id}") } else { format!("Jeu détecté introuvable : {id}") })?;
-    game.title = input.title;
-    game.launch_target = input.launch_target;
-    game.install_dir = input.install_dir;
-    game.cover_url = input.cover_url;
+    super::manual::appliquer(game, input)?;
     persist(config_dir, &games)?;
     Ok(games)
 }
@@ -281,6 +278,78 @@ fn runtime_partage(path: &str) -> bool {
 /// [`identify`] tranche.
 pub fn peut_etre_un_jeu(exe: &str) -> bool {
     plausible(&normalize(exe))
+}
+
+/// Titre et dossier d'un exécutable **choisi à la main** (ajout manuel).
+///
+/// Même savoir-faire que pour un jeu détecté — le titre de la Game Bar quand Windows
+/// connaît le jeu, sinon le nom tiré du dossier — mais sans le filtre « est-ce un jeu ? » :
+/// ici c'est l'utilisateur qui l'affirme.
+///
+/// Le dossier est `None` quand on ne peut pas en désigner un sans risque : exécutable posé
+/// directement sur une étagère (`E:\Games\jeu.exe`, le Bureau…) ou moteur partagé
+/// (`javaw.exe`). Le surveillant de process rattache un process à un jeu par préfixe de
+/// chemin : un dossier trop large ferait passer les voisins pour ce jeu.
+pub(crate) fn decrire(exe: &str) -> (String, Option<String>) {
+    let path = normalize(exe);
+    let fiche = game_bar_entry(&path).unwrap_or_default();
+    if runtime_partage(&path) {
+        let titre = fiche.nom().unwrap_or_else(|| nom_lisible(exe));
+        return (titre, None);
+    }
+    let (devine, racine) = title_and_root(exe);
+    let titre = fiche.title.filter(|t| !t.trim().is_empty()).unwrap_or(devine);
+    let dossier = Path::new(&racine);
+    let sur = dossier.is_dir() && !est_une_etagere(dossier);
+    (titre, sur.then_some(racine))
+}
+
+/// Nom présentable d'un fichier, sans son extension (`Moria-Win64-Shipping.exe` → « Moria »).
+pub(crate) fn nom_lisible(fichier: &str) -> String {
+    let stem = Path::new(fichier)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    pretty(&stem)
+}
+
+/// Le dossier d'un jeu dont on connaît le **titre** : l'ancêtre le plus haut de
+/// l'exécutable qui porte ce nom, sans jamais franchir une étagère.
+///
+/// Sert quand le titre vient d'un humain (nom d'un raccourci, titre validé dans le
+/// formulaire) : il désigne alors le dossier mieux que le nom de l'exécutable. Un jeu
+/// lancé par `…\Soulframe\Downloaded\Public\Tools\Launcher.exe` vit dans `…\Soulframe`,
+/// et c'est là que tournera son vrai process — pas dans `Tools`.
+///
+/// ⚠️ Le dossier doit contenir tout le titre (« Genshin Impact game »), ou en être au
+/// moins la moitié (« Soulframe » pour « Soulframe Preludes »). Sans ce seuil, le `bin`
+/// d'un autre jeu passerait pour le dossier de « Robin Hood ».
+pub(crate) fn dossier_nomme(exe: &str, titre: &str) -> Option<String> {
+    let cle_titre = norm(titre);
+    if cle_titre.len() < 3 {
+        return None;
+    }
+    let mut trouve: Option<&Path> = None;
+    for dir in Path::new(exe).ancestors().skip(1) {
+        if est_une_etagere(dir) {
+            break;
+        }
+        let cle = norm(&dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+        let porte_le_titre = cle.contains(&cle_titre)
+            || (cle.len() >= 3 && cle.len() * 2 >= cle_titre.len() && cle_titre.contains(&cle));
+        if porte_le_titre {
+            trouve = Some(dir);
+        }
+    }
+    trouve.map(|d| d.to_string_lossy().to_string())
+}
+
+/// Ce dossier est-il un rangement commun à plusieurs jeux (ou la racine d'un disque) ?
+pub(crate) fn est_une_etagere(dir: &Path) -> bool {
+    match dir.file_name() {
+        Some(nom) => CONTAINER_DIRS.contains(&nom.to_string_lossy().to_lowercase().as_str()),
+        None => true,
+    }
 }
 
 /// Écarte d'emblée ce qui ne peut pas être un jeu : dossiers système, clients de
@@ -600,6 +669,43 @@ mod tests {
         let (jumeau, _) =
             title_and_root(r"C:\Users\x\AppData\Local\Ubisoft\r6siege\RainbowSix_Vulkan.exe");
         assert_eq!(jumeau, titre);
+    }
+
+    /// Ajout manuel : un exécutable posé à même une étagère n'a pas de dossier à lui.
+    #[test]
+    fn une_etagere_n_est_pas_le_dossier_d_un_jeu() {
+        assert!(est_une_etagere(Path::new(r"E:\Games")));
+        assert!(est_une_etagere(Path::new(r"C:\Users\x\Desktop")));
+        assert!(est_une_etagere(Path::new(r"E:\")));
+        assert!(!est_une_etagere(Path::new(r"E:\Games\Genshin Impact game")));
+
+        assert_eq!(nom_lisible(r"E:\Games\Moria\Moria-Win64-Shipping.exe"), "Moria");
+        assert_eq!(nom_lisible(r"C:\Users\x\Desktop\Genshin Impact.lnk"), "Genshin Impact");
+    }
+
+    /// Un titre donné par un humain désigne le dossier mieux que le nom de l'exécutable.
+    #[test]
+    fn le_titre_designe_le_dossier_du_jeu() {
+        // Le lanceur vit trois étages sous le jeu : c'est le jeu entier qu'il faut surveiller.
+        assert_eq!(
+            dossier_nomme(r"C:\Users\x\AppData\Local\Soulframe\Downloaded\Public\Tools\Launcher.exe", "Soulframe").as_deref(),
+            Some(r"C:\Users\x\AppData\Local\Soulframe"),
+        );
+        // Deux dossiers au nom du jeu : le plus haut couvre l'autre.
+        assert_eq!(
+            dossier_nomme(r"E:\Games\ReturnToMoria\Moria\Binaries\Win64\Moria-Win64-Shipping.exe", "Moria").as_deref(),
+            Some(r"E:\Games\ReturnToMoria"),
+        );
+        // Jamais l'étagère, même si elle porte le mot ; et rien si aucun dossier ne parle du jeu.
+        assert_eq!(dossier_nomme(r"E:\Games\jeu.exe", "Games").as_deref(), None);
+        assert_eq!(dossier_nomme(r"E:\Games\Portage\portage.exe", "The Legend of Zelda").as_deref(), None);
+        assert_eq!(dossier_nomme(r"E:\Games\Go\go.exe", "Go").as_deref(), None);
+        // Un dossier technique dont le nom se retrouve par hasard dans le titre ne compte pas.
+        assert_eq!(dossier_nomme(r"E:\Games\Divers\bin\robin.exe", "Robin Hood").as_deref(), None);
+        assert_eq!(
+            dossier_nomme(r"E:\Games\Soulframe\Launcher.exe", "Soulframe Preludes").as_deref(),
+            Some(r"E:\Games\Soulframe"),
+        );
     }
 
     #[test]

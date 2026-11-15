@@ -1528,8 +1528,8 @@ fn replace_excluded_stores(app: tauri::AppHandle, stores: Vec<String>) -> Result
 
 /// Lance un jeu selon sa plateforme et sa cible.
 #[tauri::command]
-fn launch_game(platform: String, target: String) -> Result<(), String> {
-    platforms::launch(&platform, &target)
+fn launch_game(platform: String, target: String, args: Option<String>) -> Result<(), String> {
+    platforms::launch(&platform, &target, args.as_deref())
 }
 
 /// Déclenche l'installation d'un jeu possédé non installé (ouvre le launcher sur l'install).
@@ -1585,11 +1585,45 @@ fn uninstall_game(
     platforms::uninstall(&platform, &target, install_dir.as_deref())
 }
 
+/// Modifie les jeux hors launcher hors du thread principal, puis rend la bibliothèque à
+/// jour à ceux qui en dépendent (surveillant de process, IGDB, cache disque) : voir
+/// `libwatch::hors_launcher_modifie`.
+async fn modifier_hors_launcher(
+    app: tauri::AppHandle,
+    modification: impl FnOnce(&std::path::Path) -> Result<Vec<GameDto>, String> + Send + 'static,
+) -> Result<Vec<GameDto>, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let games = modification(&dir)?;
+        libwatch::hors_launcher_modifie(&app);
+        Ok(games)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Ce que Torii déduit d'un fichier choisi ou déposé dans « Ajouter un jeu » : titre,
+/// vraie cible d'un raccourci, arguments, dossier du jeu. Refuse un fichier introuvable.
+#[tauri::command]
+async fn inspect_game_target(path: String) -> Result<platforms::manual::Inspection, String> {
+    // Lecture du registre (Game Bar) et du disque : hors thread principal.
+    tauri::async_runtime::spawn_blocking(move || platforms::manual::inspecter(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Fiches IGDB qui correspondent à un titre, pour en choisir une à l'ajout d'un jeu.
+#[tauri::command]
+async fn search_game_sheets(title: String) -> Result<Vec<metadata::igdb::Candidat>, String> {
+    tauri::async_runtime::spawn_blocking(move || metadata::igdb::chercher(&title))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Ajoute un jeu manuel et renvoie la liste des jeux manuels à jour.
 #[tauri::command]
-fn add_manual_game(app: tauri::AppHandle, input: ManualInput) -> Result<Vec<GameDto>, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    platforms::manual::add(&dir, input)
+async fn add_manual_game(app: tauri::AppHandle, input: ManualInput) -> Result<Vec<GameDto>, String> {
+    modifier_hors_launcher(app, move |dir| platforms::manual::add(dir, input)).await
 }
 
 /// Met à jour un jeu manuel existant (édition depuis sa fiche).
@@ -1598,27 +1632,42 @@ fn add_manual_game(app: tauri::AppHandle, input: ManualInput) -> Result<Vec<Game
 /// dans leur propre fichier mais offrent exactement les mêmes champs, et le front les
 /// édite avec la même modale.
 #[tauri::command]
-fn update_manual_game(
+async fn update_manual_game(
     app: tauri::AppHandle,
     id: String,
     input: ManualInput,
 ) -> Result<Vec<GameDto>, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    if id.starts_with("detected:") {
-        return platforms::detected::update(&dir, &id, input);
-    }
-    platforms::manual::update(&dir, &id, input)
+    modifier_hors_launcher(app, move |dir| {
+        let detecte = id.starts_with("detected:");
+        let titre_de = |jeux: &[GameDto]| jeux.iter().find(|g| g.id == id).map(|g| g.title.clone());
+        let avant = titre_de(&if detecte { platforms::detected::scan(dir) } else { platforms::manual::scan(dir) });
+        let nouvelle_fiche = input.fiche.is_some();
+        let games = if detecte {
+            platforms::detected::update(dir, &id, input)?
+        } else {
+            platforms::manual::update(dir, &id, input)?
+        };
+        // Le cache IGDB retient la fiche trouvée sous l'ancien titre (et ses catégories) :
+        // on l'oublie pour que la prochaine passe cherche le jeu sous son nouveau nom.
+        if nouvelle_fiche || titre_de(&games) != avant {
+            metadata::igdb::oublier(dir, &id);
+        }
+        Ok(games)
+    })
+    .await
 }
 
 /// Retire un jeu manuel par son id — ou un jeu détecté, qui rejoint alors la liste des
 /// exécutables refusés pour ne pas réapparaître à la partie suivante.
 #[tauri::command]
-fn remove_manual_game(app: tauri::AppHandle, id: String) -> Result<Vec<GameDto>, String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    if id.starts_with("detected:") {
-        return platforms::detected::forget(&dir, &id);
-    }
-    platforms::manual::remove(&dir, &id)
+async fn remove_manual_game(app: tauri::AppHandle, id: String) -> Result<Vec<GameDto>, String> {
+    modifier_hors_launcher(app, move |dir| {
+        if id.starts_with("detected:") {
+            return platforms::detected::forget(dir, &id);
+        }
+        platforms::manual::remove(dir, &id)
+    })
+    .await
 }
 
 /// Option « revenir à la fermeture du jeu » : Torii se réduit, et la fiche du jeu sera
@@ -2118,7 +2167,14 @@ pub fn run() {
                     let _ = std::fs::write(dir.join(TUTO_A_FAIRE), "");
                 }
                 locale::charger(&dir);
-                journal::init(dir);
+                journal::init(dir.clone());
+                // Avant le premier scan : les jeux ajoutés par un raccourci avec l'ancien
+                // formulaire avaient le Bureau pour dossier, et le surveillant de process
+                // leur attribuait tout ce qui en démarrait (cf. `manual::reparer`).
+                let repares = platforms::manual::reparer(&dir);
+                if repares > 0 {
+                    journal::write(&dir, "INFO", &format!("jeux manuels : dossier d'installation corrigé ({repares})"));
+                }
             }
             // Un bandeau resté d'une session précédente n'a rien à faire là.
             toast::nettoyer_au_demarrage(&app.handle().clone());
@@ -2199,6 +2255,8 @@ pub fn run() {
             record_launch,
             uninstall_game,
             open_install_dir,
+            inspect_game_target,
+            search_game_sheets,
             add_manual_game,
             update_manual_game,
             remove_manual_game,

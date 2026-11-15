@@ -5,6 +5,7 @@ pub mod id_set;
 pub mod library_cache;
 pub mod manual;
 pub mod playhistory;
+pub mod raccourci;
 pub mod riot;
 pub mod steam;
 pub mod ubisoft;
@@ -231,8 +232,10 @@ fn merge_owned(map: &mut HashMap<String, GameDto>, mut owned: GameDto) {
     }
 }
 
-/// Lance un jeu selon sa plateforme et sa cible.
-pub fn launch(platform: &str, target: &str) -> Result<(), String> {
+/// Lance un jeu selon sa plateforme et sa cible. `args` ne sert qu'aux jeux lancés par
+/// leur propre fichier (hors launcher) : les launchers reçoivent une adresse, pas une
+/// ligne de commande.
+pub fn launch(platform: &str, target: &str, args: Option<&str>) -> Result<(), String> {
     match platform {
         "steam" => open_uri(&format!("steam://rungameid/{target}")),
         // Epic : toujours via le launcher (deeplink). Le lancement direct de l'exe casse
@@ -259,7 +262,7 @@ pub fn launch(platform: &str, target: &str) -> Result<(), String> {
                 .map_err(|e| if crate::locale::en() { format!("Couldn't launch the Riot game: {e}") } else { format!("Impossible de lancer le jeu Riot : {e}") })
         }
         // GOG installé et jeux manuels : on lance directement l'exécutable.
-        _ => launch_executable(target),
+        _ => launch_executable(target, args.map(str::trim).filter(|a| !a.is_empty())),
     }
 }
 
@@ -472,6 +475,17 @@ fn launch_via_wmi(exe: &Path, uri: &str) -> Result<(), String> {
 ///   aussitôt sans rien lancer. `ShellExecuteW` n'hérite pas des handles et détache le
 ///   processus proprement.
 fn open_uri(uri: &str) -> Result<(), String> {
+    shell_open(uri, None)
+}
+
+/// `ShellExecuteW` sur un fichier ou une adresse, avec d'éventuels paramètres (les
+/// arguments qu'un jeu hors launcher ajoute à un raccourci ou à une adresse).
+fn shell_open(uri: &str, parametres: Option<&str>) -> Result<(), String> {
+    shell_open_dans(uri, parametres, None)
+}
+
+/// Comme [`shell_open`], en fixant le dossier de travail du programme lancé.
+fn shell_open_dans(uri: &str, parametres: Option<&str>, dossier: Option<&Path>) -> Result<(), String> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
 
@@ -491,6 +505,9 @@ fn open_uri(uri: &str) -> Result<(), String> {
     let to_wide = |s: &str| -> Vec<u16> { OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect() };
     let verb = to_wide("open");
     let file = to_wide(uri);
+    // Gardé en vie jusqu'après l'appel : `ShellExecuteW` n'en reçoit qu'un pointeur.
+    let params = parametres.map(to_wide);
+    let dossier = dossier.map(|d| -> Vec<u16> { d.as_os_str().encode_wide().chain(std::iter::once(0)).collect() });
 
     // SW_SHOWNORMAL = 1.
     let code = unsafe {
@@ -498,8 +515,8 @@ fn open_uri(uri: &str) -> Result<(), String> {
             std::ptr::null_mut(),
             verb.as_ptr(),
             file.as_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
+            params.as_ref().map_or(std::ptr::null(), |p| p.as_ptr()),
+            dossier.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
             1,
         )
     };
@@ -518,7 +535,13 @@ fn open_uri(uri: &str) -> Result<(), String> {
 /// - `.exe` : spawn direct.
 /// - `.bat`/`.cmd` : via `cmd /c` (CreateProcess ne sait pas exécuter un script batch).
 /// - autre (`.lnk`, `.url`…) : ShellExecute (le raccourci porte sa propre cible + dossier).
-fn launch_executable(exe: &str) -> Result<(), String> {
+///
+/// 🔑 `args` est ajouté **tel quel** à la ligne de commande (`raw_arg`), sans guillemets ni
+/// échappement de notre part : c'est ce que fait un raccourci Windows, et c'est ce que
+/// l'utilisateur a sous les yeux en saisissant `--exec="E:\Roms\jeu.iso"`. Le redécouper
+/// nous-mêmes reviendrait à deviner les règles de chaque programme.
+fn launch_executable(exe: &str, args: Option<&str>) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
     let path = Path::new(exe);
     let ext = path
         .extension()
@@ -532,7 +555,6 @@ fn launch_executable(exe: &str) -> Result<(), String> {
             // On passe le nom de fichier (pas le chemin complet) et on fixe le CWD au dossier
             // du script → évite les pièges de guillemets de `cmd /c` et donne le bon CWD.
             // CREATE_NO_WINDOW : pas de fenêtre console qui clignote au lancement.
-            use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             let name = path.file_name().unwrap_or(path.as_os_str());
             let mut c = Command::new("cmd");
@@ -540,16 +562,31 @@ fn launch_executable(exe: &str) -> Result<(), String> {
             c
         }
         _ => {
-            return tauri_plugin_opener::open_path(exe, None::<&str>)
-                .map_err(|e| if crate::locale::en() { format!("Couldn't launch {exe}: {e}") } else { format!("Impossible de lancer {exe} : {e}") });
+            return match args {
+                Some(a) => shell_open(exe, Some(a)),
+                None => tauri_plugin_opener::open_path(exe, None::<&str>)
+                    .map_err(|e| if crate::locale::en() { format!("Couldn't launch {exe}: {e}") } else { format!("Impossible de lancer {exe} : {e}") }),
+            };
         }
     };
+    if let Some(a) = args {
+        cmd.raw_arg(a);
+    }
     if let Some(dir) = dir {
         cmd.current_dir(dir);
     }
-    cmd.spawn()
-        .map(|_| ())
-        .map_err(|e| if crate::locale::en() { format!("Couldn't launch {exe}: {e}") } else { format!("Impossible de lancer {exe} : {e}") })
+    /// `ERROR_ELEVATION_REQUIRED` : l'exécutable exige les droits d'administrateur.
+    const ELEVATION_REQUISE: i32 = 740;
+    match cmd.spawn() {
+        Ok(_) => Ok(()),
+        // `CreateProcess` ne sait pas demander l'élévation ; `ShellExecuteW` si, et c'est
+        // lui qui affiche l'invite de Windows. Sans ce repli, un jeu qui se lançait par
+        // son raccourci échouait une fois ajouté par son exécutable.
+        Err(e) if e.raw_os_error() == Some(ELEVATION_REQUISE) && ext.as_deref() == Some("exe") => {
+            shell_open_dans(exe, args, dir)
+        }
+        Err(e) => Err(if crate::locale::en() { format!("Couldn't launch {exe}: {e}") } else { format!("Impossible de lancer {exe} : {e}") }),
+    }
 }
 
 /// Taille totale d'un dossier (métadonnées uniquement, récursif).
@@ -638,6 +675,31 @@ mod tests {
         .iter()
         .map(|r| normalize(r))
         .collect()
+    }
+
+    /// Les options de lancement d'un jeu hors launcher arrivent au programme **telles
+    /// qu'elles sont écrites**, guillemets et espaces compris — comme depuis un raccourci.
+    #[test]
+    fn les_options_de_lancement_arrivent_telles_quelles() {
+        let dir = std::env::temp_dir().join(format!("torii lancement {}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sortie = dir.join("lancé avec.txt");
+        let cmd = std::env::var("ComSpec").unwrap_or_else(|_| r"C:\Windows\System32\cmd.exe".into());
+
+        launch("manual", &cmd, Some(&format!(r#"  /c echo --exec="E:\Roms\jeu.iso" -windowed> "{}"  "#, sortie.display()))).unwrap();
+
+        // Le programme est lancé sans être attendu : on lui laisse le temps d'écrire.
+        let mut lu = String::new();
+        for _ in 0..50 {
+            lu = std::fs::read_to_string(&sortie).unwrap_or_default();
+            if !lu.trim().is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert_eq!(lu.trim(), r#"--exec="E:\Roms\jeu.iso" -windowed"#);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Le cas qui motive tout : un jeu acheté puis lance depuis son launcher avant que

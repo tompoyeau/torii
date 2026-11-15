@@ -47,6 +47,7 @@ export function mergeDuplicates(games: Game[]): Game[] {
       id: g.id,
       platform: g.platform,
       launchTarget: g.launchTarget,
+      launchArgs: g.launchArgs,
       installed: g.installed,
     }));
     const installedSrc = group.find((g) => g.installed);
@@ -151,6 +152,10 @@ export function fromDto(dto: GameDto): Game {
     // Une jaquette de jeu manuel peut être un fichier local choisi par l'utilisateur :
     // la webview a besoin d'une URL `asset://` pour l'afficher.
     coverUrl: dto.coverUrl ? displayableCover(dto.coverUrl) : undefined,
+    // 🔑 La jaquette telle qu'elle est stockée. Sans elle, rouvrir « Modifier le jeu »
+    // présentait un champ vide, et enregistrer — même pour corriger le seul titre —
+    // effaçait la jaquette.
+    coverSource: dto.coverUrl ?? undefined,
     heroUrl: dto.heroUrl ?? undefined,
     installed: dto.installed,
     owned: dto.owned ?? dto.installed,
@@ -161,6 +166,7 @@ export function fromDto(dto: GameDto): Game {
       ? Date.now() / 1000 - lastPlayed < RECENT_WINDOW_DAYS * 86400
       : false,
     launchTarget: dto.launchTarget,
+    launchArgs: dto.launchArgs ?? undefined,
     installDir: dto.installDir ?? undefined,
     sizeGb: dto.sizeGb,
     // Temps de jeu (Steam) : masqué en dessous d'une heure pour éviter les « 0 h ».

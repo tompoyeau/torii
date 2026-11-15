@@ -1,4 +1,4 @@
-import type { Friend, FriendsCommon, Game, GameDto, GameMeta, LibraryIndex, LibrarySnapshot, OwnedGameSheet, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreBrowse, StoreBrowseSort, StoreShelfItem, StoreShelfKind, StoreSuggestion, StoreTag, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
+import type { Friend, FriendsCommon, Game, GameDto, GameMeta, GameSheet, TargetInspection, LibraryIndex, LibrarySnapshot, OwnedGameSheet, Settings, SocialPrefs, SteamAchievements, SteamProfile, StoreExtras, StoreGame, StoreHome, StoreItem, StoreBrowse, StoreBrowseSort, StoreShelfItem, StoreShelfKind, StoreSuggestion, StoreTag, SyncResult, ToriiAccount, ToriiCircle, ToriiDevice, ToriiPerson, ToriiSignIn, WishlistItem } from "../types";
 import { avatarFictif } from "./covers";
 import { MODE_WEB } from "./mode";
 import { commandeConnue, commandeWeb } from "./web";
@@ -8,8 +8,25 @@ import { t } from "../i18n";
 export interface ManualInput {
   title: string;
   launchTarget: string;
+  /** Arguments passés à la cible (`-windowed`, la ROM d'un émulateur…). */
+  launchArgs?: string | null;
   installDir?: string | null;
   coverUrl?: string | null;
+  /**
+   * Fiche choisie dans la recherche. Absente : le jeu garde ce qu'il a. Présente mais
+   * vide : ce qu'une fiche précédente avait apporté est effacé.
+   */
+  fiche?: ManualSheet | null;
+}
+
+/** Ce qu'une fiche apporte à un jeu ajouté à la main, hors titre et jaquette. */
+export interface ManualSheet {
+  heroUrl?: string | null;
+  genre?: string | null;
+  description?: string | null;
+  developer?: string | null;
+  year?: number | null;
+  screenshots?: string[];
 }
 
 /**
@@ -160,12 +177,15 @@ export async function relaunchApp(): Promise<void> {
 // --- Lancement / installation -------------------------------------------------
 
 export async function launchGame(game: Game): Promise<void> {
-  await launchSource(game.platform, game.launchTarget);
+  await launchSource(game.platform, game.launchTarget, game.launchArgs);
 }
 
-/** Lance une provenance précise (plateforme + cible), pour les jeux multi-sources. */
-export async function launchSource(platform: string, target?: string): Promise<void> {
-  await call<void>("launch_game", { platform, target: target ?? "" }, undefined);
+/**
+ * Lance une provenance précise (plateforme + cible), pour les jeux multi-sources. `args` :
+ * les arguments d'un jeu hors launcher, ignorés par les launchers.
+ */
+export async function launchSource(platform: string, target?: string, args?: string): Promise<void> {
+  await call<void>("launch_game", { platform, target: target ?? "", args: args ?? null }, undefined);
 }
 
 /** Déclenche l'installation d'un jeu (ouvre le launcher sur son flux d'installation). */
@@ -623,9 +643,14 @@ export async function setGameFavorite(id: string, favorite: boolean): Promise<st
 /**
  * Ajoute un jeu saisi manuellement (persisté dans `manual_games.json`).
  * Renvoie la liste à jour des jeux manuels (ou `null` hors Tauri).
+ *
+ * ⚠️ L'erreur du backend remonte, ici comme dans `updateManualGame` : « Fichier
+ * introuvable », « Ce jeu est déjà dans ta bibliothèque » sont écrits pour être montrés
+ * dans le formulaire. Avalée, elle refermait la modale sans rien ajouter ni rien dire.
  */
 export async function addManualGame(input: ManualInput): Promise<GameDto[] | null> {
-  return await call<GameDto[] | null>("add_manual_game", { input }, null);
+  if (!(await inTauri())) return null;
+  return await callOrThrow<GameDto[]>("add_manual_game", { input });
 }
 
 /** Met à jour un jeu manuel existant. Renvoie la liste à jour (ou `null` hors Tauri). */
@@ -633,7 +658,55 @@ export async function updateManualGame(
   id: string,
   input: ManualInput,
 ): Promise<GameDto[] | null> {
-  return await call<GameDto[] | null>("update_manual_game", { id, input }, null);
+  if (!(await inTauri())) return null;
+  return await callOrThrow<GameDto[]>("update_manual_game", { id, input });
+}
+
+/**
+ * Regarde un fichier choisi ou déposé dans « Ajouter un jeu » : titre deviné, vraie cible
+ * et arguments d'un raccourci, dossier du jeu. L'erreur (fichier introuvable) remonte.
+ * `null` hors Tauri.
+ */
+export async function inspectGameTarget(path: string): Promise<TargetInspection | null> {
+  if (!(await inTauri())) return null;
+  return await callOrThrow<TargetInspection>("inspect_game_target", { path });
+}
+
+/**
+ * Fiches IGDB qui correspondent à un titre, pour en choisir une. L'erreur (base
+ * injoignable, trop de recherches) remonte, à distinguer d'une liste vide.
+ *
+ * ⚠️ Le quota d'IGDB est partagé par tous les joueurs : à n'appeler que sur une action de
+ * l'utilisateur, jamais à chaque frappe.
+ */
+export async function searchGameSheets(title: string): Promise<GameSheet[]> {
+  if (!(await inTauri())) return [];
+  return await callOrThrow<GameSheet[]>("search_game_sheets", { title });
+}
+
+/**
+ * Fichiers déposés sur la fenêtre depuis l'Explorateur. `survol` suit l'entrée et la
+ * sortie du glisser, `depose` reçoit les chemins. Renvoie la fonction de désabonnement
+ * (sans effet hors Tauri, où le navigateur ne donne pas de chemin).
+ */
+export async function onFileDrop(
+  depose: (chemins: string[]) => void,
+  survol: (dessus: boolean) => void,
+): Promise<() => void> {
+  if (!hasTauriRuntime()) return () => {};
+  try {
+    const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+    return await getCurrentWebview().onDragDropEvent((e) => {
+      if (e.payload.type === "enter" || e.payload.type === "over") survol(true);
+      else if (e.payload.type === "leave") survol(false);
+      else if (e.payload.type === "drop") {
+        survol(false);
+        depose(e.payload.paths);
+      }
+    });
+  } catch {
+    return () => {};
+  }
 }
 
 /** Retire un jeu manuel par son id. Renvoie la liste à jour (ou `null` hors Tauri). */

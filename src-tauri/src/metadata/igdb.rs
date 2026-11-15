@@ -819,6 +819,107 @@ pub fn recognize(guess: &str) -> Option<(String, IgdbMeta)> {
     Some((g["name"].as_str()?.to_string(), parse_meta(g)))
 }
 
+/// Une fiche proposée à l'utilisateur quand il ajoute un jeu à la main.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Candidat {
+    pub name: String,
+    /// Le titre cherché est exactement le nom de cette fiche, ou l'un de ses alias.
+    pub exact: bool,
+    /// Sans être exact, le titre cherché est contenu dans ce nom (ou l'inverse) : la règle
+    /// qui suffit à [`recognize`] pour baptiser seul un jeu détecté. L'interface présélectionne
+    /// la première fiche exacte ou proche, et rien d'autre.
+    pub proche: bool,
+    #[serde(flatten)]
+    pub meta: IgdbMeta,
+}
+
+/// Nombre de fiches proposées : assez pour départager des homonymes (les « Doom »), pas
+/// au point de faire défiler.
+const CANDIDATS_MAX: usize = 8;
+
+/// Fiches qui correspondent à un titre saisi, pour que l'utilisateur **choisisse**.
+///
+/// 🔑 Différence avec [`recognize`], qui décide seul et doit donc être strict (5 lettres
+/// au moins, un nom inclus dans l'autre) : ici quelqu'un regarde le résultat. On peut
+/// montrer tout ce que la recherche remonte de plausible, « Doom » compris, et laisser
+/// trancher — c'est la seule réponse honnête à une recherche floue.
+///
+/// Un appel à IGDB, deux si le premier ne ramène aucun jeu de plein droit : c'est le cas
+/// des titres qui n'existent que comme alias (cf. [`name_meta`]). Le quota étant partagé
+/// par tous les joueurs, l'interface n'appelle ceci que sur une action — jamais à la frappe.
+pub fn chercher(titre: &str) -> Result<Vec<Candidat>, String> {
+    let clean = clean_title(titre);
+    let cible = norm(&clean);
+    if cible.len() < 2 {
+        return Ok(Vec::new());
+    }
+
+    let mut trouves = candidats(&demander(&format!("search \"{clean}\"; {FIELDS} limit 20;"))?, &cible);
+    if trouves.is_empty() {
+        std::thread::sleep(Duration::from_millis(CALL_DELAY_MS));
+        let exacts = demander(&format!(
+            "{FIELDS} where name ~ \"{clean}\" | alternative_names.name ~ \"{clean}\"; limit 5;"
+        ))?;
+        trouves = candidats(&exacts, &cible);
+    }
+
+    // Genres dans la langue de l'interface, comme partout ailleurs (cf. `traduire_lot`).
+    for c in &mut trouves {
+        let mut lot = [(String::new(), std::mem::take(&mut c.meta))];
+        traduire_lot(&mut lot);
+        let [(_, meta)] = lot;
+        c.meta = meta;
+    }
+    Ok(trouves)
+}
+
+/// Les jeux d'une réponse IGDB, sous forme de fiches à proposer.
+fn demander(body: &str) -> Result<Vec<Value>, String> {
+    match query("games", body) {
+        Reponse::Corps(Value::Array(jeux)) => Ok(jeux),
+        Reponse::Corps(_) => Ok(Vec::new()),
+        Reponse::Limite => Err(crate::locale::tr(
+            "Trop de recherches en ce moment. Réessaie dans une minute.",
+            "Too many searches right now. Try again in a minute.",
+        )
+        .into()),
+        Reponse::Panne => Err(crate::locale::tr(
+            "Recherche impossible : la base de jeux ne répond pas.",
+            "Search unavailable: the games database isn't responding.",
+        )
+        .into()),
+    }
+}
+
+/// Trie une réponse d'IGDB : les correspondances exactes d'abord, puis les autres jeux
+/// dans l'ordre de pertinence d'IGDB.
+///
+/// ⚠️ Les DLC, extensions et bundles (`parent_game`) sont écartés, comme dans
+/// [`recognize`] — sauf correspondance exacte : qui cherche « Phantom Liberty » le veut.
+fn candidats(jeux: &[Value], cible: &str) -> Vec<Candidat> {
+    let mut vus: HashSet<u64> = HashSet::new();
+    let mut exacts = Vec::new();
+    let mut autres = Vec::new();
+    for g in jeux {
+        let Some(name) = g["name"].as_str() else { continue };
+        if g["id"].as_u64().is_some_and(|id| !vus.insert(id)) {
+            continue;
+        }
+        let exact = nom_correspond(g, cible);
+        if !exact && !g["parent_game"].is_null() {
+            continue;
+        }
+        let cle = norm(name);
+        let proche = !exact && cible.len() >= 5 && (cle.contains(cible) || cible.contains(&cle));
+        let candidat = Candidat { name: name.to_string(), exact, proche, meta: parse_meta(g) };
+        if exact { exacts.push(candidat) } else { autres.push(candidat) }
+    }
+    exacts.extend(autres);
+    exacts.truncate(CANDIDATS_MAX);
+    exacts
+}
+
 /// Résultat d'une recherche par titre. Trois issues et pas deux : « IGDB ne connaît pas
 /// ce jeu » se mémorise, « je n'ai pas pu demander » surtout pas.
 enum Issue {
@@ -1255,6 +1356,44 @@ mod tests {
         let nu = serde_json::json!({ "name": "Hadès" });
         assert!(nom_correspond(&nu, &norm("HADÈS")));
         assert!(!nom_correspond(&nu, &norm("Hadès II")));
+    }
+
+    /// Ajout manuel : l'utilisateur choisit, donc on montre les homonymes — mais pas les
+    /// DLC, et la correspondance exacte passe devant quel que soit l'ordre d'IGDB.
+    #[test]
+    fn les_fiches_proposees_a_l_ajout_manuel() {
+        let reponse = serde_json::json!([
+            { "id": 1, "name": "Doom Eternal" },
+            { "id": 2, "name": "Doom Eternal: The Ancient Gods", "parent_game": 1 },
+            { "id": 3, "name": "DOOM" },
+            { "id": 3, "name": "DOOM" },
+            { "id": 4, "name": "Doom 3" },
+            { "id": 5 },
+        ]);
+        let jeux = reponse.as_array().unwrap();
+
+        let fiches = candidats(jeux, &norm("Doom"));
+        let noms: Vec<&str> = fiches.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(noms, ["DOOM", "Doom Eternal", "Doom 3"]);
+        assert!(fiches[0].exact && !fiches[1].exact);
+        assert_eq!(fiches[0].meta.igdb_id, Some(3));
+        // « Doom » est trop court pour qu'une simple inclusion désigne quoi que ce soit.
+        assert!(fiches.iter().all(|c| !c.proche));
+
+        // Un titre deviné d'après un dossier : inclus dans le vrai nom, donc proche.
+        let moria = serde_json::json!([{ "id": 9, "name": "The Lord of the Rings: Return to Moria" }]);
+        let fiches = candidats(moria.as_array().unwrap(), &norm("Return To Moria"));
+        assert!(fiches[0].proche && !fiches[0].exact);
+
+        // Un DLC cherché par son nom exact reste proposé : c'est ce qu'on a demandé.
+        let fiches = candidats(jeux, &norm("Doom Eternal: The Ancient Gods"));
+        assert_eq!(fiches[0].name, "Doom Eternal: The Ancient Gods");
+        assert!(fiches[0].exact);
+
+        // Jamais plus que ce que l'écran peut montrer.
+        let beaucoup: Vec<Value> =
+            (0..30).map(|i| serde_json::json!({ "id": 100 + i, "name": format!("Jeu {i}") })).collect();
+        assert_eq!(candidats(&beaucoup, "jeu").len(), CANDIDATS_MAX);
     }
 
     /// Réponses réelles d'IGDB (23/10/2026), réduites aux champs lus.

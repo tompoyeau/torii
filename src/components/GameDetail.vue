@@ -144,7 +144,7 @@ function playFrom(s: GameSource) {
   if (!game.value) return;
   if (s.installed) {
     markPlayed(game.value.id);
-    launchSource(s.platform, s.launchTarget);
+    launchSource(s.platform, s.launchTarget, s.launchArgs);
   } else {
     installSource(s.platform, s.launchTarget);
   }

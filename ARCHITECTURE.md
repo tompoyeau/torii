@@ -16,6 +16,7 @@ cargo check                          # compile-vérifier le natif
 cargo test --lib                     # tests unitaires (parseurs)
 cargo run --example scan             # jeux installés détectés
 cargo run --example community        # jeux possédés + famille (via session stockée)
+cargo run --example raccourci        # ce que l'ajout manuel tire d'un fichier ou des raccourcis du PC
 ```
 
 ⚠️ **`cargo` n'est pas dans le PATH par défaut** dans un shell frais :
@@ -331,10 +332,8 @@ cargo run --example community        # jeux possédés + famille (via session st
   Items : Jouer, Voir la fiche, (Ré)favori, Masquer/Réafficher, puis **Désinstaller** (si `installed`) ou
   **Retirer de la bibliothèque** (si `platform==="manual"` → `removeManual`). Position rabattue dans le viewport
   (mesure après `nextTick`). Ferme au clic-fond/Échap/scroll.
-- **Ajout manuel d'un jeu** : bouton « Ajouter » dans `TopBar` → `useUi.addGameOpen` → `AddGameModal.vue`
-  (titre + chemin exe requis, dossier + jaquette optionnels). Ponts `addManualGame`/`removeManualGame` dans
-  `lib/tauri.ts` → commandes Rust déjà enregistrées (`platforms/manual.rs`). `useLibrary.addManual` insère le
-  jeu créé dans le store sans re-scan (via `fromDto` exporté) ; `removeManual` le retire. Ouvre la fiche après ajout.
+- **Ajout manuel d'un jeu** : bouton « Ajouter » dans `TopBar` (ou Ctrl+N) → `useUi.addGameOpen` →
+  `AddGameModal.vue`. Tout le détail dans « Ajout manuel d'un jeu » plus bas.
 - **Auto-update de l'app** (plugin `updater` Tauri 2) : `useUpdater.ts` (check au démarrage → `available` →
   `downloadAndInstall` avec progression → `relaunch`) + `UpdateBanner.vue` (bannière bas-droite). Silencieux hors Tauri.
   - Rust : deps `tauri-plugin-updater` + `tauri-plugin-process`, enregistrés dans `lib.rs`. Permissions
@@ -1340,6 +1339,96 @@ Deux réponses, et il faut les deux — l'une évite le mal, l'autre répare ce 
 - `est_un_sosie` est isolée et testée parce que c'est **la seule règle de l'application qui
   supprime une entrée de bibliothèque**. Le test qui compte est celui du dossier voisin :
   « Portal 2 Demo » ne doit pas disparaître parce que « Portal 2 » existe.
+
+## Ajout manuel d'un jeu — `platforms/manual.rs`, `raccourci.rs`, `AddGameModal.vue` (fait)
+
+L'ancien formulaire (titre, exécutable, dossier, jaquette) avait cinq défauts : deux jeux
+du même titre s'écrasaient (même id), un fichier introuvable passait, le dossier d'un jeu
+ajouté par son raccourci était **le Bureau** (le surveillant de process lui attribuait
+alors tout ce qui en démarrait), le jeu n'était connu du surveillant et d'IGDB qu'au relevé
+en ligne suivant (jusqu'à 30 min), et les erreurs du backend étaient avalées — la modale se
+fermait sans rien ajouter ni rien dire.
+
+- **Parcours en deux temps.** En création, on désigne d'abord le fichier (bouton ou
+  glisser-déposer depuis l'Explorateur, `lib/tauri.onFileDrop`) ; `inspect_game_target`
+  (`manual::inspecter`) en tire titre, cible, options et dossier ; une recherche de fiche
+  part une fois ; le formulaire s'affiche ensuite, options avancées (options de lancement,
+  dossier, jaquette) repliées. « Saisir un chemin ou une adresse à la main » saute la
+  première étape (`steam://…`). En édition, le formulaire s'ouvre directement.
+  ⚠️ La modale est montée en permanence : un dépôt n'est traité que si elle est ouverte.
+- **Raccourcis** (`raccourci.rs`) : lus par l'API du shell (`IShellLinkW` + `IPersistFile`,
+  crate `windows` 0.61, celle de wry, sans `Resolve`). 🔑 **Ne pas revenir à un lecteur
+  maison du format `.lnk`** : essayé, il manquait 23 raccourcis sur 225 relevés sur une
+  vraie machine (Battle.net, Riot, Rockstar posent une cible qui n'existe que sous forme de
+  liste d'identifiants du shell). Avec l'API : 0 écart avec ce que Windows en dit.
+  Un raccourci est **remplacé par sa cible et ses arguments** seulement si la cible est un
+  `.exe` qui existe, qui n'est pas un client de launcher (`detected::peut_etre_un_jeu`), et
+  que « Démarrer dans » est son propre dossier (c'est ce que fait `launch_executable`).
+  Sinon on lance le raccourci tel quel, mais le dossier surveillé reste celui de la vraie
+  cible. Le titre est le nom du raccourci, sans « - Raccourci ».
+- **Dossier du jeu.** `detected::decrire` (titre de la Game Bar ou deviné, dossier par
+  `title_and_root`), **jamais une étagère** (`E:\Games`, le Bureau, la racine d'un disque)
+  ni le dossier d'un moteur partagé : sans dossier, le surveillant se rabat sur l'exécutable
+  exact. Quand le titre vient d'un humain (nom d'un raccourci), `detected::dossier_nomme`
+  prend l'ancêtre le plus haut qui porte ce titre : un jeu lancé par
+  `…\Soulframe\Downloaded\Public\Tools\Launcher.exe` vit dans `…\Soulframe`. Seuil : le
+  dossier contient tout le titre, ou en fait au moins la moitié (sinon le `bin` d'un autre
+  jeu passerait pour celui de « Robin Hood »).
+- **Garde-fous à l'enregistrement** (`manual::add` / `appliquer`) : titre non vide, cible
+  existante (une adresse n'est pas vérifiable, elle passe ; en édition, la cible n'est
+  revérifiée que si elle change — on doit pouvoir renommer un jeu dont le disque est
+  débranché), guillemets d'un chemin collé retirés, **id libre** (`manual:titre-2`…).
+  🔑 Doublon (`deja_present`) = même **lancement réel** (`lancement_reel` : la cible d'un
+  raccourci lisible et ses arguments), cherché aussi parmi les jeux détectés : un jeu ajouté
+  autrefois par son raccourci et le même ajouté par son exécutable sont un seul jeu (vu à
+  l'essai). Les arguments distinguent : un émulateur sert autant de jeux qu'il a de ROM.
+- **Options de lancement** : `GameDto.launch_args` (omis du JSON quand absent, donc rien ne
+  change pour les launchers), passées à `launch_game`. 🔑 Ajoutées **telles quelles**
+  (`Command::raw_arg`, ou les paramètres de `ShellExecuteW` pour un raccourci / une adresse),
+  sans guillemets ni découpage de notre part — c'est ce que fait un raccourci Windows.
+  Testé en lançant un vrai programme (`les_options_de_lancement_arrivent_telles_quelles`).
+  Un `.exe` qui exige les droits d'administrateur (`CreateProcess` → erreur 740) est relancé
+  par `ShellExecuteW`, qui affiche l'invite de Windows.
+- **Fiche du jeu** : `search_game_sheets` → `igdb::chercher`. Différence avec `recognize`,
+  qui décide seul et doit être strict : ici quelqu'un choisit, on montre donc jusqu'à 8
+  fiches (DLC écartés sauf nom exact), marquées `exact` / `proche`. 🔑 **Présélection
+  seulement si une seule fiche est exacte** (sinon une seule proche) : « Ocarina of Time »
+  désigne à la fois le jeu de 1998 et son remake, et l'ordre d'IGDB ne dit pas lequel on
+  possède. ⚠️ **Un appel par action, jamais à la frappe** : le quota IGDB est partagé.
+  La fiche choisie voyage dans `ManualInput.fiche` (hero, genre, description, studio,
+  année, captures) ; absente, rien ne bouge ; **présente mais vide, elle efface** (« Aucune
+  de ces fiches »). Sa jaquette remplit le champ sauf image choisie à la main. Un titre
+  deviné peut être remplacé par le nom de la fiche, un titre tapé jamais.
+- **Publication immédiate** (`libwatch::hors_launcher_modifie`, appelé par les trois
+  commandes, devenues `async`) : les jeux manuels ne font pas partie de l'empreinte locale,
+  la veille ne les voit donc pas changer. On recompose tout de suite avec les possédés du
+  dernier relevé en ligne ; si un relevé tourne, un fil attend la fin et publie par-dessus
+  (en prévenant l'interface, à qui ce relevé a pu rendre une liste sans le jeu). Une
+  modification qui change le titre ou la fiche oublie l'entrée du cache IGDB (`oublier`).
+- **Front.** `addManualGame` / `updateManualGame` laissent remonter l'erreur (`callOrThrow`),
+  affichée dans la modale. `updateManual` ne remplace que ce que le formulaire édite : repartir
+  du jeu relu du fichier effaçait de l'écran favori, catégories et visuels de réserve.
+  `fromDto` garde `coverSource` (la jaquette telle que stockée) : sans elle, « Modifier »
+  présentait un champ vide et enregistrer effaçait la jaquette. ⚠️ Les boutons
+  « Rechercher » et « Ajouter le jeu » ne sont **pas désactivés** pendant l'attente (la
+  fonction ignore un second clic, `aria-busy` le dit) : un bouton désactivé perd le focus,
+  qui retombait sur la page.
+- **Réparation au démarrage** (`manual::reparer`, dans `setup`, avant le premier scan) : les
+  jeux ajoutés avec l'ancien formulaire dont le dossier est celui du fichier lancé, quand ce
+  fichier est un raccourci ou vit sur une étagère, reçoivent le dossier de la vraie cible —
+  ou plus de dossier du tout. Seul le dossier change, la cible marche déjà. Idempotente.
+- **Essai de bout en bout** dans un profil séparé : `npm run tauri dev -- --config <fichier>`
+  avec `{ "identifier": "com.tompo.ludo.essai" }` (dossier de config à part, aucune donnée
+  réelle touchée), pilotage par CDP (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`).
+  Un dépôt de fichier se simule en émettant `tauri://drag-drop` (`plugin:event|emit`).
+  ⚠️ Via `npm run`, le `--` est mangé sous PowerShell : passer par `npx tauri dev --config …`,
+  sinon l'appli démarre avec le vrai identifiant.
+- ⚠️ **Limite connue** : le suivi de session rattache un process à un jeu par son dossier.
+  Plusieurs jeux d'un même émulateur partagent ce dossier, donc la partie est attribuée au
+  premier d'entre eux.
+- **Reste à faire** : proposer les jeux à ajouter (lot « jeux trouvés sur ce PC »). La liste
+  de la Game Bar ne suffit pas (sur la machine de dev, un seul jeu absent de la
+  bibliothèque) : piste d'un dossier de jeux à parcourir, à cadrer.
 
 ## Durcissement du proxy — cache, limites par IP, listes blanches (fait)
 

@@ -50,4 +50,7 @@ winreg = "0.52"
 # Mêmes versions que celles qu'utilise déjà wry : rien de plus à compiler.
 webview2-com = "0.38"
 windows-core = "0.61"
+# Lecture des raccourcis `.lnk` par l'API du shell (`platforms/raccourci.rs`). Même crate
+# et même version que celle de wry, déjà compilée : on n'y active que trois modules.
+windows = { version = "0.61", features = ["Win32_UI_Shell", "Win32_System_Com", "Win32_Storage_FileSystem"] }
 
