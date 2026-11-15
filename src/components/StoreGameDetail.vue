@@ -461,8 +461,8 @@ const detailOffre = (p: StorePrice) =>
 </template>
 
 <style scoped>
-/* Toute la fenêtre, comme la fiche d'un jeu de la bibliothèque. */
-.sd { position: fixed; inset: 0 0 var(--barre-mobile) 0; z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
+/* Sous la barre du haut, comme la fiche d'un jeu de la bibliothèque. */
+.sd { position: fixed; inset: var(--hauteur-barre, 0px) 0 var(--barre-mobile) 0; z-index: 110; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; opacity: 0; visibility: hidden; transition: opacity 0.28s; }
 .sd.open { opacity: 1; visibility: visible; }
 .sd-banner { position: relative; height: 40vh; min-height: 300px; overflow: hidden; }
 .sd-banner-art { position: absolute; inset: 0; }
@@ -617,6 +617,8 @@ const detailOffre = (p: StorePrice) =>
   .sd-prices { position: static; }
 }
 @media (max-width: 820px) {
+  /* Sur téléphone, la barre du haut défile avec la page : la fiche part du haut de l'écran. */
+  .sd { top: 0; }
   .sd-header, .sd-body { padding-left: 22px; padding-right: 22px; }
   /* Comparer les prix passe avant de lire la description. */
   .sd-prices { order: -1; }

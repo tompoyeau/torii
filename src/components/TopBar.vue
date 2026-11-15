@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useUi } from "../composables/useUi";
 import { useLibrary } from "../composables/useLibrary";
 import { useFriends } from "../composables/useFriends";
@@ -69,7 +69,44 @@ function openMyAccount() {
  * Précédent / suivant, comme dans un navigateur. L'infobulle dit où mène chaque flèche
  * (« Revenir à : Boutique ») : les deux piles ne se voient pas autrement.
  */
-const { peutReculer, peutAvancer, libellePrecedent, libelleSuivant, reculer, avancer, quitterLesSurcouches } = useNavigation();
+const { peutReculer, peutAvancer, libellePrecedent, libelleSuivant, reculer, avancer, quitterLesSurcouches, coucheDuDessus } = useNavigation();
+
+/**
+ * Les fiches (jeu, Boutique) s'ouvrent SOUS la barre, qui reste là pour changer de section ou
+ * revenir en arrière. Elles se calent sur sa hauteur réelle (`--hauteur-barre`), mesurée :
+ * elle change avec le zoom, la police, et le jour où la barre passe sur deux lignes.
+ */
+const barre = ref<HTMLElement | null>(null);
+let observateur: ResizeObserver | null = null;
+onMounted(() => {
+  if (!barre.value) return;
+  observateur = new ResizeObserver(([entree]) => {
+    const hauteur = Math.round(entree.borderBoxSize?.[0]?.blockSize ?? entree.target.getBoundingClientRect().height);
+    document.documentElement.style.setProperty("--hauteur-barre", `${hauteur}px`);
+  });
+  observateur.observe(barre.value);
+});
+onBeforeUnmount(() => observateur?.disconnect());
+
+/** Une fiche est ouverte sous la barre : fond plein, la page ne doit pas transparaître. */
+const surFiche = computed(() => {
+  const couche = coucheDuDessus();
+  return couche === "jeu" || couche === "produit";
+});
+
+/**
+ * Le champ filtre la bibliothèque, cachée sous la fiche : y entrer referme d'abord la fiche,
+ * comme Ctrl+F, sinon on taperait sans rien voir changer.
+ *
+ * ⚠️ En se fermant, la fiche rend le focus à la carte qui l'avait ouverte (`useFocusTrap`) :
+ * on le reprend au tour suivant, sans quoi la frappe partirait sur la carte.
+ */
+async function surFocusRecherche() {
+  if (!surFiche.value) return;
+  quitterLesSurcouches();
+  await nextTick();
+  champ.value?.focus();
+}
 
 /**
  * Les grandes sections, en onglets : c'est ici que vit la navigation depuis que la barre
@@ -113,7 +150,7 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 </script>
 
 <template>
-  <div class="topbar" :class="{ web: MODE_WEB }">
+  <div ref="barre" class="topbar" :class="{ web: MODE_WEB, 'sur-fiche': surFiche }">
     <!-- Sur téléphone, la barre latérale et son logo ne sont plus là. -->
     <img v-if="MODE_WEB" class="marque" src="/torii.svg" alt="Torii" />
     <div class="logo" aria-hidden="true">
@@ -170,7 +207,7 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
     </div>
     <label v-if="chercheDansLaBiblio" class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-      <input ref="champ" v-model="query" data-recherche type="text" :placeholder="t('bibliotheque.barre.rechercher')" autocomplete="off" />
+      <input ref="champ" v-model="query" data-recherche type="text" @focus="surFocusRecherche" :placeholder="t('bibliotheque.barre.rechercher')" autocomplete="off" />
       <!-- Rappel du raccourci tant que le champ est vide : c'est là qu'on le cherche. -->
       <span v-if="!query" class="hint" aria-hidden="true"><kbd>{{ t("reglages.raccourcis.touches.ctrl") }}</kbd><kbd>F</kbd></span>
       <button
@@ -197,7 +234,7 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" /></svg>
     </button>
-    <button v-if="!MODE_WEB" class="icon-btn friends-btn" data-tuto="amis" :class="{ active: section === 'friends' }" :title="avecRaccourci(t('bibliotheque.barre.amis'), ctrl, '4')" @click="showFriends">
+    <button v-if="!MODE_WEB" class="icon-btn friends-btn" data-tuto="amis" :class="{ active: section === 'friends' }" :title="avecRaccourci(t('bibliotheque.barre.amis'), ctrl, '4')" @click="allerA(showFriends)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
       <span v-if="friendsOnline" class="friends-badge">{{ friendsOnline }}</span>
     </button>
@@ -220,9 +257,10 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
 <style scoped>
 .topbar {
   position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px;
-  padding: 18px 0 16px;
+  padding: 18px 34px 16px;
   background: linear-gradient(var(--bg) 60%, transparent); backdrop-filter: blur(6px);
 }
+.topbar.sur-fiche { background: var(--bg); }
 .logo {
   width: 38px; height: 38px; border-radius: 11px; flex: none;
   background: linear-gradient(140deg, var(--accent), #ff9a6b); color: var(--accent-ink);
@@ -351,7 +389,9 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
    défile avec la page : l'écran est trop petit pour lui laisser sa hauteur en permanence.
    Le retour passe par le geste du téléphone et par le bouton des fiches. */
 @media (max-width: 820px) {
-  .topbar.web { position: static; gap: 8px; padding: 12px 0; background: none; backdrop-filter: none; }
+  /* Les mêmes marges que la page (`.main`, `AppShell.vue`). */
+  .topbar { padding-inline: max(18px, env(safe-area-inset-left, 0px)) max(18px, env(safe-area-inset-right, 0px)); }
+  .topbar.web { position: static; gap: 8px; padding-block: 12px; background: none; backdrop-filter: none; }
   .topbar.web .marque { display: block; width: 34px; height: 34px; flex: none; }
   .topbar .logo,
   .topbar .onglets,

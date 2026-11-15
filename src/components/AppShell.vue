@@ -25,8 +25,9 @@ const { section, filter, query, sort, setSort, listView, installedOnly, toggleIn
 const { selectedGameId: produitOuvert } = useStore();
 
 /**
- * Une fiche (jeu, Boutique) recouvre le contenu : ce qu'elle cache sort de la tabulation et
- * des lecteurs d'écran (`inert`), barre du haut comprise.
+ * Une fiche (jeu, Boutique) recouvre le contenu, sous la barre du haut : ce qu'elle cache
+ * sort de la tabulation et des lecteurs d'écran (`inert`). La barre, hors de `<main>`, reste
+ * joignable — c'est pourquoi les fiches n'enferment pas le focus.
  */
 const contenuRecouvert = computed(
   () => produitOuvert.value != null || (selectedGameId.value != null && games.value.some((g) => g.id === selectedGameId.value)),
@@ -74,8 +75,8 @@ const SORTS = computed<{ key: SortKey; label: string }[]>(() => [
 
 <template>
   <div class="shell">
+    <TopBar />
     <main class="main" :class="{ 'sur-page': section === 'web' }" :inert="contenuRecouvert">
-      <TopBar />
 
       <PageWeb v-if="section === 'web'" />
       <StoreView v-else-if="section === 'store'" />
