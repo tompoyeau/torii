@@ -41,17 +41,6 @@ export default {
 
   /** Accueil : vedette, rayons, classements. */
   accueil: {
-    rayons: "Rayons de la boutique",
-    nav: {
-      promos: "Promos",
-      ventes: "Meilleures ventes",
-      nouveautes: "Nouveautés",
-      aVenir: "À venir",
-      offerts: "Offerts",
-      genres: "Par genre",
-      gratuits: "Free-to-play",
-      toutes: "Toutes les offres",
-    },
     vedette: {
       titre: "En vedette",
       surtitre: "En vedette · Promo",

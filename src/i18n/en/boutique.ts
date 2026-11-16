@@ -41,17 +41,6 @@ const en: Forme<typeof fr> = {
   retirerWishlist: "Remove from wishlist",
 
   accueil: {
-    rayons: "Store sections",
-    nav: {
-      promos: "Deals",
-      ventes: "Top sellers",
-      nouveautes: "New releases",
-      aVenir: "Upcoming",
-      offerts: "Free to keep",
-      genres: "By genre",
-      gratuits: "Free-to-play",
-      toutes: "All deals",
-    },
     vedette: {
       titre: "Featured",
       surtitre: "Featured · On sale",
