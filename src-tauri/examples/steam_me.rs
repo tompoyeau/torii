@@ -5,7 +5,7 @@ fn main() {
     let appdata = std::env::var("APPDATA").expect("APPDATA introuvable");
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
-    match ludo_lib::accounts::steam_me(&dir) {
+    match torii_lib::accounts::steam_me(&dir) {
         Some(p) => {
             println!("=== Profil Steam ===");
             println!("  Pseudo : {}", p.name);

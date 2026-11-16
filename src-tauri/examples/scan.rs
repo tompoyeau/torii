@@ -2,7 +2,7 @@
 //! `cargo run --example scan` (depuis src-tauri).
 
 fn main() {
-    let games = ludo_lib::platforms::scan_all(None);
+    let games = torii_lib::platforms::scan_all(None);
     println!("=== {} jeux détectés ===\n", games.len());
     for g in &games {
         let cover = if g.cover_url.is_some() { "🖼" } else { "—" };

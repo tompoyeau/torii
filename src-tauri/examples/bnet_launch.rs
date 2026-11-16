@@ -3,7 +3,7 @@
 //! N'exécute RIEN — affiche seulement ce qui serait lancé.
 
 fn main() {
-    match ludo_lib::accounts::battlenet::launcher_exe() {
+    match torii_lib::accounts::battlenet::launcher_exe() {
         None => {
             println!("❌ Battle.net.exe introuvable (protocole battlenet:// non enregistré ?).");
             println!("   → repli sur le deeplink `battlenet://<code>/` (ne marche que client fermé).");

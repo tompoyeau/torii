@@ -6,7 +6,7 @@ fn main() {
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
     println!("=== Vitrine (mises en avant, page 0) ===");
-    let items = ludo_lib::metadata::store::deals(0, "featured", &Default::default());
+    let items = torii_lib::metadata::store::deals(0, "featured", &Default::default());
     println!("{} jeux\n", items.len());
     for it in items.iter().take(6) {
         println!(
@@ -16,7 +16,7 @@ fn main() {
     }
 
     println!("\n=== Recherche « witcher » ===");
-    let res = ludo_lib::metadata::store::search("witcher", &Default::default());
+    let res = torii_lib::metadata::store::search("witcher", &Default::default());
     println!("{} résultats\n", res.len());
     for it in res.iter().take(6) {
         println!("  {:<40} {:>6.2}€  id={}", trunc(&it.title, 40), it.price, it.game_id);
@@ -24,7 +24,7 @@ fn main() {
 
     if let Some(first) = res.first() {
         println!("\n=== Fiche produit : {} (id {}) ===", first.title, first.game_id);
-        match ludo_lib::metadata::store::game(&first.game_id, &dir) {
+        match torii_lib::metadata::store::game(&first.game_id, &dir) {
             Some(g) => {
                 println!("Titre       : {}", g.title);
                 println!("Plus bas    : {:?}€", g.cheapest_ever);

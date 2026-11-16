@@ -4,7 +4,7 @@
 fn main() {
     let appdata = std::env::var("APPDATA").expect("APPDATA introuvable");
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
-    let creds = ludo_lib::accounts::secrets::load(&dir);
+    let creds = torii_lib::accounts::secrets::load(&dir);
 
     let Some(steam_id) = creds.steam_id.clone() else {
         println!("Pas de SteamID stocké."); return;
@@ -20,9 +20,9 @@ fn main() {
         (1091500, "Cyberpunk 2077"),
         (105600, "Terraria"),
     ] {
-        let players = ludo_lib::accounts::steam::current_players(appid);
+        let players = torii_lib::accounts::steam::current_players(appid);
         println!(">>> {label} — joueurs en ce moment : {players:?}");
-        match ludo_lib::accounts::steam::achievements(&steam_id, appid, &cookie) {
+        match torii_lib::accounts::steam::achievements(&steam_id, appid, &cookie) {
             None => println!("=== {label} ({appid}) : aucun succès / indisponible ===\n"),
             Some(a) => {
                 let pct = if a.total > 0 { a.unlocked * 100 / a.total } else { 0 };

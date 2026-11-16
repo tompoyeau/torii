@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn une_mise_a_jour_n_est_pas_une_installation_neuve() {
-        let dir = std::env::temp_dir().join(format!("ludo-locale-neuve-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("torii-locale-neuve-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         assert!(installation_neuve(&dir), "le dossier n'existe même pas encore");
         std::fs::create_dir_all(&dir).unwrap();

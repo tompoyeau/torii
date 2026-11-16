@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — Ludo
+# ARCHITECTURE.md — Torii
 
 Launcher de jeux type Playnite, plus joli. **Tauri 2 + Vue 3 + TypeScript**, Windows.
 Agrège jeux **installés** (fichiers locaux) et **possédés** (comptes en ligne), dont toute
@@ -51,6 +51,10 @@ cargo run --example suggestions      # les jeux que « Trouvés sur ce PC » pro
 - Le front doit rester fonctionnel hors Tauri (navigateur) : les appels `invoke` sont
   try/catch → repli sur données mock. Ne pas casser ce chemin.
 - Config/secrets stockés dans le dossier config de l'app (`%APPDATA%\com.tompo.ludo\`).
+- ⚠️ **L'identifiant `com.tompo.ludo` (`tauri.conf.json`) ne change jamais**, même s'il porte un
+  ancien nom de code : il nomme ce dossier, celui de WebView2 (`%LOCALAPPDATA%`, où vivent les
+  connexions aux launchers et le `localStorage`) et sert à l'installeur pour reconnaître une mise
+  à jour. Le changer ferait repartir chaque utilisateur de zéro, voire installer un second Torii.
 - 🔒 **Les identifiants sont chiffrés au repos** : `accounts/secrets.rs` écrit `credentials.dat`
   via **DPAPI** (`CryptProtectData`, portée utilisateur + entropie applicative), en FFI directe
   sur `crypt32` (pas de nouvelle dépendance). Un ancien `credentials.json` en clair est migré
@@ -198,7 +202,7 @@ cargo run --example suggestions      # les jeux que « Trouvés sur ce PC » pro
   `{authorizationCode}` sur `/id/api/redirect`. Donc `connect_epic` ouvre la fenêtre sur `login_url()`
   (login?redirectUrl=…/id/api/redirect?clientId=…&responseType=code), injecte `EPIC_CAPTURE_JS`
   (`initialization_script`) qui lit le code dans `document.body.innerText` et le met dans
-  `document.title` = `ludo-epic:<code>`, capté via `.on_document_title_changed` → canal mpsc.
+  `document.title` = `torii-epic:<code>`, capté via `.on_document_title_changed` → canal mpsc.
   Plus `.on_new_window(Allow)` pour les logins sociaux. Poll code/fermeture jusqu'à ~3 min.
 - Jeux : `launcher-public-service-prod06…/launcher/api/public/assets/Windows?label=Live` (Bearer)
   → {appName, catalogItemId, namespace}. Filtre `namespace=="ue"` écarté. Résolution titre/jaquettes
@@ -992,7 +996,7 @@ familial sont exclus de la vue, des deux côtés, dans `useFriendsCommon` :
   la fonctionnalité**. D'où un bandeau dans la vue Amis, à l'endroit où la proposition a
   du sens, calqué sur `ToriiPanel`.
 - 🔑 **Une proposition se fait une fois** : « Non merci » est définitif
-  (`libraryInviteDismissed` dans `ludo-prefs`), même principe que `steam_auto_linked`.
+  (`libraryInviteDismissed` dans `torii-prefs`), même principe que `steam_auto_linked`.
 - 🔑 Le bandeau propose les **deux usages séparément** — « Partager avec mes amis »
   (synchro + partage) et « Seulement mes appareils » (synchro seule, pour retrouver sa
   bibliothèque sur son mobile sans la montrer à personne). Il allumait d'abord les deux
@@ -1689,7 +1693,7 @@ la permissive, qui s'applique. Un binaire release construit à la main ne prouve
 Le vérifier en une commande, avant de conclure quoi que ce soit :
 
 ```bash
-for d in src-tauri/target/release/build/ludo-*/; do
+for d in src-tauri/target/release/build/torii-*/; do
   printf '%s dev=%s\n' "$d" "$(grep -c 'cfg=dev' "$d/output")"
 done
 ```

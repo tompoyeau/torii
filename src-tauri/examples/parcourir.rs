@@ -4,11 +4,11 @@
 //! Travaille dans un dossier temporaire : les caches de l'application installée ne sont
 //! pas touchés.
 
-use ludo_lib::metadata::vitrine::{self, TriParcours};
+use torii_lib::metadata::vitrine::{self, TriParcours};
 
 fn main() {
-    ludo_lib::locale::definir("fr", "FR");
-    let dir = std::env::temp_dir().join("ludo-exemple-parcourir");
+    torii_lib::locale::definir("fr", "FR");
+    let dir = std::env::temp_dir().join("torii-exemple-parcourir");
     let mut tags: Vec<u64> = std::env::args().skip(1).filter_map(|a| a.parse().ok()).collect();
     if tags.is_empty() {
         tags = vec![1685, 1662];

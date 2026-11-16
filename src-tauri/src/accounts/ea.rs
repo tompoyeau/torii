@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const API_URL: &str = "https://service-aggregation-layer.juno.ea.com/graphql";
-const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Ludo/1.0";
+const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Torii/1.0";
 
 /// Endpoint qui renvoie un `access_token` JSON quand la session est valide.
 pub const TOKEN_ENDPOINT: &str = "https://accounts.ea.com/connect/auth\

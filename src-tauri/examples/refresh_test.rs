@@ -15,12 +15,12 @@ fn main() {
 
     println!("Refresh token : {} car | steamId : {steam_id}", rt.len());
     println!("\n1) GenerateAccessTokenForApp → cookie frais…");
-    match ludo_lib::accounts::steam::refresh_web_cookie(rt, steam_id) {
+    match torii_lib::accounts::steam::refresh_web_cookie(rt, steam_id) {
         None => println!("   ❌ ÉCHEC (AccessDenied ou token invalide) — repli à prévoir."),
         Some(cookie) => {
             println!("   ✅ Cookie régénéré : {}…", &cookie[..cookie.len().min(45)]);
             println!("\n2) Bibliothèque via ce cookie frais…");
-            let games = ludo_lib::accounts::steam::owned_from_community(steam_id, &cookie);
+            let games = torii_lib::accounts::steam::owned_from_community(steam_id, &cookie);
             println!("   => {} jeux possédés récupérés", games.len());
             for g in games.iter().take(10) {
                 println!("      {}", g.title);

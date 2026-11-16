@@ -4,7 +4,7 @@
 //! Travaille dans un dossier temporaire : les caches de l'application installée ne sont
 //! pas touchés.
 
-use ludo_lib::metadata::vitrine::{self, Rayon, ShelfItem};
+use torii_lib::metadata::vitrine::{self, Rayon, ShelfItem};
 
 fn ligne(j: &ShelfItem) -> String {
     let prix = match (j.is_free, j.price) {
@@ -25,8 +25,8 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let region = args.next().unwrap_or_else(|| "FR".into());
     let langue = args.next().unwrap_or_else(|| "fr".into());
-    ludo_lib::locale::definir(&langue, &region);
-    let dir = std::env::temp_dir().join("ludo-exemple-vitrine");
+    torii_lib::locale::definir(&langue, &region);
+    let dir = std::env::temp_dir().join("torii-exemple-vitrine");
 
     let t = std::time::Instant::now();
     let accueil = vitrine::home(&dir, &Default::default());

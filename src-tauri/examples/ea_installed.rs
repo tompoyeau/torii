@@ -5,7 +5,7 @@ fn main() {
     let appdata = std::env::var("APPDATA").expect("APPDATA introuvable");
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
-    let games = ludo_lib::accounts::ea::load_library(&dir);
+    let games = torii_lib::accounts::ea::load_library(&dir);
     if games.is_empty() {
         println!("Bibliothèque EA vide (non connecté ?).");
         return;

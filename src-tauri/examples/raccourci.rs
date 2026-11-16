@@ -7,7 +7,7 @@
 //!
 //! Aucun appel réseau, aucune écriture.
 
-use ludo_lib::platforms::{manual, raccourci};
+use torii_lib::platforms::{manual, raccourci};
 use std::path::{Path, PathBuf};
 
 fn main() {

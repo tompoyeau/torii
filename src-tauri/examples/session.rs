@@ -12,7 +12,7 @@ fn main() {
         .expect("aucune session Steam stockée — connecte-toi d'abord dans l'app");
 
     println!("Récupération de la bibliothèque possédée…");
-    let games = ludo_lib::accounts::steam::owned_from_session(&dir, cookie);
+    let games = torii_lib::accounts::steam::owned_from_session(&dir, cookie);
     println!("=> {} jeux possédés récupérés\n", games.len());
     for g in games.iter().take(15) {
         println!("  {}", g.title);

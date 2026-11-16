@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 fn main() {
     let dir = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("com.tompo.ludo");
-    let games = ludo_lib::platforms::library_cache::load(&dir);
+    let games = torii_lib::platforms::library_cache::load(&dir);
 
     // Dossiers déjà couverts par la bibliothèque : un exécutable qui tombe dessous est
     // reconnu par le surveillant sans passer par la détection.
@@ -45,7 +45,7 @@ fn main() {
             deja += 1;
             continue;
         }
-        match ludo_lib::platforms::detected::identify(exe) {
+        match torii_lib::platforms::detected::identify(exe) {
             Some(jeu) => {
                 adoptes += 1;
                 if vus.insert(jeu.id.clone()) {

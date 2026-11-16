@@ -6,7 +6,7 @@
 //!
 //! Aucun appel réseau, aucune écriture.
 
-use ludo_lib::platforms::{library_cache, suggestions};
+use torii_lib::platforms::{library_cache, suggestions};
 use std::time::Instant;
 
 fn main() {

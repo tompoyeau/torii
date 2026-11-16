@@ -363,7 +363,7 @@ fn steam_id_from_cookie(secure: &str) -> Option<String> {
 /// transparent (rappelle les fonctions natives) → ne perturbe pas le login.
 const STEAM_CAPTURE_JS: &str = r#"
 (function () {
-  function stash(v) { if (v) { try { document.title = 'ludo-steam-rt:' + v; } catch (e) {} } }
+  function stash(v) { if (v) { try { document.title = 'torii-steam-rt:' + v; } catch (e) {} } }
   // Corps de `finalizelogin` : `nonce=<refresh_token>`.
   function fromBody(body) {
     try {
@@ -415,7 +415,7 @@ const STEAM_CAPTURE_JS: &str = r#"
 /// `async` pour ne pas bloquer le thread principal (rendu de la WebView).
 #[tauri::command]
 async fn connect_steam(app: tauri::AppHandle) -> Result<Settings, String> {
-    let (rt_rx, on_title) = capture_channel("ludo-steam-rt:");
+    let (rt_rx, on_title) = capture_channel("torii-steam-rt:");
 
     // Tant qu'aucun refresh token n'est stocké, on force un login FRAIS : Steam n'émet
     // le refresh token (~200 j) que lors d'une vraie saisie identifiants + Steam Guard,
@@ -603,7 +603,7 @@ const EPIC_CAPTURE_JS: &str = r#"
       if (location.pathname.indexOf('/id/api/redirect') === -1) return false;
       var t = (document.body && document.body.innerText) || '';
       var m = t.match(/"authorizationCode"\s*:\s*"([0-9a-fA-F]+)"/);
-      if (m) { document.title = 'ludo-epic:' + m[1]; return true; }
+      if (m) { document.title = 'torii-epic:' + m[1]; return true; }
     } catch (e) {}
     return false;
   }
@@ -619,7 +619,7 @@ const EPIC_CAPTURE_JS: &str = r#"
 /// d'autorisation via le titre de la page, puis l'échange contre un refresh token.
 #[tauri::command]
 async fn connect_epic(app: tauri::AppHandle) -> Result<Settings, String> {
-    let (rx, on_title) = capture_channel("ludo-epic:");
+    let (rx, on_title) = capture_channel("torii-epic:");
 
     open_login_window(
         &app,
@@ -677,7 +677,7 @@ const EA_CAPTURE_JS: &str = r#"
     try {
       var body = (document.body && document.body.innerText) || '';
       var m = body.match(/"access_token"\s*:\s*"([^"]+)"/);
-      if (m) { document.title = 'ludo-ea:' + m[1]; return true; } // token capté
+      if (m) { document.title = 'torii-ea:' + m[1]; return true; } // token capté
 
       var onToken = location.href.indexOf('response_type=token') !== -1;
       // Endpoint token SANS session (login_required) → aller au formulaire de login.
@@ -704,7 +704,7 @@ const EA_CAPTURE_JS: &str = r#"
 /// récupère la bibliothèque possédée (API Juno) et la met en cache sur disque.
 #[tauri::command]
 async fn connect_ea(app: tauri::AppHandle) -> Result<Settings, String> {
-    let (rx, on_title) = capture_channel("ludo-ea:");
+    let (rx, on_title) = capture_channel("torii-ea:");
 
     // On démarre sur l'endpoint token (prompt=none) : si la session existe déjà
     // (reconnexion) → token direct, sinon le JS redirige vers le login.

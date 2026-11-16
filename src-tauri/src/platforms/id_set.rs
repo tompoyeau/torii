@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn replace_remplace_toute_la_liste() {
-        let dir = std::env::temp_dir().join(format!("ludo-idset-replace-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("torii-idset-replace-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
         EXCLUDED_STORES.set(&dir, "G2A", true).unwrap();
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn set_unset_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("ludo-idset-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("torii-idset-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
         assert!(HIDDEN.load(&dir).is_empty());

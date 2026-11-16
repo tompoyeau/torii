@@ -13,7 +13,7 @@ fn main() {
     let steam_id = creds["steamId"].as_str().expect("steamId manquant");
 
     println!("Récupération via page communautaire + GetOwnedGames…");
-    let games = ludo_lib::accounts::steam::owned_from_community(steam_id, cookie);
+    let games = torii_lib::accounts::steam::owned_from_community(steam_id, cookie);
     println!("=> {} jeux (jeux-only)\n", games.len());
     let mut sorted = games;
     sorted.sort_by_key(|g| std::cmp::Reverse(g.playtime_minutes));

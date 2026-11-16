@@ -5,7 +5,7 @@ fn main() {
     let appdata = std::env::var("APPDATA").expect("APPDATA introuvable");
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
-    let Some(data) = ludo_lib::accounts::friends_games::compute(&dir, true) else {
+    let Some(data) = torii_lib::accounts::friends_games::compute(&dir, true) else {
         println!("Steam non connecté (pas de compute).");
         return;
     };

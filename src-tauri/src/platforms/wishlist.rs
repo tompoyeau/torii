@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn add_remove_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("ludo-wl-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("torii-wl-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         assert!(load(&dir).is_empty());
         add(&dir, WishEntry { id: "itad-1".into(), steam_appid: Some(440), title: "TF2".into(), cover_url: None }).unwrap();

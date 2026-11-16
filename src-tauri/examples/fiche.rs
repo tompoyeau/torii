@@ -3,15 +3,15 @@
 //! Sans id : Cyberpunk 2077. Dossier temporaire : les caches de l'application installée
 //! ne sont pas touchés.
 
-use ludo_lib::metadata::{store, vitrine};
+use torii_lib::metadata::{store, vitrine};
 
 fn main() {
     let mut args = std::env::args().skip(1);
     let id = args.next().unwrap_or_else(|| "018d937f-2997-7131-b8b9-7c8af4825fa8".into());
     let region = args.next().unwrap_or_else(|| "FR".into());
     let langue = args.next().unwrap_or_else(|| "fr".into());
-    ludo_lib::locale::definir(&langue, &region);
-    let dir = std::env::temp_dir().join("ludo-exemple-fiche");
+    torii_lib::locale::definir(&langue, &region);
+    let dir = std::env::temp_dir().join("torii-exemple-fiche");
 
     let t = std::time::Instant::now();
     let Some(g) = store::game(&id, &dir) else {

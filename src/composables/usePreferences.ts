@@ -3,6 +3,7 @@ import type { SortKey } from "../types";
 import { appliquerLangue, langueDuSysteme, langueParDefaut, type Langue } from "../i18n";
 import { appliquerRegion, REGIONS, regionDuSysteme, type CodeRegion } from "../i18n/regions";
 import { choixLocaleRetenu, langueHeritee, setLocale } from "../lib/tauri";
+import { reprendreAncienneCle } from "../lib/anciennesCles";
 
 /** Densité de la grille de bibliothèque (taille des jaquettes). */
 export type Density = "compact" | "normal" | "large";
@@ -67,8 +68,9 @@ const DEFAULTS: Prefs = {
   region: null,
 };
 
-const KEY = "ludo-prefs";
+const KEY = "torii-prefs";
 function loadPrefs(): Prefs {
+  reprendreAncienneCle(KEY);
   try {
     const raw = localStorage.getItem(KEY);
     return raw ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) } : { ...DEFAULTS };

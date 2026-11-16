@@ -3,6 +3,7 @@ import { notify, wishlistAll } from "../lib/tauri";
 import { formatPrix } from "../lib/format";
 import { t } from "../i18n";
 import { usePreferences } from "./usePreferences";
+import { reprendreAncienneCle } from "../lib/anciennesCles";
 
 const { prefs } = usePreferences();
 
@@ -19,8 +20,8 @@ const { prefs } = usePreferences();
 // plus par `appId` — les jeux de la wishlist Torii absents de Steam ont tous `appId = 0`
 // et partageaient donc la même entrée de suivi. Clés bumpées pour repartir propre (et
 // pour que l'amorçage silencieux soit rejoué, sinon la 1re passe notifierait tout).
-const MAP_KEY = "ludo-wishlist-notif-v2";
-const SEEDED_KEY = "ludo-wishlist-notif-seeded-v2";
+const MAP_KEY = "torii-wishlist-notif-v2";
+const SEEDED_KEY = "torii-wishlist-notif-seeded-v2";
 /**
  * Devise dans laquelle les prix de `MAP_KEY` ont été relevés.
  *
@@ -30,7 +31,8 @@ const SEEDED_KEY = "ludo-wishlist-notif-seeded-v2";
  * baisse qui n'existe pas. Quand la devise change, les anciens relevés ne veulent plus
  * rien dire — on repart d'un amorçage silencieux, comme au tout premier passage.
  */
-const DEVISE_KEY = "ludo-wishlist-notif-devise";
+const DEVISE_KEY = "torii-wishlist-notif-devise";
+for (const cle of [MAP_KEY, SEEDED_KEY, DEVISE_KEY]) reprendreAncienneCle(cle);
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 h
 const FIRST_DELAY_MS = 30 * 1000; // laisse l'app/session s'initialiser
 

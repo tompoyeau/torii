@@ -5,7 +5,7 @@ fn main() {
     let appdata = std::env::var("APPDATA").expect("APPDATA introuvable");
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
-    let games = ludo_lib::accounts::owned_games(&dir);
+    let games = torii_lib::accounts::owned_games(&dir);
     let mut multi: Vec<_> = games.iter().filter(|g| g.family_owners.len() >= 2).collect();
     multi.sort_by(|a, b| b.family_owners.len().cmp(&a.family_owners.len()));
 

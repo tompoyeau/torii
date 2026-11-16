@@ -8,16 +8,16 @@ fn main() {
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
     println!("Scan de la bibliothèque…");
-    let games = ludo_lib::platforms::scan_all(Some(&dir));
+    let games = torii_lib::platforms::scan_all(Some(&dir));
     println!("{} jeux au total\n", games.len());
 
     let done = std::cell::Cell::new(0usize);
-    let updates = ludo_lib::metadata::igdb::fill_metadata(&games, &dir, |batch| {
+    let updates = torii_lib::metadata::igdb::fill_metadata(&games, &dir, |batch| {
         done.set(done.get() + batch.len());
         println!("  … +{} (total {})", batch.len(), done.get());
     });
 
-    let by_id: HashMap<String, ludo_lib::metadata::igdb::IgdbMeta> =
+    let by_id: HashMap<String, torii_lib::metadata::igdb::IgdbMeta> =
         updates.iter().cloned().collect();
 
     // Couverture par plateforme (match IGDB) + richesse (jaquette / description).

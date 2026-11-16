@@ -4,7 +4,7 @@
 fn main() {
     let appdata = std::env::var("APPDATA").expect("APPDATA introuvable");
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
-    let creds = ludo_lib::accounts::secrets::load(&dir);
+    let creds = torii_lib::accounts::secrets::load(&dir);
 
     let Some(steam_id) = creds.steam_id.clone() else {
         println!("Pas de SteamID stocké (connecte Steam dans l'app d'abord).");
@@ -16,7 +16,7 @@ fn main() {
     };
     println!("SteamID: {steam_id}\nRécupération des amis…\n");
 
-    let friends = ludo_lib::accounts::steam::friends(&steam_id, &cookie);
+    let friends = torii_lib::accounts::steam::friends(&steam_id, &cookie);
     if friends.is_empty() {
         println!("0 ami (liste privée ? cookie expiré ?).");
         return;

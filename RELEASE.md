@@ -30,7 +30,7 @@ installer **à la main, une dernière fois**, le premier build produit par la CI
 ### 1. Mettre le projet sur GitHub
 
 ```bash
-# depuis D:\dev\ludo (déjà un dépôt git local avec un premier commit)
+# depuis D:\dev\torii (déjà un dépôt git local avec un premier commit)
 git remote add origin https://github.com/tompoyeau/torii.git
 git branch -M main
 git push -u origin main

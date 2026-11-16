@@ -1,7 +1,7 @@
 //! Vérifie le cycle « visible par mes amis Steam » : lier, délier, relier.
 //!   1. `cd server && npx wrangler dev --port 8791 --local`
 //!   2. `TORII_API=http://127.0.0.1:8791 cargo run --example steamlink`
-use ludo_lib::social;
+use torii_lib::social;
 
 fn etat(dir: &std::path::Path) -> String {
     match social::me(dir) {

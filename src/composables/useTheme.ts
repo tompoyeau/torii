@@ -1,8 +1,11 @@
 import { ref } from "vue";
+import { reprendreAncienneCle } from "../lib/anciennesCles";
 
 type Theme = "dark" | "light";
 
-const stored = (localStorage.getItem("ludo-theme") as Theme | null) ?? null;
+const KEY = "torii-theme";
+reprendreAncienneCle(KEY);
+const stored = (localStorage.getItem(KEY) as Theme | null) ?? null;
 const theme = ref<Theme | null>(stored);
 
 function systemPrefersDark(): boolean {
@@ -36,8 +39,8 @@ export function useTheme() {
   /** Fixe le thème : "dark"/"light", ou null pour suivre le système. */
   function setTheme(value: Theme | null) {
     theme.value = value;
-    if (value) localStorage.setItem("ludo-theme", value);
-    else localStorage.removeItem("ludo-theme");
+    if (value) localStorage.setItem(KEY, value);
+    else localStorage.removeItem(KEY);
     apply(value);
   }
   return { theme, toggle, setTheme };

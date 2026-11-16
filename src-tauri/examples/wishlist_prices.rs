@@ -5,14 +5,14 @@ fn main() {
     let appdata = std::env::var("APPDATA").expect("APPDATA introuvable");
     let dir = std::path::Path::new(&appdata).join("com.tompo.ludo");
 
-    let appids = ludo_lib::accounts::steam_wishlist_appids(&dir);
+    let appids = torii_lib::accounts::steam_wishlist_appids(&dir);
     println!("Wishlist : {} appids\n", appids.len());
     if appids.is_empty() {
         println!("(vide — Steam non connecté ou wishlist inaccessible)");
         return;
     }
 
-    let items = ludo_lib::metadata::store::wishlist(&appids, &Default::default());
+    let items = torii_lib::metadata::store::wishlist(&appids, &Default::default());
     let priced = items.iter().filter(|i| i.price.is_some()).count();
     let on_sale = items.iter().filter(|i| i.savings > 0).count();
     println!("{} items · {priced} avec prix · {on_sale} en promo\n", items.len());

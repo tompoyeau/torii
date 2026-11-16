@@ -7,9 +7,9 @@
 //! caches de métadonnées servent ; aucun compte n'est rescanné, donc aucun jeton (GOG et
 //! Epic les font tourner) n'est consommé dans la copie à la place de l'original.
 
-use ludo_lib::metadata::categories::{self, Categories};
-use ludo_lib::metadata::igdb::{self, IgdbMeta};
-use ludo_lib::models::GameDto;
+use torii_lib::metadata::categories::{self, Categories};
+use torii_lib::metadata::igdb::{self, IgdbMeta};
+use torii_lib::models::GameDto;
 use std::collections::{BTreeMap, HashMap};
 use std::time::Instant;
 

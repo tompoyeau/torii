@@ -8,11 +8,11 @@ fn main() {
         .expect("usage: cargo run --example owned <CLE_API_STEAM> [steamid]");
     let id = std::env::args()
         .nth(2)
-        .or_else(ludo_lib::accounts::steam::detect_steam_id)
+        .or_else(torii_lib::accounts::steam::detect_steam_id)
         .expect("SteamID introuvable — passe-le en 2e argument");
 
     println!("SteamID: {id}\n");
-    let games = ludo_lib::accounts::steam::owned_games(&key, &id);
+    let games = torii_lib::accounts::steam::owned_games(&key, &id);
     println!("=== {} jeux possédés ===\n", games.len());
 
     let mut sorted = games;

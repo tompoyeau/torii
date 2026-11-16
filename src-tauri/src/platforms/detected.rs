@@ -70,7 +70,6 @@ const NOT_A_GAME: &[&str] = &[
     "eabackgroundservice.exe",
     "ealaunchhelper.exe",
     "torii.exe",
-    "ludo.exe",
 ];
 
 /// Fragments de nom qui trahissent un utilitaire embarqué avec le jeu (anti-triche,

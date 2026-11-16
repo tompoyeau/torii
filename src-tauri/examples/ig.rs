@@ -13,7 +13,7 @@ fn main() {
         // Le comparateur ajoute « Restored Land » ; Steam et IG disent « Dying Light: The Beast ».
         ("Dying Light: The Beast Restored Land", 3008130),
     ] {
-        match ludo_lib::metadata::instant_gaming::price(title, Some(appid)) {
+        match torii_lib::metadata::instant_gaming::price(title, Some(appid)) {
             Some(o) => println!("{title:<38} → {:>6.2}€  (-{}%)  {}", o.price, o.savings, o.url),
             None => println!("{title:<38} → (pas d'offre exacte trouvée)"),
         }

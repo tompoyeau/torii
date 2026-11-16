@@ -2,7 +2,7 @@
 //!   1. `cd server && npx wrangler dev --port 8787 --local`
 //!   2. `TORII_API=http://127.0.0.1:8787 cargo run --example social`
 //! Utilise un dossier de config jetable : les vrais identifiants ne sont pas touchés.
-use ludo_lib::social;
+use torii_lib::social;
 
 fn main() {
     let dir = std::env::temp_dir().join(format!("torii-social-{}", std::process::id()));
@@ -61,7 +61,7 @@ fn main() {
     println!("── Rejeu du laissez-passer : pseudo inchangé = {}", rejoue.display_name == "Testeur");
 
     // Le jeton doit être rangé chiffré, comme les autres secrets.
-    let creds = ludo_lib::accounts::secrets::load(&dir);
+    let creds = torii_lib::accounts::secrets::load(&dir);
     println!("── Jeton persisté : {}", creds.torii_token.is_some());
     let raw = std::fs::read(dir.join("credentials.dat")).unwrap();
     let token = creds.torii_token.clone().unwrap();
@@ -142,7 +142,7 @@ fn main() {
         let _ = std::fs::remove_dir_all(&dir3);
     }
 
-    println!("── Déconnecté, jeton effacé : {}", ludo_lib::accounts::secrets::load(&dir).torii_token.is_none());
+    println!("── Déconnecté, jeton effacé : {}", torii_lib::accounts::secrets::load(&dir).torii_token.is_none());
     println!("── me() après déconnexion : {:?}", social::me(&dir).is_none());
 
     let _ = std::fs::remove_dir_all(&dir);
