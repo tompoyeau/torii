@@ -2184,7 +2184,9 @@ synchronisée et la Boutique, depuis n'importe quel navigateur.
   site. Un 401 efface le jeton et recharge la page : rien du compte précédent ne reste en mémoire.
 - **La bibliothèque** est l'union des appareils du compte (`scan_library` → `lib/libraries.ts`),
   convertie en `GameDto` pour passer par `mergeDuplicates` comme un scan. ⚠️ Le serveur ne sait pas ce
-  qui est installé (la liste est lisible par les amis) : pas de tri, de catégories ni de vedette.
+  qui est installé (la liste est lisible par les amis) : ni catégories ni vedette. Le menu Trier
+  (Récemment joué, A → Z, Temps de jeu) y est, sur le temps de jeu du compte ; à égalité, et donc
+  sans temps de jeu partagé, l'ordre alphabétique.
 - **Un jeu s'ouvre sur sa fiche** (`GameDetail.vue`, la même que sur PC), sans jouer, installer ni
   options, et « Voir les prix » mène à la Boutique. Le temps de jeu vient de `GET /v1/library-stats`
   s'il a été autorisé. Le reste passe par le Worker : `owned_game_sheet` (Steam et annonces, par

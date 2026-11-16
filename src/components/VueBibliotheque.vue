@@ -20,17 +20,22 @@ import GameCard from "./GameCard.vue";
 const { filtered, games, loading, echec, reload } = useLibrary();
 const { filter, query, sort, listView, installedOnly, categories, clearCategories, openGame, showStore } = useUi();
 
-/** Tri de la liste selon le menu Trier. */
+/**
+ * Tri de la liste selon le menu Trier. À égalité, l'ordre alphabétique : les jeux jamais lancés
+ * (souvent la majorité, et tous sur le web quand le temps de jeu n'est pas partagé) restaient
+ * sinon dans l'ordre du scan, qui ne veut rien dire pour qui les lit.
+ */
 function sortGames(list: Game[], key: SortKey): Game[] {
+  const alpha = (a: Game, b: Game) => a.title.localeCompare(b.title, etiquetteIntl.value, { sensitivity: "base" });
   const by = [...list];
   switch (key) {
     case "alpha":
-      return by.sort((a, b) => a.title.localeCompare(b.title, etiquetteIntl.value, { sensitivity: "base" }));
+      return by.sort(alpha);
     case "playtime":
-      return by.sort((a, b) => (b.hoursPlayed ?? 0) - (a.hoursPlayed ?? 0));
+      return by.sort((a, b) => (b.hoursPlayed ?? 0) - (a.hoursPlayed ?? 0) || alpha(a, b));
     case "recent":
     default:
-      return by.sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0));
+      return by.sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || alpha(a, b));
   }
 }
 

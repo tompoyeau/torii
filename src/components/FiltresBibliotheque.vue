@@ -163,8 +163,8 @@ const resteint = computed(() => props.affiches !== count(filter.value).value);
       {{ t("bibliotheque.grille.installesSeulement") }}
     </button>
 
+    <!-- Aussi sur le web : le temps de jeu et la dernière session y arrivent (`/v1/library-stats`). -->
     <MenuChoix
-      v-if="!MODE_WEB"
       class="a-droite"
       :options="optionsTri"
       :choisie="sort"

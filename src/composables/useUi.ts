@@ -46,8 +46,9 @@ interface UiState {
 
 const state = reactive<UiState>({
   // Amorçage depuis les préférences persistées (filtre/tri/vue par défaut).
-  // Sur le web, on arrive sur la Boutique, et la bibliothèque n'a qu'un seul tri utile : le
-  // serveur ne connaît ni le temps de jeu, ni la dernière partie, ni ce qui est installé.
+  // Sur le web, on arrive sur la Boutique. La bibliothèque y commence par « Récemment joué » : le
+  // temps de jeu et la dernière session viennent du compte s'ils sont partagés, et sans eux le tri
+  // retombe sur l'ordre alphabétique (`VueBibliotheque`). Les Paramètres du web n'ont pas de tri de départ.
   section: MODE_WEB ? "store" : "library",
   friendProfileKey: null,
   friendLibraryId: null,
@@ -56,7 +57,7 @@ const state = reactive<UiState>({
   // toutes : la préférence de démarrage qui le choisit ouvre « Tous », bascule allumée.
   filter: MODE_WEB || initialPrefs.defaultFilter === "installed" ? "all" : initialPrefs.defaultFilter,
   query: "",
-  sort: MODE_WEB ? "alpha" : initialPrefs.defaultSort,
+  sort: MODE_WEB ? "recent" : initialPrefs.defaultSort,
   listView: initialPrefs.listView,
   installedOnly: !MODE_WEB && initialPrefs.defaultFilter === "installed",
   categories: [],
