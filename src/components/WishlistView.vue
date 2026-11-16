@@ -11,7 +11,7 @@ import { ouvrirPage } from "../composables/usePageWeb";
 
 const { items, loading, loaded, steamConnected, indisponible, onSaleCount, refresh } = useWishlist();
 const { openProduct } = useStore();
-const { openSettings } = useUi();
+const { openSettings, showStore } = useUi();
 
 onMounted(() => {
   if (!loaded.value) void refresh();
@@ -61,6 +61,11 @@ function atLow(it: WishlistItem): boolean {
 <template>
   <div class="wl">
     <div class="sec-head">
+      <!-- La wishlist s'ouvre depuis la Boutique : on y retourne d'ici, ou par son onglet. -->
+      <button class="chip back" :title="t('boutique.wishlist.retour')" @click="showStore()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6" /></svg>
+        {{ t("boutique.titre") }}
+      </button>
       <h2>{{ t("boutique.wishlist.titre") }}</h2>
       <span class="n">{{ t("bibliotheque.jeux", { n: visibles.length }) }}</span>
       <!-- Le compte des promos porte sur la wishlist entiere : on le cache pendant une
@@ -158,6 +163,8 @@ function atLow(it: WishlistItem): boolean {
 .sec-head .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); }
 .sec-head .n.sale { color: #3ad07f; }
 .sec-head .spacer { flex: 1; }
+.back { display: inline-flex; align-items: center; gap: 6px; }
+.back svg { width: 16px; height: 16px; }
 .chip.refresh {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 99px; font-size: 12.5px;
   color: var(--text-dim); background: var(--surface); border: 1px solid var(--border);

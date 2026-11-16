@@ -241,6 +241,7 @@ const en: Forme<typeof fr> = {
 
   wishlist: {
     titre: "Wishlist",
+    retour: "Back to the Store",
     enPromo: "· {n} on sale",
     actualisation: "Refreshing…",
     rechercher: "Search…",

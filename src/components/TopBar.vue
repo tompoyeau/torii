@@ -140,7 +140,10 @@ async function surFocusRecherche() {
  *
  * Changer de section referme d'abord ce qui est ouvert par-dessus (Paramètres…), en une
  * seule étape d'historique : le retour y ramène. Ordre = celui des raccourcis Ctrl + chiffre
- * (`useRaccourcis.ts`). Wishlist et Contacts vivent sur le PC : pas sur le web.
+ * (`useRaccourcis.ts`). Contacts vit sur le PC : pas sur le web.
+ *
+ * La Wishlist n'a pas d'onglet : elle s'ouvre depuis la Boutique (`StoreView`), dont l'onglet
+ * reste allumé sur elle.
  *
  * Contacts regroupe les amis et les jeux en commun (`ContactsOnglets`), et leurs pages
  * d'un ami (profil, bibliothèque) : l'onglet reste allumé sur toutes.
@@ -148,10 +151,9 @@ async function surFocusRecherche() {
 const SECTIONS_CONTACTS = ["friends", "common", "friendProfile", "friendLibrary"];
 const ONGLETS = computed(() => [
   { id: "library", label: t("bibliotheque.laterale.bibliotheque"), touche: "1", aller: ui.showLibrary, tuto: "bibliotheque", sections: ["library"] },
-  { id: "store", label: t("bibliotheque.laterale.boutique"), touche: "2", aller: ui.showStore, tuto: "boutique", sections: ["store"] },
+  { id: "store", label: t("bibliotheque.laterale.boutique"), touche: "2", aller: ui.showStore, tuto: "boutique", sections: ["store", "wishlist"] },
   ...(MODE_WEB ? [] : [
-    { id: "wishlist", label: t("bibliotheque.laterale.wishlist"), touche: "3", aller: ui.showWishlist, tuto: "wishlist", sections: ["wishlist"] },
-    { id: "contacts", label: t("bibliotheque.laterale.contacts"), touche: "4", aller: showFriends, tuto: "amis", sections: SECTIONS_CONTACTS },
+    { id: "contacts", label: t("bibliotheque.laterale.contacts"), touche: "3", aller: showFriends, tuto: "amis", sections: SECTIONS_CONTACTS },
   ]),
 ].map((o) => ({ ...o, on: o.sections.includes(section.value), titre: avecRaccourci(o.label, ctrl.value, o.touche) })));
 
@@ -199,7 +201,6 @@ const myInitials = computed(() => myName.value.trim().slice(0, 2).toUpperCase())
       >
         <svg v-if="o.id === 'library'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
         <svg v-else-if="o.id === 'store'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h16l-1 4a3 3 0 0 1-3 2.4H8A3 3 0 0 1 5 12Z" /><path d="M4 8l1.4-3.4A2 2 0 0 1 7.2 3.4h9.6a2 2 0 0 1 1.8 1.2L20 8" /><path d="M6 14.4V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5.6" /></svg>
-        <svg v-else-if="o.id === 'wishlist'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" /></svg>
         <span class="onglet-nom">{{ o.label }}</span>
         <!-- Les amis en ligne, sur l'onglet Contacts (toutes sources, dédoublonnés). -->

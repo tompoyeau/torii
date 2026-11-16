@@ -27,8 +27,7 @@ let bibliotheque: ReturnType<typeof useLibrary> | null = null;
 const SECTIONS: Record<string, () => void> = {
   "1": () => ui.showLibrary(),
   "2": () => ui.showStore(),
-  "3": () => ui.showWishlist(),
-  "4": () => ui.showFriends(),
+  "3": () => ui.showFriends(),
 };
 
 function estUnChamp(cible: EventTarget | null): boolean {
@@ -113,7 +112,7 @@ function surTouche(e: KeyboardEvent) {
   if (!ctrl || e.altKey) return;
   const touche = e.key.toLowerCase();
   // Le chiffre par sa position (`code`) : sur un clavier AZERTY, Ctrl+1 donne la touche « & ».
-  const chiffre = /^(?:Digit|Numpad)([1-4])$/.exec(e.code)?.[1];
+  const chiffre = /^(?:Digit|Numpad)([1-3])$/.exec(e.code)?.[1];
   if (touche === "f") {
     e.preventDefault();
     if (!nav.modaleOuverte()) void allerALaRecherche();
@@ -126,7 +125,7 @@ function surTouche(e: KeyboardEvent) {
     e.preventDefault();
     if (!nav.modaleOuverte()) ui.openAddGame();
   } else if (chiffre) {
-    // La wishlist et les amis n'existent pas encore sur le web.
+    // Les contacts n'existent pas encore sur le web.
     if (MODE_WEB && chiffre > "2") return;
     e.preventDefault();
     if (nav.modaleOuverte()) return;
@@ -164,8 +163,7 @@ export function listeRaccourcis(): { titre: string; lignes: LigneRaccourci[] }[]
         { action: t("reglages.raccourcis.actions.fermer"), combinaisons: [[echap]] },
         { action: t("reglages.raccourcis.actions.bibliotheque"), combinaisons: [[ctrl, "1"]] },
         { action: t("reglages.raccourcis.actions.boutique"), combinaisons: [[ctrl, "2"]] },
-        { action: t("reglages.raccourcis.actions.wishlist"), combinaisons: [[ctrl, "3"]] },
-        { action: t("reglages.raccourcis.actions.amis"), combinaisons: [[ctrl, "4"]] },
+        { action: t("reglages.raccourcis.actions.amis"), combinaisons: [[ctrl, "3"]] },
       ],
     },
     {

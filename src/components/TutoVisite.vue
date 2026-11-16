@@ -17,7 +17,7 @@ const { quitterLesSurcouches } = useNavigation();
 const { showLibrary } = useUi();
 
 const ETAPES = computed(() =>
-  (["bibliotheque", "boutique", "wishlist", "amis"] as const).map((cible) => ({
+  (["bibliotheque", "boutique", "amis"] as const).map((cible) => ({
     cible,
     titre: t(`tuto.visite.${cible}.titre`),
     texte: t(`tuto.visite.${cible}.texte`),

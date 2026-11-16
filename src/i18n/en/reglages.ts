@@ -296,7 +296,6 @@ const en: Forme<typeof fr> = {
       fermer: "Close the open page or window",
       bibliotheque: "Library",
       boutique: "Store",
-      wishlist: "Wishlist",
       amis: "Contacts",
       rechercher: "Jump to the search bar",
       ajouter: "Add a game manually",

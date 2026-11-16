@@ -2038,7 +2038,7 @@ stats et les liens (page Steam, site officiel, communauté).
   montage. Un composant qui consomme Échap (modale, menu, visionneuse) DOIT appeler
   `preventDefault()`, sinon la fiche du dessous se ferme avec lui.
 - **Raccourcis** : Ctrl+F (recherche de l'écran, sinon celle de la bibliothèque — champs
-  marqués `data-recherche`), Ctrl+1…4 (Bibliothèque, Boutique, Wishlist, Contacts), Ctrl+N,
+  marqués `data-recherche`), Ctrl+1…3 (Bibliothèque, Boutique, Contacts), Ctrl+N,
   Ctrl+, , F5/Ctrl+R (resynchroniser — **dans l'application seulement**, la démo web garde
   le rechargement), F1 ou ? (Paramètres > Raccourcis clavier, alimenté par
   `listeRaccourcis()`). Les chiffres se lisent par `e.code` (AZERTY : Ctrl+1 = « & ») et
@@ -2047,7 +2047,9 @@ stats et les liens (page Steam, site officiel, communauté).
 ## Barre du haut et fenêtre (0.29 — `TopBar.vue`, `ControlesFenetre.vue`, `EtatJoueur.vue`)
 
 - **Plus de barre latérale.** Les sections sont des onglets dans la barre du haut :
-  Bibliothèque, Boutique, Wishlist, Contacts (icônes seules sous 1180 px, nom en infobulle).
+  Bibliothèque, Boutique, Contacts (icônes seules sous 1180 px, nom en infobulle).
+  La Wishlist n'a pas d'onglet : un bouton de l'en-tête de la Boutique (`StoreView`) l'ouvre,
+  l'onglet Boutique reste allumé sur elle, et sa page a un bouton de retour à la Boutique.
   Contacts réunit amis et jeux en commun sur une page (`FriendsView`, avec `CommonView` en
   slot) ; la section `common` y mène et descend jusqu'aux jeux en commun. Le bouton Amis de la
   barre a disparu : la pastille des amis en ligne est sur l'onglet.

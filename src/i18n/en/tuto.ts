@@ -54,11 +54,7 @@ const tuto: Forme<typeof fr> = {
     },
     boutique: {
       titre: "The Store",
-      texte: "Compare a game's price across every PC store, and spot the real deals.",
-    },
-    wishlist: {
-      titre: "Your wishlist",
-      texte: "Keep the games you're after close at hand, wherever they're sold. Torii can tell you when their price drops.",
+      texte: "Compare a game's price across every PC store, and spot the real deals. Your wishlist lives there too: Torii can tell you when a price drops.",
     },
     amis: {
       titre: "Your friends",

@@ -7,6 +7,7 @@ import { usePossession } from "../composables/usePossession";
 import { useQuandVisible } from "../composables/useQuandVisible";
 import { useToriiWishlist } from "../composables/useToriiWishlist";
 import { useImagesWishlist } from "../composables/useImagesWishlist";
+import { useUi } from "../composables/useUi";
 import { gradientFor } from "../lib/covers";
 import { formatPrix } from "../lib/format";
 import { MODE_WEB } from "../lib/mode";
@@ -32,6 +33,7 @@ const { home, homeEtat, chargerAccueil, chargerRayon, rayon } = useStoreHome();
 const { possession } = usePossession();
 const { isWishlisted, toggle: toggleWishlist } = useToriiWishlist();
 const cats = useStoreCategories();
+const { showWishlist } = useUi();
 
 onMounted(() => {
   void chargerAccueil();
@@ -244,6 +246,11 @@ function onCoverError(url: string | null) {
           @basculer="(cle) => cats.basculer(Number(cle))"
           @effacer="cats.effacer()"
         />
+        <!-- La wishlist n'a plus son onglet : elle s'ouvre d'ici, et l'onglet Boutique reste allumé. -->
+        <button v-if="!MODE_WEB" class="chip store-wl" @click="showWishlist()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20s-7-4.3-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7c0 5-7 9.3-7 9.3Z" /></svg>
+          {{ t("boutique.wishlist.titre") }}
+        </button>
       </div>
     </div>
 
@@ -461,13 +468,15 @@ function onCoverError(url: string | null) {
 .store { min-width: 0; }
 .store-head { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
 .store-title h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
-/* Recherche par titre et catégories : côte à côte, jamais l'une sous l'autre. Base de 420 px : sous
+/* Recherche par titre, catégories et wishlist : côte à côte, jamais l'une sous l'autre. Base de 420 px : sous
    cette place, l'ensemble passe sous le titre au lieu d'écraser le champ jusqu'à le rendre illisible. */
-.store-outils { display: flex; gap: 8px; margin-left: auto; flex: 1 1 420px; min-width: 320px; max-width: 660px; }
+.store-outils { display: flex; gap: 8px; margin-left: auto; flex: 1 1 420px; min-width: 320px; max-width: 780px; }
 .store-search-wrap { position: relative; flex: 1; min-width: 0; }
-/* Le bouton des catégories, à la hauteur de la barre de recherche. */
+/* Les boutons des catégories et de la wishlist, à la hauteur de la barre de recherche. */
 .store-cats { align-self: stretch; display: flex; flex: none; }
 .store-cats :deep(.cat-btn) { height: 100%; padding: 0 14px; border-radius: 12px; }
+.store-wl { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 0 14px; border-radius: 12px; }
+.store-wl svg { width: 14px; height: 14px; flex: none; }
 
 /* Résultats d'une recherche par catégories. */
 .choisies { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }

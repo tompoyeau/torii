@@ -306,7 +306,6 @@ export default {
       fermer: "Fermer la fiche ou la fenêtre ouverte",
       bibliotheque: "Bibliothèque",
       boutique: "Boutique",
-      wishlist: "Wishlist",
       amis: "Contacts",
       rechercher: "Aller dans la barre de recherche",
       ajouter: "Ajouter un jeu manuellement",

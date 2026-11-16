@@ -242,6 +242,7 @@ export default {
 
   wishlist: {
     titre: "Wishlist",
+    retour: "Retour à la Boutique",
     enPromo: "· {n} en promo",
     actualisation: "Actualisation…",
     rechercher: "Rechercher…",

@@ -52,11 +52,7 @@ export default {
     },
     boutique: {
       titre: "La Boutique",
-      texte: "Compare le prix d'un jeu sur toutes les boutiques PC, et repère les vraies promos.",
-    },
-    wishlist: {
-      titre: "Ta wishlist",
-      texte: "Garde sous la main les jeux qui te tentent, où qu'ils soient vendus. Torii peut te prévenir quand leur prix baisse.",
+      texte: "Compare le prix d'un jeu sur toutes les boutiques PC, et repère les vraies promos. Ta wishlist s'y trouve aussi : Torii peut te prévenir quand un prix baisse.",
     },
     amis: {
       titre: "Tes amis",
