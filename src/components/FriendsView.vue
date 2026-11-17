@@ -7,6 +7,7 @@ import { useLibrary } from "../composables/useLibrary";
 import { useTorii } from "../composables/useTorii";
 import { useUi } from "../composables/useUi";
 import { useFriendLibrary } from "../composables/useFriendLibrary";
+import { useStore } from "../composables/useStore";
 import { showToast } from "../composables/useToast";
 import ToriiPanel from "./ToriiPanel.vue";
 import LibraryInvite from "./LibraryInvite.vue";
@@ -20,7 +21,8 @@ const {
   refresh: refreshTorii, respond, setPresenceMode,
 } = useTorii();
 const { launchOrInstall } = useLibrary();
-const { openSettings, openGame, showFriendProfile } = useUi();
+const { openSettings, openGame, showFriendProfile, showStore } = useUi();
+const { openForTitle } = useStore();
 const { refreshIndex } = useFriendLibrary();
 
 /**
@@ -112,6 +114,16 @@ function onSameGame(f: UnifiedFriend) {
   if (!g) return;
   if (g.installed) launchOrInstall(g);
   else openGame(g.id);
+}
+
+/**
+ * Un jeu qu'on n'a pas : sa fiche Boutique. Seul le titre est connu (ni Steam ni Torii ne
+ * donnent ici d'identifiant), donc `openForTitle` n'ouvre une fiche que sur un titre exact ;
+ * sinon il prépare la recherche, et c'est la Boutique qu'on affiche pour ses résultats.
+ */
+async function voirEnBoutique(f: UnifiedFriend) {
+  if (!f.gameName) return;
+  if (!(await openForTitle(f.gameName))) showStore();
 }
 
 /** Les gens joignables tout de suite : en jeu ou disponibles. */
@@ -279,6 +291,11 @@ onBeforeUnmount(() => {
             <button v-if="f.ownedGame" class="btn-play" @click="onSameGame(f)">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
               {{ f.ownedGame.installed ? t("bibliotheque.jouer") : t("amis.voirFiche") }}
+            </button>
+            <!-- Un jeu qu'on n'a pas : sa fiche Boutique, pour voir ce qu'il coûte et le rejoindre. -->
+            <button v-else-if="f.gameName" class="btn-play boutique" @click="voirEnBoutique(f)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 13.3 12.8 21a1.5 1.5 0 0 1-2.1 0l-7-7a1.4 1.4 0 0 1-.4-1V4.6A1.5 1.5 0 0 1 4.6 3h8.4a1.4 1.4 0 0 1 1 .4l6.5 6.5a2 2 0 0 1 0 2.8Z" /><circle cx="7.8" cy="7.8" r="1.4" fill="currentColor" stroke="none" /></svg>
+              {{ t("fiche.voirBoutique") }}
             </button>
           </div>
         </div>
@@ -541,6 +558,10 @@ onBeforeUnmount(() => {
 }
 .btn-play:hover { background: var(--accent-hover); }
 .btn-play svg { width: 14px; height: 14px; }
+/* Même place et même forme que « Jouer », en retrait : jouer avec quelqu'un reste l'action
+   phare de l'écran, la Boutique une piste. */
+.btn-play.boutique { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.btn-play.boutique:hover { background: var(--surface-3); border-color: var(--border-strong); }
 
 /* ── Retirer un ami ──────────────────────────────────── */
 

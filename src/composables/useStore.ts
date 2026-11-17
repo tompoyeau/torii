@@ -151,6 +151,11 @@ function onExclusionChanged() {
 function ensureDeals() {
   if (dealsLoaded) return;
   dealsLoaded = true;
+  // ⚠️ Une recherche lancée avant le premier affichage de la Boutique (« Voir dans la
+  // boutique » depuis une fiche ou Contacts, quand le titre n'ouvre pas de fiche) : la
+  // vitrine l'écrasait en arrivant, et on tombait sur l'accueil avec le titre dans le champ.
+  // Vider la recherche recharge la vitrine (`runSearch`).
+  if (activeQuery.value) return;
   void loadHome();
 }
 
