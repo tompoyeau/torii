@@ -124,7 +124,9 @@ function ouvrirPartie() {
 <template>
   <div v-if="actif && (partie || presence || loading)" ref="racine" class="etat" data-tauri-drag-region>
     <!-- Ta présence : un clic pour la changer. Pendant une partie, le point seul suffit (la
-         partie prend la place), le nom revient dans l'infobulle. -->
+         partie prend la place), le nom revient dans l'infobulle. C'est le seul point de la
+         bande : la partie n'en porte pas, « En jeu » en vert le dit déjà, et deux points verts
+         côte à côte se lisaient comme un doublon. -->
     <div v-if="presence" class="presence-wrap">
       <button
         ref="bouton"
@@ -164,7 +166,6 @@ function ouvrirPartie() {
       :title="t('systeme.etat.ouvrirFiche', { titre })"
       @click="ouvrirPartie"
     >
-      <span class="pastille en-jeu" aria-hidden="true" />
       <span class="quoi">{{ t("systeme.etat.enJeu") }}</span>
       <span class="titre">{{ titre }}</span>
       <span v-if="duree" class="duree">{{ duree }}</span>
@@ -234,6 +235,6 @@ function ouvrirPartie() {
 
 /* Les mêmes points que la présence des amis (`FriendsView`). */
 .pastille { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--text-faint); }
-.pastille.en-jeu, .pastille.en-ligne { background: #3ad07f; box-shadow: 0 0 6px #3ad07f; }
+.pastille.en-ligne { background: #3ad07f; box-shadow: 0 0 6px #3ad07f; }
 .pastille.invisible { background: none; border: 1.5px solid var(--text-faint); box-sizing: border-box; }
 </style>
