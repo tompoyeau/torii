@@ -5,6 +5,7 @@ import { useLibrary } from "../composables/useLibrary";
 import { useUi } from "../composables/useUi";
 import { gradientFor } from "../lib/covers";
 import GameCard from "./GameCard.vue";
+import ChampRecherche from "./ChampRecherche.vue";
 import type { CommonGame, FriendLib, Game } from "../types";
 import { t } from "../i18n";
 
@@ -102,14 +103,11 @@ const visibles = computed(() => {
       <span class="n">{{ t("bibliotheque.jeux", { n: visibles.length }) }}</span>
       <span v-if="loading" class="spin" :title="t('amis.actualisation')" />
       <span class="spacer" />
-      <input
+      <ChampRecherche
         v-if="shownGames.length"
         v-model="query"
-        data-recherche
-        class="search"
-        type="search"
         :placeholder="t('amis.bibliotheque.rechercher')"
-        :aria-label="t('amis.commun.rechercherAide')"
+        :libelle="t('amis.commun.rechercherAide')"
       />
       <button class="chip refresh" :disabled="loading" :title="t('amis.commun.recalculer')" @click="refresh(true)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
@@ -269,13 +267,4 @@ const visibles = computed(() => {
 .btn-connect:hover { background: var(--accent-hover); }
 .btn-ghost { margin-top: 12px; padding: 7px 15px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); font-size: 13px; cursor: pointer; }
 .btn-ghost:hover { color: var(--text); border-color: var(--border-strong); }
-
-/* Recherche locale : meme dessin que celle de la bibliotheque d un ami — c est le meme
-   geste, il doit avoir la meme tete partout. */
-.search {
-  width: 220px; padding: 7px 12px; border-radius: 10px;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
-  font-size: 13px;
-}
-.search:focus { border-color: var(--accent); }
 </style>

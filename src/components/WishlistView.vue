@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { gradientFor } from "../lib/covers";
 import type { WishlistItem } from "../types";
 import { ouvrirPage } from "../composables/usePageWeb";
+import ChampRecherche from "./ChampRecherche.vue";
 
 const { items, loading, loaded, steamConnected, indisponible, onSaleCount, refresh } = useWishlist();
 const { openProduct } = useStore();
@@ -73,14 +74,11 @@ function atLow(it: WishlistItem): boolean {
       <span v-if="onSaleCount && !query.trim()" class="n sale">{{ t("boutique.wishlist.enPromo", { n: onSaleCount }) }}</span>
       <span v-if="loading" class="spin" :title="t('boutique.wishlist.actualisation')" />
       <span class="spacer" />
-      <input
+      <ChampRecherche
         v-if="items.length"
         v-model="query"
-        data-recherche
-        class="search"
-        type="search"
         :placeholder="t('boutique.wishlist.rechercher')"
-        :aria-label="t('boutique.wishlist.rechercherAide')"
+        :libelle="t('boutique.wishlist.rechercherAide')"
       />
       <button class="chip refresh" :disabled="loading" :title="t('boutique.wishlist.actualiser')" @click="refresh()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5" /></svg>
@@ -194,13 +192,4 @@ function atLow(it: WishlistItem): boolean {
 .empty .dim { font-size: 12.5px; opacity: 0.8; }
 .btn-connect { margin-top: 14px; padding: 9px 18px; border-radius: 11px; background: var(--accent); color: var(--accent-ink); border: none; font-weight: 600; font-size: 13.5px; }
 .btn-connect:hover { background: var(--accent-hover); }
-
-/* Recherche locale : meme dessin que celle de la bibliotheque d un ami — c est le meme
-   geste, il doit avoir la meme tete partout. */
-.search {
-  width: 220px; padding: 7px 12px; border-radius: 10px;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
-  font-size: 13px;
-}
-.search:focus { border-color: var(--accent); }
 </style>

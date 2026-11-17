@@ -14,6 +14,7 @@ import { useUi } from "../composables/useUi";
 import { gradientFor } from "../lib/covers";
 import { platformName } from "../data/platforms";
 import GameCard from "./GameCard.vue";
+import ChampRecherche from "./ChampRecherche.vue";
 import PlatformIcon from "./PlatformIcon.vue";
 import type { Game, LibGame, PlatformId } from "../types";
 import { t } from "../i18n";
@@ -161,7 +162,7 @@ const familyCount = computed(() => games.value.filter((g) => g.familyShared).len
     <!-- Recherche et filtres sur la même ligne : ils font le même travail — restreindre
          la liste — et les séparer donnait deux barres d'outils pour une seule intention. -->
     <div v-if="games.length" class="filters">
-      <input v-model="query" data-recherche class="search" type="search" :placeholder="t('amis.bibliotheque.rechercher')" />
+      <ChampRecherche v-model="query" :placeholder="t('amis.bibliotheque.rechercher')" />
       <button
         v-for="f in FILTRES"
         :key="f.key"
@@ -213,12 +214,6 @@ const familyCount = computed(() => games.value.filter((g) => g.familyShared).len
 .sec-head .n { font-family: var(--mono); font-size: 13px; color: var(--text-faint); }
 .back { display: inline-flex; align-items: center; gap: 6px; }
 .back svg { width: 16px; height: 16px; }
-.search {
-  width: 220px; padding: 7px 12px; border-radius: 10px;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
-  font-size: 13px;
-}
-.search:focus { border-color: var(--accent); }
 .sub { font-size: 12.5px; color: var(--text-dim); margin: 0 0 14px; }
 .filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 .empty { color: var(--text-dim); font-size: 14px; padding: 28px 0; }

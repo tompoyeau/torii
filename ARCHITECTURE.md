@@ -100,6 +100,10 @@ cargo run --example suggestions      # les jeux que « Trouvés sur ce PC » pro
   bibliothèque d'un ami, dans « En commun » et dans la Wishlist, qui n'en déclaraient que
   les variantes (`.chip.refresh`). Un scoped ne porte QUE sur les éléments du composant —
   un enfant n'en hérite pas.
+- **Les recherches locales passent par `ChampRecherche.vue`** (Wishlist, En commun, bibliothèque
+  d'un ami) : le dessin de la recherche du bandeau (loupe, fond, arrondi, croix), plus basse pour
+  s'aligner sur les puces. `type="text"` avec notre croix, et `data-recherche` pour Ctrl+F.
+  Chaque vue avait son champ nu, d'un autre fond et sans loupe.
 - 🔑 **`.cover-card` porte `width: 100%`, et ce n'est pas redondant.** La carte est un
   `<button>`, donc elle se dimensionne sur son contenu. Posée directement dans la grille
   elle est étirée par elle (bibliothèque, Boutique, Wishlist : rien ne se voyait) ;
