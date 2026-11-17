@@ -5,6 +5,12 @@ export default {
   jouerDepuis: "Jouer depuis…",
   installerDepuis: "Installer depuis…",
   voirBoutique: "Voir dans la boutique",
+  categories: {
+    titre: "Catégories",
+    voir: "Voir mes jeux « {nom} »",
+    plus: "+{n}",
+    moins: "Moins",
+  },
   demo: {
     de: "Démo de {titre}",
     voirJeu: "Voir le jeu complet",

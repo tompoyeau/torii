@@ -34,7 +34,7 @@ const { charger: chargerFiche, entree: entreeFiche } = useFichePossede();
 const { friends, ensureLoaded, ownersOf } = useFriendsCommon();
 const { openForTitle } = useStore();
 const { connected: toriiConnected, isMuted, setMuted } = useTorii();
-const { selectedGameId, closeGame, showStore, openEditGame, openGame } = useUi();
+const { selectedGameId, closeGame, showStore, openEditGame, openGame, setFilter, clearCategories, toggleCategorie } = useUi();
 const { idBibliotheque } = usePossession();
 
 /**
@@ -58,6 +58,30 @@ async function viewInStore() {
 }
 
 const game = computed(() => byId(selectedGameId.value));
+
+/**
+ * Les catégories du jeu, sous son titre : celles du filtre « Catégories » de la bibliothèque
+ * (tags Steam, ou déduits d'IGDB hors Steam), de la plus votée à la moins votée. Les 8
+ * premières, le reste au clic sur « +N ».
+ *
+ * Un clic ramène à TA bibliothèque filtrée sur cette catégorie, comme un tag de la fiche
+ * Boutique ouvre la Boutique sur la sienne. Pas sur le web : ce filtre n'y existe pas, une
+ * catégorie cochée là ne pourrait plus se décocher.
+ */
+const CATEGORIES_VISIBLES = 8;
+const toutesLesCategories = ref(false);
+const categories = computed(() => game.value?.tags ?? []);
+const categoriesAffichees = computed(() =>
+  toutesLesCategories.value ? categories.value : categories.value.slice(0, CATEGORIES_VISIBLES),
+);
+watch(selectedGameId, () => (toutesLesCategories.value = false));
+function voirCategorie(nom: string) {
+  closeGame();
+  setFilter("all");
+  clearCategories();
+  toggleCategorie(nom);
+  window.scrollTo({ top: 0 });
+}
 
 // Fiche ouverte = la bibliothèque en dessous ne doit plus défiler (ni montrer sa barre).
 useScrollLock(computed(() => !!game.value));
@@ -570,6 +594,24 @@ function retour() {
               <span>{{ t("fiche.demo.de", { titre: jeuComplet.titre }) }}</span>
               <span class="demo-de-lien">{{ idJeuComplet ? t("fiche.demo.ouvrirJeu") : t("fiche.demo.voirJeu") }} →</span>
             </button>
+            <div v-if="categories.length" class="detail-cats" role="group" :aria-label="t('fiche.categories.titre')">
+              <template v-if="!MODE_WEB">
+                <button
+                  v-for="nom in categoriesAffichees"
+                  :key="nom"
+                  class="detail-cat"
+                  :title="t('fiche.categories.voir', { nom })"
+                  @click.stop="voirCategorie(nom)"
+                >{{ nom }}</button>
+              </template>
+              <span v-for="nom in MODE_WEB ? categoriesAffichees : []" :key="nom" class="detail-cat fixe">{{ nom }}</span>
+              <button
+                v-if="categories.length > CATEGORIES_VISIBLES"
+                class="detail-cat plus"
+                :aria-expanded="toutesLesCategories"
+                @click.stop="toutesLesCategories = !toutesLesCategories"
+              >{{ toutesLesCategories ? t("fiche.categories.moins") : t("fiche.categories.plus", { n: categories.length - CATEGORIES_VISIBLES }) }}</button>
+            </div>
           </div>
           <div class="detail-actions">
             <!-- Sur le web, rien à lancer ni à installer : l'action de la fiche, c'est de voir les prix. -->
@@ -930,6 +972,20 @@ function retour() {
 }
 :root[data-theme="light"] .detail-plat { color: var(--text-dim); background: rgba(255, 255, 255, 0.6); border-color: var(--border); }
 .detail-plat :deep(.platform-icon) { width: 15px; height: 15px; }
+/* Catégories sous le titre : la pastille sombre de la plateforme, lisible sur n'importe quelle
+   image et dans les deux thèmes. */
+.detail-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; max-width: 760px; }
+.detail-cat {
+  padding: 4px 11px; border-radius: 99px; font-size: 12px; font-weight: 600; font-family: inherit;
+  background: rgba(12, 8, 18, 0.5); border: 1px solid rgba(255, 255, 255, 0.18); color: #fff;
+  backdrop-filter: blur(6px); cursor: pointer;
+}
+.detail-cat:hover { background: rgba(12, 8, 18, 0.75); border-color: rgba(255, 255, 255, 0.4); }
+.detail-cat.fixe { cursor: default; }
+.detail-cat.fixe:hover { background: rgba(12, 8, 18, 0.5); border-color: rgba(255, 255, 255, 0.18); }
+.detail-cat.plus { color: rgba(255, 255, 255, 0.75); border-style: dashed; }
+:root[data-theme="light"] .detail-cat { color: var(--text-dim); background: rgba(255, 255, 255, 0.6); border-color: var(--border); }
+:root[data-theme="light"] .detail-cat:not(.fixe):hover { color: var(--text); border-color: var(--border-strong); }
 .detail-title {
   font-size: clamp(36px, 5vw, 60px); font-weight: 800; letter-spacing: -0.035em; margin: 0; color: #fff;
   line-height: 1; text-shadow: 0 3px 24px rgba(0, 0, 0, 0.4); text-wrap: balance;

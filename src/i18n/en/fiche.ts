@@ -7,6 +7,12 @@ const en: Forme<typeof fr> = {
   jouerDepuis: "Play from…",
   installerDepuis: "Install from…",
   voirBoutique: "View in store",
+  categories: {
+    titre: "Categories",
+    voir: "Show my “{nom}” games",
+    plus: "+{n}",
+    moins: "Less",
+  },
   demo: {
     de: "Demo of {titre}",
     voirJeu: "View the full game",
