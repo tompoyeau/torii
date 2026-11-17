@@ -560,7 +560,8 @@ onBeforeUnmount(() => {
 .btn-play svg { width: 14px; height: 14px; }
 /* Même place et même forme que « Jouer », en retrait : jouer avec quelqu'un reste l'action
    phare de l'écran, la Boutique une piste. */
-.btn-play.boutique { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+/* Sans le halo orange du « Jouer » commun (`style.css`), qui jurait sous un bouton gris. */
+.btn-play.boutique { background: var(--surface-2); color: var(--text); border-color: var(--border); box-shadow: none; }
 .btn-play.boutique:hover { background: var(--surface-3); border-color: var(--border-strong); }
 
 /* ── Retirer un ami ──────────────────────────────────── */
