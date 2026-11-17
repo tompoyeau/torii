@@ -5,6 +5,15 @@ Les notes de chaque version sont extraites automatiquement par la CI (section
 Ajoute une section en tête avant de tagger une nouvelle version — **et sa traduction
 dans `CHANGELOG.en.md`**, qui alimente la page anglaise des notes de version.
 
+## 0.30.0
+- **La Wishlist rejoint la Boutique.** Elle n'a plus d'onglet : un bouton « Wishlist » l'ouvre depuis l'en-tête de la Boutique, et sa page a un bouton de retour. Ctrl+3 ouvre désormais Contacts.
+- **Les catégories d'un jeu sur sa fiche.** Sous le titre, ses catégories (Coop, Survie, Monde ouvert…) ; un clic affiche tes jeux de la même catégorie.
+- **Contacts** : quand un ami joue à un jeu que tu n'as pas, sa carte propose « Voir dans la boutique » pour en comparer les prix.
+- **Trier ta bibliothèque sur le web** : Récemment joué, A → Z ou Temps de jeu, comme dans l'application. À égalité, les jeux sont rangés par ordre alphabétique, ici comme sur le PC.
+- **Des recherches identiques partout** : celles de la Wishlist, des jeux en commun et de la bibliothèque d'un ami prennent le dessin de la barre du haut, avec sa loupe et sa croix pour effacer.
+- **Un seul point vert en haut à gauche pendant une partie**, au lieu de deux côte à côte.
+- **« Voir dans la boutique » tombe juste**, même quand la Boutique n'a pas encore été ouverte : la recherche du jeu n'est plus remplacée par l'accueil.
+
 ## 0.29.0
 - **Une nouvelle navigation.** Le menu de gauche laisse la place à des onglets en haut de la fenêtre : Bibliothèque, Boutique, Wishlist et Contacts. Tes jeux gagnent toute la largeur, et la barre du haut se pare d'un effet verre quand la page défile dessous.
 - **Torii a sa propre barre de titre.** Réduire, agrandir et fermer restent à leur place habituelle, mais se fondent dans l'application. On déplace la fenêtre en tirant la barre du haut, et un double-clic l'agrandit.

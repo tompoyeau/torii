@@ -5,6 +5,15 @@ English release notes page (`npm run build:notes` → `site/en/release-notes/`).
 Add each new version here at the same time as in `CHANGELOG.md`, with the same
 `## X.Y.Z` heading. UI labels quoted in a note must match the English app.
 
+## 0.30.0
+- **The Wishlist moves into the Store.** It no longer has its own tab: a “Wishlist” button opens it from the Store header, and its page has a back button. Ctrl+3 now opens Contacts.
+- **A game's categories on its page.** Below the title, its categories (Co-op, Survival, Open World…); click one to see your games in the same category.
+- **Contacts**: when a friend is playing a game you don't own, their card offers “View in store” to compare prices.
+- **Sort your library on the web**: Recently played, A → Z or Playtime, just like in the app. Games that tie are sorted alphabetically, on the web and on your PC.
+- **The same search box everywhere**: the Wishlist, games in common and a friend's library get the top bar's design, with its magnifying glass and its clear button.
+- **A single green dot at the top left while you play**, instead of two side by side.
+- **“View in store” lands right**, even when the Store hasn't been opened yet: the game search is no longer replaced by the home page.
+
 ## 0.29.0
 - **A new way to get around.** The left menu makes way for tabs at the top of the window: Library, Store, Wishlist and Contacts. Your games get the full width, and the top bar turns to frosted glass when the page scrolls under it.
 - **Torii has its own title bar.** Minimize, maximize and close stay where you expect them, but blend into the app. Drag the top bar to move the window, and double-click it to maximize.
